@@ -1,0 +1,686 @@
+{% extends "base.html" %}
+
+{% block title %}Gestión de Servicios - ServiFarma{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>🛠️ Gestión de Servicios</h1>
+    <button class="btn btn-primary" onclick="abrirModal('modalCrear')">+ Nuevo Servicio</button>
+    <button class="btn btn-primary" onclick="location.href='{{ url_for('ver_tipos_servicio') }}'">Tipos de Servicios</button>
+    <div style="display: flex; gap: 10px; align-items: center;">
+        <a href="{{ url_for('ver_servicios', tipo=tipo_seleccionado, mostrar_inactivos=0 if mostrando_inactivos else 1) }}" 
+           class="btn btn-secondary">
+            {{ 'Ocultar Inactivos' if mostrando_inactivos else 'Ver Inactivos' }}
+        </a>
+
+
+        
+        
+        <!-- Filtro por tipo -->
+        <select id="filtroTipo" onchange="filtrarPorTipo(this.value)" class="form-control" style="width: 250px;">
+            <option value="">Todos los tipos</option>
+            {% for tipo in tipos_activos %}
+            <option value="{{ tipo.id }}" {% if tipo_seleccionado == tipo.id %}selected{% endif %}>
+                {{ tipo.nombre }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+</div>
+
+<!-- Notificaciones -->
+<div id="notificacion" style="display: none; position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 300px;"></div>
+
+<!-- Tabla de Servicios -->
+<div class="table-container">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nombre</th>
+                <th>Tipo</th>
+                <th>Descripción</th>
+                <th>Precio</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody id="tabla-servicios-body">
+            {% for servicio in servicios %}
+            <tr class="{% if not servicio.activo %}inactivo-row{% endif %}"
+                data-id="{{ servicio.id }}"
+                data-nombre="{{ servicio.nombre }}"
+                data-descripcion="{{ servicio.descripcion or '' }}"
+                data-precio="{{ servicio.precio }}"
+                data-tipo-id="{{ servicio.tipo_servicio_id }}"
+                data-tipo-nombre="{{ servicio.tipo_nombre }}"
+                data-activo="{{ 'true' if servicio.activo else 'false' }}">
+                <td><strong>#{{ servicio.id }}</strong></td>
+                <td>{{ servicio.nombre }}</td>
+                <td><span class="badge badge-info">{{ servicio.tipo_nombre }}</span></td>
+                <td>{{ servicio.descripcion or 'Sin descripción' }}</td>
+                <td><strong>C${{ "%.2f"|format(servicio.precio) }}</strong></td>
+                <td>
+                    <span class="badge {% if servicio.activo %}badge-activo{% else %}badge-inactivo{% endif %}">
+                        {{ 'Activo' if servicio.activo else 'Inactivo' }}
+                    </span>
+                </td>
+                <td>
+                    <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                        <button class="btn btn-small btn-edit" 
+                                onclick="editarServicio({{ servicio.id }})">
+                            Editar
+                        </button>
+                        {% if servicio.activo %}
+                        <button class="btn btn-small btn-warning" 
+                                onclick="desactivarServicio({{ servicio.id }}, '{{ servicio.nombre|escape }}')">
+                            Desactivar
+                        </button>
+                        {% else %}
+                        <button class="btn btn-small btn-success" 
+                                onclick="activarServicio({{ servicio.id }}, '{{ servicio.nombre|escape }}')">
+                            Activar
+                        </button>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% else %}
+            <tr id="fila-vacia">
+                <td colspan="7" class="text-center" style="padding: 40px;">
+                    <i class="fas fa-tools" style="font-size: 48px; color: #ccc; margin-bottom: 10px; display: block;"></i>
+                    <h5 style="color: #999; margin: 0;">No hay servicios registrados</h5>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- MODAL CREAR SERVICIO -->
+<div id="modalCrear" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Nuevo Servicio</h2>
+            <button class="btn-close" onclick="cerrarModal('modalCrear')">&times;</button>
+        </div>
+        <form id="formCrear" class="form">
+            <div class="form-group">
+                <label>Nombre *</label>
+                <input type="text" id="nombre" name="nombre" required maxlength="100" 
+                       placeholder="Ej: Consulta Médica General">
+            </div>
+            <div class="form-group">
+                <label>Tipo de Servicio *</label>
+                <select id="tipo_servicio_id" name="tipo_servicio_id" required class="form-control">
+                    <option value="">Seleccione un tipo</option>
+                    {% for tipo in tipos_para_modal %}
+                    <option value="{{ tipo.id }}">{{ tipo.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Descripción</label>
+                <textarea id="descripcion" name="descripcion" rows="3" 
+                          placeholder="Descripción del servicio..."></textarea>
+            </div>
+            <div class="form-group">
+                <label>Precio *</label>
+                <input type="number" id="precio" name="precio" required min="0" step="0.01" 
+                       placeholder="0.00" style="width: 200px;">
+            </div>
+
+            <div class="form-notice">
+                <small><i class="fas fa-info-circle"></i> Los campos marcados con * son obligatorios</small>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="cerrarModal('modalCrear')">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar Servicio</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL EDITAR SERVICIO -->
+<div id="modalEditar" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Editar Servicio</h2>
+            <button class="btn-close" onclick="cerrarModal('modalEditar')">&times;</button>
+        </div>
+        <form id="formEditar" class="form">
+            <input type="hidden" id="edit_id" name="id" value="">
+            
+            <div class="form-group">
+                <label>Nombre *</label>
+                <input type="text" id="edit_nombre" name="nombre" required maxlength="100">
+            </div>
+            <div class="form-group">
+                <label>Tipo de Servicio *</label>
+                <select id="edit_tipo_servicio_id" name="tipo_servicio_id" required class="form-control">
+                    <option value="">Seleccione un tipo</option>
+                    {% for tipo in tipos_para_modal %}
+                    <option value="{{ tipo.id }}">{{ tipo.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Descripción</label>
+                <textarea id="edit_descripcion" name="descripcion" rows="3"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Precio *</label>
+                <input type="number" id="edit_precio" name="precio" required min="0" step="0.01" style="width: 200px;">
+            </div>
+
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="activo" id="edit_activo">
+                    Servicio Activo
+                </label>
+            </div>
+
+            <div class="form-notice">
+                <small><i class="fas fa-info-circle"></i> Los campos marcados con * son obligatorios</small>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="cerrarModal('modalEditar')">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Actualizar Servicio</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL CAMBIAR ESTADO -->
+<div id="modalEstado" class="modal">
+    <div class="modal-content" style="max-width: 400px;">
+        <div class="modal-header">
+            <h2 id="estadoModalTitle">Cambiar Estado</h2>
+            <button class="btn-close" onclick="cerrarModal('modalEstado')">&times;</button>
+        </div>
+        <form id="formEstado" class="form">
+            <input type="hidden" id="estado_id" value="">
+            <input type="hidden" id="estado_accion" value="">
+            
+            <div style="padding: 20px; text-align: center;">
+                <i class="fas fa-question-circle" style="font-size: 48px; color: #ffc107; margin-bottom: 15px;"></i>
+                <p id="estadoMensaje" style="font-size: 16px; margin-bottom: 20px;"></p>
+            </div>
+
+            <div class="form-actions" style="justify-content: center;">
+                <button type="button" class="btn btn-secondary" onclick="cerrarModal('modalEstado')">Cancelar</button>
+                <button type="submit" class="btn" id="estadoBoton">Confirmar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Variables globales
+let tiposData = {{ tipos_para_modal|tojson }};
+
+// Función para mostrar notificaciones
+function mostrarNotificacion(mensaje, tipo = 'success') {
+    const notificacion = document.getElementById('notificacion');
+    const colores = {
+        'success': '#28a745',
+        'error': '#dc3545',
+        'warning': '#ffc107',
+        'info': '#17a2b8'
+    };
+    
+    notificacion.innerHTML = `
+        <div style="background-color: ${colores[tipo]}; color: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+            <i class="fas fa-${tipo === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+            ${mensaje}
+        </div>
+    `;
+    notificacion.style.display = 'block';
+    
+    setTimeout(() => {
+        notificacion.style.display = 'none';
+    }, 3000);
+}
+
+// Función para cerrar modales
+function cerrarModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+    const form = document.querySelector(`#${modalId} form`);
+    if (form && modalId !== 'modalEstado') {
+        form.reset();
+    }
+}
+
+// Función para abrir modales
+function abrirModal(modalId) {
+    document.getElementById(modalId).style.display = 'block';
+}
+
+// Función para filtrar por tipo
+function filtrarPorTipo(tipoId) {
+    let url = "{{ url_for('ver_servicios') }}";
+    let params = new URLSearchParams();
+    
+    if (tipoId) params.append('tipo', tipoId);
+    {% if mostrando_inactivos %}
+    params.append('mostrar_inactivos', '1');
+    {% endif %}
+    
+    if (params.toString()) {
+        url += '?' + params.toString();
+    }
+    
+    window.location.href = url;
+}
+
+// Función para editar servicio
+function editarServicio(id) {
+    const fila = document.querySelector(`tr[data-id="${id}"]`);
+    if (fila) {
+        document.getElementById('edit_id').value = id;
+        document.getElementById('edit_nombre').value = fila.dataset.nombre;
+        document.getElementById('edit_descripcion').value = fila.dataset.descripcion;
+        document.getElementById('edit_precio').value = fila.dataset.precio;
+        document.getElementById('edit_tipo_servicio_id').value = fila.dataset.tipoId;
+        document.getElementById('edit_activo').checked = fila.dataset.activo === 'true';
+        
+        abrirModal('modalEditar');
+    }
+}
+
+// Función para activar servicio
+function activarServicio(id, nombre) {
+    document.getElementById('estado_id').value = id;
+    document.getElementById('estado_accion').value = '1';
+    document.getElementById('estadoModalTitle').innerHTML = 'Activar Servicio';
+    document.getElementById('estadoMensaje').innerHTML = `¿Está seguro que desea activar el servicio: <strong>"${nombre}"</strong>?`;
+    
+    const boton = document.getElementById('estadoBoton');
+    boton.innerHTML = '<i class="fas fa-check"></i> Activar';
+    boton.className = 'btn btn-success';
+    
+    abrirModal('modalEstado');
+}
+
+// Función para desactivar servicio
+function desactivarServicio(id, nombre) {
+    document.getElementById('estado_id').value = id;
+    document.getElementById('estado_accion').value = '0';
+    document.getElementById('estadoModalTitle').innerHTML = 'Desactivar Servicio';
+    document.getElementById('estadoMensaje').innerHTML = `¿Está seguro que desea desactivar el servicio: <strong>"${nombre}"</strong>?`;
+    
+    const boton = document.getElementById('estadoBoton');
+    boton.innerHTML = '<i class="fas fa-ban"></i> Desactivar';
+    boton.className = 'btn btn-warning';
+    
+    abrirModal('modalEstado');
+}
+
+// Función para agregar nueva fila a la tabla
+function agregarFilaTabla(servicio) {
+    const tbody = document.getElementById('tabla-servicios-body');
+    const filaVacia = document.getElementById('fila-vacia');
+    
+    if (filaVacia) {
+        filaVacia.remove();
+    }
+    
+    const tipo = tiposData.find(t => t.id == servicio.tipo_servicio_id) || { nombre: 'Desconocido' };
+    
+    const nuevaFila = document.createElement('tr');
+    nuevaFila.setAttribute('data-id', servicio.id);
+    nuevaFila.setAttribute('data-nombre', servicio.nombre);
+    nuevaFila.setAttribute('data-descripcion', servicio.descripcion || '');
+    nuevaFila.setAttribute('data-precio', servicio.precio);
+    nuevaFila.setAttribute('data-tipo-id', servicio.tipo_servicio_id);
+    nuevaFila.setAttribute('data-tipo-nombre', tipo.nombre);
+    nuevaFila.setAttribute('data-activo', 'true');
+    
+    nuevaFila.innerHTML = `
+        <td><strong>#${servicio.id}</strong></td>
+        <td>${servicio.nombre}</td>
+        <td><span class="badge badge-info">${tipo.nombre}</span></td>
+        <td>${servicio.descripcion || 'Sin descripción'}</td>
+        <td><strong>C$${parseFloat(servicio.precio).toFixed(2)}</strong></td>
+        <td><span class="badge badge-activo">Activo</span></td>
+        <td>
+            <div style="display: flex; gap: 5px;">
+                <button class="btn btn-small btn-edit" onclick="editarServicio(${servicio.id})">Editar</button>
+                <button class="btn btn-small btn-warning" onclick="desactivarServicio(${servicio.id}, '${servicio.nombre}')">Desactivar</button>
+            </div>
+        </td>
+    `;
+    
+    tbody.appendChild(nuevaFila);
+}
+
+// Función para actualizar fila en la tabla
+function actualizarFilaTabla(id, nombre, descripcion, precio, tipoId, activo) {
+    const fila = document.querySelector(`tr[data-id="${id}"]`);
+    if (fila) {
+        const tipo = tiposData.find(t => t.id == tipoId) || { nombre: 'Desconocido' };
+        
+        fila.setAttribute('data-nombre', nombre);
+        fila.setAttribute('data-descripcion', descripcion);
+        fila.setAttribute('data-precio', precio);
+        fila.setAttribute('data-tipo-id', tipoId);
+        fila.setAttribute('data-tipo-nombre', tipo.nombre);
+        fila.setAttribute('data-activo', activo ? 'true' : 'false');
+        
+        if (activo) {
+            fila.classList.remove('inactivo-row');
+        } else {
+            fila.classList.add('inactivo-row');
+        }
+        
+        // Actualizar celdas
+        const celdas = fila.cells;
+        celdas[1].textContent = nombre;
+        celdas[2].innerHTML = `<span class="badge badge-info">${tipo.nombre}</span>`;
+        celdas[3].textContent = descripcion || 'Sin descripción';
+        celdas[4].innerHTML = `<strong>C$${parseFloat(precio).toFixed(2)}</strong>`;
+        
+        // Actualizar badge de estado
+        const badge = celdas[5].querySelector('.badge');
+        badge.className = `badge ${activo ? 'badge-activo' : 'badge-inactivo'}`;
+        badge.textContent = activo ? 'Activo' : 'Inactivo';
+        
+        // Actualizar botones de acción
+        const accionesDiv = celdas[6].querySelector('div');
+        if (activo) {
+            accionesDiv.innerHTML = `
+                <button class="btn btn-small btn-edit" onclick="editarServicio(${id})">Editar</button>
+                <button class="btn btn-small btn-warning" onclick="desactivarServicio(${id}, '${nombre}')">Desactivar</button>
+            `;
+        } else {
+            accionesDiv.innerHTML = `
+                <button class="btn btn-small btn-edit" onclick="editarServicio(${id})">Editar</button>
+                <button class="btn btn-small btn-success" onclick="activarServicio(${id}, '${nombre}')">Activar</button>
+            `;
+        }
+    }
+}
+
+// Event Listeners
+document.addEventListener('DOMContentLoaded', function() {
+    // Formulario de creación
+    document.getElementById('formCrear').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const nombre = document.getElementById('nombre').value.trim();
+        const tipoId = document.getElementById('tipo_servicio_id').value;
+        const precio = document.getElementById('precio').value;
+        
+        if (!nombre || nombre.length < 2) {
+            alert('El nombre es requerido (mínimo 2 caracteres)');
+            return;
+        }
+        
+        if (!tipoId) {
+            alert('Debe seleccionar un tipo de servicio');
+            return;
+        }
+        
+        if (!precio || parseFloat(precio) < 0) {
+            alert('El precio debe ser un número válido mayor o igual a 0');
+            return;
+        }
+        
+        const data = {
+            nombre: nombre,
+            tipo_servicio_id: parseInt(tipoId),
+            descripcion: document.getElementById('descripcion').value.trim() || null,
+            precio: parseFloat(precio)
+        };
+        
+        try {
+            const response = await fetch('/api/servicios', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                mostrarNotificacion('Servicio creado exitosamente', 'success');
+                cerrarModal('modalCrear');
+                agregarFilaTabla({
+                    id: result.id,
+                    ...data
+                });
+            } else {
+                mostrarNotificacion('Error: ' + result.error, 'error');
+            }
+        } catch (error) {
+            mostrarNotificacion('Error de conexión', 'error');
+        }
+    });
+    
+    // Formulario de edición
+    document.getElementById('formEditar').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const id = document.getElementById('edit_id').value;
+        const nombre = document.getElementById('edit_nombre').value.trim();
+        const tipoId = document.getElementById('edit_tipo_servicio_id').value;
+        const precio = document.getElementById('edit_precio').value;
+        
+        if (!nombre || nombre.length < 2) {
+            alert('El nombre es requerido (mínimo 2 caracteres)');
+            return;
+        }
+        
+        if (!tipoId) {
+            alert('Debe seleccionar un tipo de servicio');
+            return;
+        }
+        
+        if (!precio || parseFloat(precio) < 0) {
+            alert('El precio debe ser un número válido mayor o igual a 0');
+            return;
+        }
+        
+        const data = {
+            nombre: nombre,
+            tipo_servicio_id: parseInt(tipoId),
+            descripcion: document.getElementById('edit_descripcion').value.trim() || null,
+            precio: parseFloat(precio)
+        };
+        
+        try {
+            const response = await fetch('/api/servicios/' + id, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                mostrarNotificacion('Servicio actualizado exitosamente', 'success');
+                cerrarModal('modalEditar');
+                actualizarFilaTabla(
+                    id,
+                    data.nombre,
+                    data.descripcion,
+                    data.precio,
+                    data.tipo_servicio_id,
+                    document.getElementById('edit_activo').checked
+                );
+            } else {
+                mostrarNotificacion('Error: ' + result.error, 'error');
+            }
+        } catch (error) {
+            mostrarNotificacion('Error de conexión', 'error');
+        }
+    });
+    
+    // Formulario de cambio de estado
+    document.getElementById('formEstado').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const id = document.getElementById('estado_id').value;
+        const activo = document.getElementById('estado_accion').value === '1';
+        
+        try {
+            const response = await fetch('/api/servicios/' + id + '/estado', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ activo: activo ? 1 : 0 })
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                const estado = activo ? 'activado' : 'desactivado';
+                mostrarNotificacion(`Servicio ${estado} exitosamente`, 'success');
+                cerrarModal('modalEstado');
+                
+                const fila = document.querySelector(`tr[data-id="${id}"]`);
+                if (fila) {
+                    const nombre = fila.dataset.nombre;
+                    const descripcion = fila.dataset.descripcion;
+                    const precio = fila.dataset.precio;
+                    const tipoId = fila.dataset.tipoId;
+                    
+                    actualizarFilaTabla(id, nombre, descripcion, precio, tipoId, activo);
+                }
+            } else {
+                mostrarNotificacion('Error: ' + result.error, 'error');
+            }
+        } catch (error) {
+            mostrarNotificacion('Error de conexión', 'error');
+        }
+    });
+    
+    // Cerrar modales al hacer clic fuera
+    window.addEventListener('click', function(event) {
+        if (event.target.classList.contains('modal')) {
+            event.target.style.display = 'none';
+            const form = event.target.querySelector('form');
+            if (form && event.target.id !== 'modalEstado') {
+                form.reset();
+            }
+        }
+    });
+    
+    // Cerrar modales con tecla ESC
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            document.querySelectorAll('.modal').forEach(modal => {
+                modal.style.display = 'none';
+                const form = modal.querySelector('form');
+                if (form && modal.id !== 'modalEstado') {
+                    form.reset();
+                }
+            });
+        }
+    });
+});
+</script>
+
+<!-- Estilos adicionales -->
+<style>
+/* Badges */
+.badge-activo {
+    background-color: #d4edda;
+    color: #155724;
+    padding: 4px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.badge-inactivo {
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 4px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.badge-info {
+    background-color: #17a2b8;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+/* Estilo para filas inactivas */
+.inactivo-row {
+    opacity: 0.7;
+    background-color: #f8f9fa;
+}
+
+/* Mejoras para los modales */
+#modalEstado .modal-content {
+    text-align: center;
+}
+
+#modalEstado .form-actions {
+    border-top: none;
+    margin-top: 10px;
+}
+
+/* Ajustes para los botones de acción */
+.btn-small.btn-warning {
+    background-color: #ffc107;
+    color: #000;
+}
+
+.btn-small.btn-warning:hover {
+    background-color: #ffca2c;
+}
+
+.btn-small.btn-success {
+    background-color: #28a745;
+    color: white;
+}
+
+.btn-small.btn-success:hover {
+    background-color: #218838;
+}
+
+/* Notificaciones */
+#notificacion {
+    animation: slideIn 0.3s ease-in-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Estilo para selects */
+.form-control {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+}
+</style>
+{% endblock %}

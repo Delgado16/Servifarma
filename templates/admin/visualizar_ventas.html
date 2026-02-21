@@ -1,0 +1,977 @@
+{% extends "base.html" %}
+
+{% block title %}Visualizar Ventas - ServiFarma{% endblock %}
+
+{% block content %}
+<div class="page-header responsive-header">
+    <h1>👁️ Visualización de Ventas</h1>
+    <div class="header-buttons">
+        <a href="{{ url_for('nueva_venta') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i>
+            <span class="btn-text">Nueva Venta</span>
+        </a>
+    </div>
+</div>
+
+<!-- FILTROS DE VISUALIZACIÓN - CORREGIDO -->
+<div class="filters-container">
+    <form method="GET" action="{{ url_for('visualizar_ventas') }}" class="filter-form">
+        <div class="filter-row">
+            <select name="filtro" id="filtroSelect" class="input-select">
+                <option value="dia" {% if filtro_actual == 'dia' %}selected{% endif %}>📅 Hoy</option>
+                <option value="semana" {% if filtro_actual == 'semana' %}selected{% endif %}>📊 Esta Semana</option>
+                <option value="mes" {% if filtro_actual == 'mes' %}selected{% endif %}>📈 Este Mes</option>
+                <option value="personalizado" {% if filtro_actual == 'personalizado' %}selected{% endif %}>🎯 Personalizado</option>
+            </select>
+            
+            <div id="fechasPersonalizadas" class="fechas-group" style="{% if filtro_actual != 'personalizado' %}display: none;{% endif %}">
+                <input type="date" class="input-search" name="fecha_inicio" value="{{ fecha_inicio or '' }}" placeholder="Desde">
+                <input type="date" class="input-search" name="fecha_fin" value="{{ fecha_fin or '' }}" placeholder="Hasta">
+            </div>
+
+            <!-- ELIMINADO EL FILTRO POR TIPO DE VENTA QUE NO ESTABA IMPLEMENTADO -->
+            
+            <div class="filter-buttons">
+                <button type="submit" class="btn btn-primary" id="btnAplicar" {% if filtro_actual == 'personalizado' %}style="display: inline-flex;"{% else %}style="display: none;"{% endif %}>
+                    <i class="fas fa-search"></i>
+                    <span class="btn-text">Aplicar</span>
+                </button>
+                <button type="submit" class="btn btn-primary" id="btnActualizar" {% if filtro_actual != 'personalizado' %}style="display: inline-flex;"{% else %}style="display: none;"{% endif %}>
+                    <i class="fas fa-sync-alt"></i>
+                    <span class="btn-text">Actualizar</span>
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- TARJETAS DE RESUMEN - CORREGIDO -->
+<div class="stats-grid">
+    <div class="stats-card stats-card-primary">
+        <div class="stats-content">
+            <div class="stats-info">
+                <div class="stats-label">TOTAL VENTAS</div>
+                <div class="stats-value">{{ resumen.total_ventas|default(0) }}</div>
+                <small>operaciones</small>
+            </div>
+            <i class="fas fa-shopping-cart stats-icon"></i>
+        </div>
+    </div>
+    
+    <div class="stats-card stats-card-success">
+        <div class="stats-content">
+            <div class="stats-info">
+                <div class="stats-label">TOTAL VENDIDO</div>
+                <div class="stats-value">C$ {{ "{:,.0f}".format(resumen.suma_total|default(0)) }}</div>
+                <small>ingresos</small>
+            </div>
+            <i class="fas fa-cash-register stats-icon"></i>
+        </div>
+    </div>
+    
+    <div class="stats-card stats-card-warning">
+        <div class="stats-content">
+            <div class="stats-info">
+                <div class="stats-label">PROMEDIO</div>
+                <div class="stats-value">C$ {{ "{:,.0f}".format(resumen.promedio_venta|default(0)) }}</div>
+                <small>por venta</small>
+            </div>
+            <i class="fas fa-chart-line stats-icon"></i>
+        </div>
+    </div>
+    
+    <div class="stats-card stats-card-info">
+        <div class="stats-content">
+            <div class="stats-info">
+                <div class="stats-label">CAMBIO DADO</div>
+                <div class="stats-value">C$ {{ "{:,.0f}".format(resumen.total_cambio|default(0)) }}</div>
+                <small>en vueltos</small>
+            </div>
+            <i class="fas fa-hand-holding-usd stats-icon"></i>
+        </div>
+    </div>
+</div>
+
+<!-- TABLA DE VENTAS - CORREGIDA (ELIMINADA COLUMNA TIPO) -->
+<div class="table-responsive">
+    <div class="table-wrapper">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th># Venta</th>
+                    <th>Fecha</th>
+                    <th class="text-right">Total</th>
+                    <th class="text-right">Efectivo</th>
+                    <th class="text-right">Cambio</th>
+                    <th class="text-center">Estado</th>
+                    <th class="text-center">Usuario</th>
+                    <th class="text-center">Detalle</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for venta in ventas %}
+                <tr>
+                    <td data-label="# Venta">
+                        <strong>VTA-{{ "%06d"|format(venta.id) }}</strong>
+                    </td>
+                    <td data-label="Fecha">
+                        {% if venta.fecha_venta %}
+                            {{ venta.fecha_venta.strftime('%d/%m/%Y') }}
+                        {% else %}
+                            -
+                        {% endif %}
+                        <small class="hora-cell">
+                            {% if venta.fecha_creacion %}
+                                {{ venta.fecha_creacion.strftime('%H:%M') }}
+                            {% endif %}
+                        </small>
+                    </td>
+                    <td data-label="Total" class="text-right total-cell">
+                        C$ {{ "{:,.2f}".format(venta.total_venta|default(0)) }}
+                    </td>
+                    <td data-label="Efectivo" class="text-right">
+                        C$ {{ "{:,.2f}".format(venta.efectivo|default(0)) }}
+                    </td>
+                    <td data-label="Cambio" class="text-right">
+                        {% if venta.cambio and venta.cambio > 0 %}
+                            <span class="badge success cambio-badge">
+                                C$ {{ "{:,.2f}".format(venta.cambio) }}
+                            </span>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td data-label="Estado" class="text-center">
+                        {% set total_venta = venta.total_venta|default(0) %}
+                        {% set efectivo = venta.efectivo|default(0) %}
+                        {% if efectivo >= total_venta %}
+                            <span class="badge success">✅ Pagado</span>
+                        {% else %}
+                            <span class="badge warning">⏳ Pendiente</span>
+                        {% endif %}
+                    </td>
+                    <td data-label="Usuario" class="text-center">
+                        <small>{{ venta.usuario_nombre or 'N/A' }}</small>
+                    </td>
+                    <td data-label="Acciones" class="text-center">
+                        <a href="{{ url_for('detalle_venta', venta_id=venta.id) }}" class="btn-icon btn-view" title="Ver detalle">
+                            <i class="fas fa-eye"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="8" class="text-center empty-state">
+                        <div class="empty-state-content">
+                            <i class="fas fa-inbox empty-icon"></i>
+                            <h5>No hay ventas en este período</h5>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- PRODUCTOS MÁS VENDIDOS - CORREGIDO -->
+<div class="table-responsive">
+    <div class="table-header">
+        <h3>
+            <i class="fas fa-trophy" style="color: #ffc107;"></i> 
+            Top 10 Productos más vendidos
+        </h3>
+    </div>
+    <div class="table-wrapper">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Producto</th>
+                    <th class="text-right">Cantidad Vendida</th>
+                    <th class="text-right">Total Recaudado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for producto in productos_vendidos %}
+                <tr>
+                    <td data-label="#" class="ranking-cell">
+                        <span class="ranking-number">{{ loop.index }}</span>
+                    </td>
+                    <td data-label="Producto">{{ producto.nombre or 'Producto' }}</td>
+                    <td data-label="Cantidad" class="text-right">
+                        {{ producto.total_vendido|default(0)|int }} unidades
+                    </td>
+                    <td data-label="Total" class="text-right recaudado-cell">
+                        C$ {{ "{:,.2f}".format(producto.total_recaudado|default(0)) }}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" class="text-center empty-state">
+                        <div class="empty-state-content">
+                            <p>No hay ventas de productos en este período</p>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- MODAL PARA DETALLE DE VENTA - CORREGIDO -->
+<div id="detalleVentaModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>
+                <i class="fas fa-receipt"></i> Detalle de Venta
+            </h2>
+            <button class="modal-close" onclick="cerrarModalDetalle()">&times;</button>
+        </div>
+        <div class="modal-body" id="detalleVentaBody">
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+                <p>Cargando detalles...</p>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="cerrarModalDetalle()">Cerrar</button>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Variables CSS para fácil personalización */
+:root {
+    --primary-color: #0d6efd;
+    --success-color: #28a745;
+    --warning-color: #ffc107;
+    --info-color: #17a2b8;
+    --danger-color: #dc3545;
+    --text-color: #333333;
+    --text-light: #666666;
+    --text-white: #ffffff;
+    --border-color: #dee2e6;
+    --bg-light: #f8f9fa;
+    --bg-white: #ffffff;
+}
+
+/* Estilos responsive generales */
+.responsive-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.responsive-header h1 {
+    color: var(--text-color);
+    margin: 0;
+}
+
+.header-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* Filtros responsive */
+.filters-container {
+    background: var(--bg-white);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+.input-select, .input-search {
+    min-width: 200px;
+    flex: 1 1 auto;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--bg-white);
+    color: var(--text-color);
+    font-size: 14px;
+}
+
+.input-select:focus, .input-search:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.25);
+}
+
+.fechas-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    flex: 2 1 auto;
+}
+
+.fechas-group input {
+    flex: 1 1 200px;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+}
+
+.filter-buttons {
+    display: flex;
+    gap: 10px;
+    flex: 0 0 auto;
+}
+
+/* Grid de estadísticas responsive */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.stats-card {
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    color: var(--text-white);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stats-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.stats-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 100%;
+}
+
+.stats-info {
+    flex: 1;
+}
+
+.stats-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    opacity: 0.9;
+    margin-bottom: 5px;
+    color: var(--text-white);
+}
+
+.stats-value {
+    font-size: 1.8rem;
+    font-weight: bold;
+    line-height: 1.2;
+    word-break: break-word;
+    color: var(--text-white);
+    margin-bottom: 5px;
+}
+
+.stats-info small {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.75rem;
+    display: block;
+}
+
+.stats-icon {
+    font-size: 2.5rem;
+    opacity: 0.5;
+    margin-left: 10px;
+    color: var(--text-white);
+}
+
+/* Colores de fondo para las tarjetas */
+.stats-card-primary { 
+    background: linear-gradient(135deg, #0d6efd, #0a58ca); 
+}
+
+.stats-card-success { 
+    background: linear-gradient(135deg, #28a745, #218838); 
+}
+
+.stats-card-warning { 
+    background: linear-gradient(135deg, #ffc107, #e0a800); 
+}
+
+.stats-card-info { 
+    background: linear-gradient(135deg, #17a2b8, #138496); 
+}
+
+/* Tabla responsive */
+.table-responsive {
+    width: 100%;
+    margin-bottom: 20px;
+    overflow: hidden;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    background: var(--bg-white);
+}
+
+.table-header {
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--bg-light);
+}
+
+.table-header h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: var(--text-color);
+}
+
+.table-header h3 i {
+    margin-right: 8px;
+}
+
+.table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    background: var(--bg-white);
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 600px;
+}
+
+.table th {
+    background-color: var(--bg-light);
+    padding: 12px;
+    font-weight: 600;
+    text-align: left;
+    border-bottom: 2px solid var(--border-color);
+    color: var(--text-color);
+    font-size: 14px;
+}
+
+.table td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-color);
+    font-size: 14px;
+}
+
+.table tbody tr:hover {
+    background-color: rgba(13, 110, 253, 0.05);
+}
+
+/* Badges */
+.badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    line-height: 1;
+}
+
+.badge.primary {
+    background-color: #cfe2ff;
+    color: #084298;
+}
+
+.badge.success {
+    background-color: #d1e7dd;
+    color: #0a3622;
+}
+
+.badge.warning {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.badge.secondary {
+    background-color: #e2e3e5;
+    color: #41464b;
+}
+
+/* Botones y elementos interactivos */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s;
+    color: var(--text-white);
+    text-decoration: none;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+}
+
+.btn-primary:hover {
+    background-color: #0b5ed7;
+    text-decoration: none;
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+}
+
+.btn-secondary:hover {
+    background-color: #5c636a;
+    text-decoration: none;
+}
+
+.btn-icon {
+    padding: 8px 12px;
+    border: none;
+    border-radius: 4px;
+    background-color: var(--primary-color);
+    color: var(--text-white);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px;
+}
+
+.btn-icon:hover {
+    background-color: #0b5ed7;
+}
+
+.btn-view {
+    background-color: var(--info-color);
+}
+
+.btn-view:hover {
+    background-color: #1491a9;
+}
+
+/* Modal responsive */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    overflow-y: auto;
+}
+
+.modal-content {
+    background-color: var(--bg-white);
+    margin: 50px auto;
+    width: 90%;
+    max-width: 800px;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    animation: modalSlideIn 0.3s;
+}
+
+@keyframes modalSlideIn {
+    from {
+        transform: translateY(-30px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.modal-header {
+    background-color: var(--primary-color);
+    color: var(--text-white);
+    padding: 15px 20px;
+    border-radius: 8px 8px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    color: var(--text-white);
+}
+
+.modal-header h2 i {
+    margin-right: 10px;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: var(--text-white);
+    font-size: 2rem;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+.modal-close:hover {
+    opacity: 1;
+}
+
+.modal-body {
+    padding: 20px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.modal-body p {
+    color: var(--text-color);
+    margin: 10px 0;
+}
+
+.modal-footer {
+    padding: 15px 20px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+/* Loading spinner */
+.loading-spinner {
+    text-align: center;
+    padding: 40px;
+}
+
+.loading-spinner p {
+    color: var(--text-color);
+    margin-top: 10px;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #e9ecef;
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Empty state */
+.empty-state {
+    padding: 40px !important;
+}
+
+.empty-state-content {
+    text-align: center;
+}
+
+.empty-state-content h5,
+.empty-state-content p {
+    color: var(--text-light);
+    margin: 10px 0 0;
+}
+
+.empty-icon {
+    font-size: 48px;
+    color: #ccc;
+    margin-bottom: 10px;
+}
+
+/* Text alignment */
+.text-right {
+    text-align: right;
+}
+
+.text-center {
+    text-align: center;
+}
+
+/* Utility classes */
+.hora-cell {
+    display: block;
+    color: var(--text-light);
+    font-size: 0.75rem;
+    margin-top: 4px;
+}
+
+.total-cell {
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
+.cambio-badge {
+    display: inline-block;
+    white-space: nowrap;
+}
+
+.ranking-number {
+    font-weight: bold;
+    color: var(--text-color);
+}
+
+.recaudado-cell {
+    font-weight: bold;
+    color: var(--success-color);
+}
+
+/* Media queries para responsive */
+@media (max-width: 1200px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .responsive-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .header-buttons {
+        justify-content: stretch;
+    }
+    
+    .header-buttons .btn {
+        flex: 1;
+        justify-content: center;
+    }
+    
+    .filter-row {
+        flex-direction: column;
+    }
+    
+    .input-select,
+    .input-search,
+    .fechas-group,
+    .filter-buttons {
+        width: 100%;
+    }
+    
+    .fechas-group input {
+        flex: 1 1 100%;
+    }
+    
+    .filter-buttons {
+        flex-direction: column;
+    }
+    
+    .filter-buttons .btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .stats-card {
+        padding: 15px;
+    }
+    
+    .stats-value {
+        font-size: 1.5rem;
+    }
+    
+    .table-wrapper {
+        overflow-x: hidden;
+    }
+    
+    .table {
+        min-width: 100%;
+    }
+    
+    .table thead {
+        display: none;
+    }
+    
+    .table tbody tr {
+        display: block;
+        margin-bottom: 15px;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        background: var(--bg-white);
+    }
+    
+    .table td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 15px;
+        border: none;
+        border-bottom: 1px solid var(--border-color);
+        text-align: left;
+    }
+    
+    .table td:last-child {
+        border-bottom: none;
+    }
+    
+    .table td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: var(--text-color);
+        margin-right: 10px;
+        min-width: 100px;
+        font-size: 13px;
+    }
+    
+    .table td.text-right {
+        text-align: left;
+    }
+    
+    .cambio-badge {
+        margin-left: auto;
+    }
+    
+    .modal-content {
+        margin: 20px;
+        width: auto;
+    }
+    
+    .modal-header h2 {
+        font-size: 1.2rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .btn-text {
+        display: none;
+    }
+    
+    .btn i {
+        margin: 0;
+    }
+    
+    .stats-card {
+        padding: 15px;
+    }
+    
+    .stats-value {
+        font-size: 1.3rem;
+    }
+    
+    .stats-label {
+        font-size: 0.7rem;
+    }
+    
+    .stats-icon {
+        font-size: 1.8rem;
+    }
+    
+    .table td {
+        font-size: 13px;
+        padding: 8px 12px;
+    }
+    
+    .table td::before {
+        min-width: 90px;
+        font-size: 12px;
+    }
+    
+    .badge {
+        font-size: 0.7rem;
+        padding: 3px 6px;
+    }
+    
+    .hora-cell {
+        font-size: 0.7rem;
+    }
+}
+</style>
+
+<script>
+// Función para cerrar modal
+function cerrarModalDetalle() {
+    document.getElementById('detalleVentaModal').style.display = 'none';
+    document.body.style.overflow = '';
+}
+
+// Mostrar/ocultar fechas personalizadas - CORREGIDO
+document.addEventListener('DOMContentLoaded', function() {
+    const filtroSelect = document.getElementById('filtroSelect');
+    if (filtroSelect) {
+        filtroSelect.addEventListener('change', function() {
+            const valor = this.value;
+            const fechasGroup = document.getElementById('fechasPersonalizadas');
+            const btnAplicar = document.getElementById('btnAplicar');
+            const btnActualizar = document.getElementById('btnActualizar');
+            
+            if (valor === 'personalizado') {
+                fechasGroup.style.display = 'flex';
+                btnAplicar.style.display = 'inline-flex';
+                btnActualizar.style.display = 'none';
+            } else {
+                fechasGroup.style.display = 'none';
+                btnAplicar.style.display = 'none';
+                btnActualizar.style.display = 'inline-flex';
+            }
+        });
+    }
+
+    // Ver detalle de venta - CORREGIDO
+    window.verDetalle = function(ventaId) {
+        const modal = document.getElementById('detalleVentaModal');
+        const modalBody = document.getElementById('detalleVentaBody');
+        
+        modal.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+        
+        modalBody.innerHTML = `
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+                <p>Cargando detalles de la venta #${ventaId}...</p>
+            </div>
+        `;
+        
+        // Petición fetch para obtener detalles
+        fetch(`/ventas/${ventaId}`)
+            .then(response => response.text())
+            .then(html => {
+                modalBody.innerHTML = html;
+            })
+            .catch(error => {
+                modalBody.innerHTML = `
+                    <div class="alert alert-danger" style="margin: 20px; padding: 15px; background-color: #f8d7da; color: #721c24; border-radius: 4px; border: 1px solid #f5c6cb;">
+                        <strong>Error:</strong> No se pudo cargar el detalle de la venta. Intente nuevamente.
+                    </div>
+                `;
+                console.error('Error:', error);
+            });
+    };
+    
+    // Cerrar modal al hacer clic fuera
+    window.addEventListener('click', function(event) {
+        const modal = document.getElementById('detalleVentaModal');
+        if (event.target == modal) {
+            cerrarModalDetalle();
+        }
+    });
+    
+    // Cerrar con tecla ESC
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            const modal = document.getElementById('detalleVentaModal');
+            if (modal.style.display === 'block') {
+                cerrarModalDetalle();
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

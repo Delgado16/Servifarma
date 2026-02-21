@@ -1,0 +1,695 @@
+{% extends "base.html" %}
+
+{% block title %}Gestión de Proveedores - ServiFarma{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>🏢 Gestión de Proveedores</h1>
+    <button class="btn btn-primary" data-toggle="modal" data-target="#modalProveedor">+ Nuevo Proveedor</button>
+    <a href="{{ url_for('proveedores', incluir_inactivos=1) }}" class="btn btn-secondary">Ver Inactivos</a>
+</div>
+
+<!-- Filtros -->
+<div class="filters-bar">
+    <form method="GET" action="{{ url_for('proveedores') }}" class="filter-form">
+        <input type="text" name="buscar" placeholder="Buscar por nombre, contacto o email..." 
+               value="{{ buscar }}" class="input-search">
+        <select name="ciudad" class="input-select">
+            <option value="">Todas las ciudades</option>
+            {% for ciudad in ciudades %}
+                <option value="{{ ciudad }}" 
+                    {% if ciudad_filtro == ciudad %}selected{% endif %}>
+                    {{ ciudad }}
+                </option>
+            {% endfor %}
+        </select>
+        <div class="form-check">
+            <input type="checkbox" name="incluir_inactivos" id="incluir_inactivos" 
+                   class="form-check-input" {% if incluir_inactivos %}checked{% endif %}>
+            <label for="incluir_inactivos" class="form-check-label">Mostrar inactivos</label>
+        </div>
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+        <a href="{{ url_for('proveedores') }}" class="btn btn-secondary">Limpiar</a>
+    </form>
+</div>
+
+<!-- Tabla de Proveedores -->
+<div class="table-container">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nombre</th>
+                <th>Email</th>
+                <th>Teléfono</th>
+                <th>Ciudad</th>
+                <th>Contacto</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if proveedores %}
+                {% for proveedor in proveedores %}
+                <tr class="{% if not proveedor.activo %}inactivo-row{% endif %}"
+                    data-id="{{ proveedor.id }}"
+                    data-nombre="{{ proveedor.nombre }}"
+                    data-email="{{ proveedor.email or '' }}"
+                    data-telefono="{{ proveedor.telefono or '' }}"
+                    data-ciudad="{{ proveedor.ciudad or '' }}"
+                    data-contacto="{{ proveedor.contacto or '' }}"
+                    data-direccion="{{ proveedor.direccion or '' }}"
+                    data-observaciones="{{ proveedor.observaciones or '' }}"
+                    data-activo="{{ 'true' if proveedor.activo else 'false' }}">
+                    <td>{{ proveedor.id }}</td>
+                    <td>{{ proveedor.nombre }}</td>
+                    <td>{{ proveedor.email or '-' }}</td>
+                    <td>{{ proveedor.telefono or '-' }}</td>
+                    <td>{{ proveedor.ciudad or '-' }}</td>
+                    <td>{{ proveedor.contacto or '-' }}</td>
+                    <td>
+                        {% if proveedor.activo %}
+                        <span class="badge success">Activo</span>
+                        {% else %}
+                        <span class="badge danger">Inactivo</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button class="btn btn-small btn-edit" 
+                                data-toggle="modal" 
+                                data-target="#modalEditarProveedor"
+                                onclick="cargarDatosDesdeFila(this)">
+                            Editar
+                        </button>
+                        
+                        <!-- Formulario para activar/desactivar -->
+                        <form method="POST" 
+                              action="{{ url_for(proveedor.activo and 'desactivar_proveedor' or 'activar_proveedor', id=proveedor.id) }}" 
+                              style="display: inline;" 
+                              onsubmit="return confirm('¿{{ proveedor.activo and 'Desactivar' or 'Activar' }} este proveedor?');">
+                            <button type="submit" class="btn btn-small {{ proveedor.activo and 'btn-warning' or 'btn-success' }}">
+                                {{ proveedor.activo and 'Desactivar' or 'Activar' }}
+                            </button>
+                        </form>
+                        
+                        <!-- Formulario para eliminar -->
+                        <form method="POST" action="{{ url_for('eliminar_proveedor', id=proveedor.id) }}" 
+                              style="display: inline;" 
+                              onsubmit="return confirm('¿Eliminar permanentemente este proveedor?');">
+                            <button type="submit" class="btn btn-small btn-danger">Eliminar</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="8" class="text-center">
+                        {% if buscar or ciudad_filtro %}
+                            No se encontraron proveedores con los filtros aplicados
+                        {% else %}
+                            No hay proveedores registrados.
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal para Nuevo Proveedor -->
+<div id="modalProveedor" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Nuevo Proveedor</h2>
+            <button class="btn-close" onclick="cerrarModal('modalProveedor')">&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('crear_proveedor') }}" class="form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Nombre *</label>
+                    <input type="text" name="nombre" required 
+                           placeholder="Ingrese el nombre del proveedor">
+                </div>
+                <div class="form-group">
+                    <label>Contacto</label>
+                    <input type="text" name="contacto" 
+                           placeholder="Nombre de la persona de contacto">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" name="email" 
+                           placeholder="correo@ejemplo.com">
+                </div>
+                <div class="form-group">
+                    <label>Teléfono</label>
+                    <input type="text" name="telefono" 
+                           placeholder="Número telefónico">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Ciudad</label>
+                    <input type="text" name="ciudad" 
+                           placeholder="Ciudad del proveedor">
+                </div>
+                <div class="form-group">
+                    <label>Dirección</label>
+                    <input type="text" name="direccion" 
+                           placeholder="Dirección completa">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Observaciones</label>
+                <textarea name="observaciones" rows="3" 
+                          placeholder="Notas adicionales"></textarea>
+            </div>
+
+            <div class="form-notice">
+                <small><i class="fas fa-info-circle"></i> Los campos marcados con * son obligatorios</small>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Guardar Proveedor</button>
+                <button type="button" class="btn btn-secondary" onclick="cerrarModal('modalProveedor')">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal para Editar Proveedor -->
+<div id="modalEditarProveedor" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Editar Proveedor</h2>
+            <button class="btn-close" onclick="cerrarModal('modalEditarProveedor')">&times;</button>
+        </div>
+        <form method="POST" id="formEditarProveedor" class="form">
+            <input type="hidden" name="id" id="edit_id">
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Nombre *</label>
+                    <input type="text" name="nombre" id="edit_nombre" required 
+                           placeholder="Ingrese el nombre del proveedor">
+                </div>
+                <div class="form-group">
+                    <label>Contacto</label>
+                    <input type="text" name="contacto" id="edit_contacto" 
+                           placeholder="Nombre de la persona de contacto">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" name="email" id="edit_email" 
+                           placeholder="correo@ejemplo.com">
+                </div>
+                <div class="form-group">
+                    <label>Teléfono</label>
+                    <input type="text" name="telefono" id="edit_telefono" 
+                           placeholder="Número telefónico">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Ciudad</label>
+                    <input type="text" name="ciudad" id="edit_ciudad" 
+                           placeholder="Ciudad del proveedor">
+                </div>
+                <div class="form-group">
+                    <label>Dirección</label>
+                    <input type="text" name="direccion" id="edit_direccion" 
+                           placeholder="Dirección completa">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Observaciones</label>
+                <textarea name="observaciones" id="edit_observaciones" rows="3" 
+                          placeholder="Notas adicionales"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="activo" id="edit_activo">
+                    Proveedor Activo
+                </label>
+            </div>
+
+            <div class="form-notice">
+                <small><i class="fas fa-info-circle"></i> Los campos marcados con * son obligatorios</small>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Actualizar Proveedor</button>
+                <button type="button" class="btn btn-secondary" onclick="cerrarModal('modalEditarProveedor')">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Función para cerrar modales
+function cerrarModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+
+// Función para cargar datos desde la fila al hacer clic en Editar
+function cargarDatosDesdeFila(boton) {
+    const fila = boton.closest('tr');
+    
+    const datos = {
+        id: fila.dataset.id,
+        nombre: fila.dataset.nombre,
+        email: fila.dataset.email,
+        telefono: fila.dataset.telefono,
+        ciudad: fila.dataset.ciudad,
+        contacto: fila.dataset.contacto,
+        direccion: fila.dataset.direccion,
+        observaciones: fila.dataset.observaciones,
+        activo: fila.dataset.activo
+    };
+    
+    // Llenar el formulario de edición con los datos
+    document.getElementById('edit_id').value = datos.id;
+    document.getElementById('edit_nombre').value = datos.nombre || '';
+    document.getElementById('edit_email').value = datos.email || '';
+    document.getElementById('edit_telefono').value = datos.telefono || '';
+    document.getElementById('edit_ciudad').value = datos.ciudad || '';
+    document.getElementById('edit_contacto').value = datos.contacto || '';
+    document.getElementById('edit_direccion').value = datos.direccion || '';
+    document.getElementById('edit_observaciones').value = datos.observaciones || '';
+    
+    // Configurar estado activo
+    document.getElementById('edit_activo').checked = (datos.activo === 'true');
+    
+    // Configurar acción del formulario
+    const form = document.getElementById('formEditarProveedor');
+    form.action = `/proveedores/editar/${datos.id}`;
+    
+    // Mostrar el modal
+    document.getElementById('modalEditarProveedor').style.display = 'block';
+}
+
+// Inicialización al cargar la página
+document.addEventListener('DOMContentLoaded', function() {
+    // Mostrar modal de nuevo proveedor si hay parámetro
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('nuevo') === '1') {
+        document.getElementById('modalProveedor').style.display = 'block';
+    }
+    
+    // Abrir modal de nuevo proveedor al hacer clic en botón
+    const botonNuevo = document.querySelector('[data-target="#modalProveedor"]');
+    if (botonNuevo) {
+        botonNuevo.addEventListener('click', function(e) {
+            e.preventDefault();
+            document.getElementById('modalProveedor').style.display = 'block';
+        });
+    }
+    
+    // Manejar cierre de modales
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                this.style.display = 'none';
+            }
+        });
+    });
+    
+    // Validación de formularios
+    const forms = document.querySelectorAll('.form');
+    forms.forEach(form => {
+        form.addEventListener('submit', function(e) {
+            const nombre = this.querySelector('input[name="nombre"]');
+            if (nombre && nombre.value.trim().length < 2) {
+                e.preventDefault();
+                alert('El nombre del proveedor es requerido (mínimo 2 caracteres)');
+                nombre.focus();
+                return false;
+            }
+            return true;
+        });
+    });
+});
+</script>
+
+<style>
+/* Estilos para los modales - consistentes con productos */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+}
+
+.modal-content {
+    background-color: white;
+    margin: 5% auto;
+    padding: 20px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 800px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+}
+
+.modal-header h2 {
+    margin: 0;
+}
+
+.btn-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #666;
+}
+
+.btn-close:hover {
+    color: #333;
+}
+
+/* Estilos para la cabecera de página */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+
+.page-header h1 {
+    margin: 0;
+    font-size: 1.8rem;
+    color: #333;
+}
+
+/* Estilos para filtros */
+.filters-bar {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    border: 1px solid #dee2e6;
+}
+
+.filter-form {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.input-search,
+.input-select {
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 14px;
+    flex-grow: 1;
+    min-width: 200px;
+}
+
+.input-search:focus,
+.input-select:focus {
+    outline: none;
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+.form-check {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.form-check-input {
+    margin: 0;
+}
+
+.form-check-label {
+    font-size: 14px;
+    color: #666;
+}
+
+/* Estilos para botones */
+.btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background-color: #0d6efd;
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #0b5ed7;
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background-color: #5c636a;
+}
+
+.btn-success {
+    background-color: #198754;
+    color: white;
+}
+
+.btn-success:hover {
+    background-color: #157347;
+}
+
+.btn-warning {
+    background-color: #ffc107;
+    color: #000;
+}
+
+.btn-warning:hover {
+    background-color: #ffca2c;
+}
+
+.btn-danger {
+    background-color: #dc3545;
+    color: white;
+}
+
+.btn-danger:hover {
+    background-color: #bb2d3b;
+}
+
+.btn-small {
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+/* Estilos para la tabla */
+.table-container {
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+    overflow: hidden;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table th {
+    background-color: #f8f9fa;
+    padding: 12px 15px;
+    text-align: left;
+    font-weight: 600;
+    color: #495057;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.table td {
+    padding: 12px 15px;
+    border-bottom: 1px solid #dee2e6;
+    vertical-align: middle;
+}
+
+.table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+.table tbody tr.inactivo-row {
+    opacity: 0.7;
+    background-color: #f8f9fa;
+}
+
+/* Estilos para formularios dentro de modales */
+.form {
+    margin-top: 20px;
+}
+
+.form-row {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 15px;
+}
+
+.form-row .form-group {
+    flex: 1;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    color: #495057;
+    font-size: 14px;
+}
+
+.form-group input[type="text"],
+.form-group input[type="email"],
+.form-group input[type="number"],
+.form-group input[type="date"],
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: border-color 0.15s ease-in-out;
+}
+
+.form-group textarea {
+    resize: vertical;
+    min-height: 60px;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+.form-notice {
+    background-color: #e7f3ff;
+    border-left: 4px solid #0d6efd;
+    padding: 10px 15px;
+    margin: 15px 0;
+    font-size: 14px;
+    color: #495057;
+}
+
+.form-notice small {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+}
+
+/* Estilos para badges de estado */
+.badge {
+    display: inline-block;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: 10px;
+}
+
+.badge.success {
+    background-color: #d1e7dd;
+    color: #0f5132;
+}
+
+.badge.danger {
+    background-color: #f8d7da;
+    color: #842029;
+}
+
+/* Texto centrado */
+.text-center {
+    text-align: center;
+}
+
+/* Responsividad */
+@media (max-width: 768px) {
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    
+    .filter-form {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .form-row {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .modal-content {
+        margin: 10% auto;
+        width: 95%;
+    }
+    
+    .table {
+        display: block;
+        overflow-x: auto;
+    }
+}
+</style>
+{% endblock %}

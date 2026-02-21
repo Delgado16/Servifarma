@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard Admin - Servifarma{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>📊 Dashboard Administrativo</h1>
+    <p>Resumen general del sistema farmacéutico</p>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon">💊</div>
+        <div class="stat-content">
+            <h3>Productos Activos</h3>
+            <p class="stat-number">{{ stats.total_productos or 0 }}</p>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon">📦</div>
+        <div class="stat-content">
+            <h3>Stock Total</h3>
+            <p class="stat-number">{{ stats.stock_total or 0 }} unidades</p>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon">💰</div>
+        <div class="stat-content">
+            <h3>Inversión Total</h3>
+            <p class="stat-number">C$ {{ "%.2f"|format(stats.inversion_total or 0) }}</p>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon">📈</div>
+        <div class="stat-content">
+            <h3>Ventas (30 días)</h3>
+            <p class="stat-number">C$ {{ "%.2f"|format(ventas_stats.ganancia_total or 0) }}</p>
+            <small>{{ ventas_stats.total_ventas or 0 }} transacciones</small>
+        </div>
+    </div>
+</div>
+
+<div class="dashboard-sections">
+    <section class="dashboard-section">
+        <h2>⚠️ Productos Bajo Stock</h2>
+        <div id="bajo-stock" class="products-list">
+            <p class="loading">Cargando...</p>
+        </div>
+    </section>
+
+    <section class="dashboard-section">
+        <h2>📋 Últimas Ventas</h2>
+        <div id="ultimas-ventas" class="sales-list">
+            <p class="loading">Cargando...</p>
+        </div>
+    </section>
+</div>
+
+<script>
+// Cargar productos bajo stock
+fetch('/api/productos')
+    .then(r => r.json())
+    .then(productos => {
+        const bajoStock = productos.filter(p => p.stock_actual <= p.stock_minimo);
+        const html = bajoStock.map(p => `
+            <div class="list-item">
+                <div class="item-info">
+                    <h4>${p.nombre}</h4>
+                    <p>Stock: ${p.stock_actual} / Mínimo: ${p.stock_minimo}</p>
+                </div>
+                <a href="/admin/productos#${p.id}" class="btn btn-small">Actualizar</a>
+            </div>
+        `).join('');
+        
+        document.getElementById('bajo-stock').innerHTML = html || '<p class="empty">No hay productos bajo stock</p>';
+    });
+
+// Cargar últimas ventas
+fetch('/api/ventas')
+    .then(r => r.json())
+    .then(ventas => {
+        const html = ventas.slice(0, 5).map(v => `
+            <div class="list-item">
+                <div class="item-info">
+                    <h4>#${v.numero_comprobante}</h4>
+                    <p>${v.cliente_nombre || 'Sin cliente'} - ${new Date(v.fecha_venta).toLocaleDateString('es-ES')}</p>
+                </div>
+                <div class="item-amount">RD$ ${parseFloat(v.total_venta).toFixed(2)}</div>
+            </div>
+        `).join('');
+        
+        document.getElementById('ultimas-ventas').innerHTML = html || '<p class="empty">No hay ventas</p>';
+    });
+</script>
+{% endblock %}

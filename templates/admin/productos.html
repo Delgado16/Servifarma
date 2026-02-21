@@ -1,0 +1,432 @@
+{% extends "base.html" %}
+
+{% block title %}Gestión de Productos - ServiFarma{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>💊 Gestión de Productos</h1>
+    <button class="btn btn-primary" data-toggle="modal" data-target="#modalProducto">+ Nuevo Producto</button>
+    <a href="{{ url_for('productos', mostrar_inactivos=1) }}" class="btn btn-secondary">Ver Inactivos</a>
+</div>
+
+<!-- Filtros -->
+<div class="filters-bar">
+    <form method="GET" action="{{ url_for('productos') }}" class="filter-form">
+        <input type="text" name="buscar" placeholder="Buscar producto..." 
+               value="{{ buscar }}" class="input-search">
+        <select name="categoria" class="input-select">
+            <option value="">Todas las categorías</option>
+            {% for categoria in categorias %}
+                <option value="{{ categoria.id }}" 
+                    {% if categoria.id|string == categoria_seleccionada %}selected{% endif %}>
+                    {{ categoria.nombre }}
+                </option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+        <a href="{{ url_for('productos') }}" class="btn btn-secondary">Limpiar</a>
+    </form>
+</div>
+
+<!-- Tabla de Productos -->
+<div class="table-container">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Código</th>
+                <th>Nombre</th>
+                <th>Categoría</th>
+                <th>Stock</th>
+                <th>Costo</th>
+                <th>Venta</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in productos %}
+            <tr>
+                <td>{{ p.codigo }}</td>
+                <td>{{ p.nombre }}</td>
+                <td>{{ p.categoria_nombre }}</td>
+                <td class="stock-cell {% if p.stock_actual <= p.stock_minimo %}bajo-stock{% endif %}">
+                    {{ p.stock_actual }} {{ p.unidad_nombre }}
+                </td>
+                <td>C$ {{ "%.2f"|format(p.precio_costo) }}</td>
+                <td>C$ {{ "%.2f"|format(p.precio_venta) }}</td>
+                <td>
+                    <button class="btn btn-small btn-edit" 
+                            data-toggle="modal" 
+                            data-target="#modalEditarProducto"
+                            data-id="{{ p.id }}"
+                            data-codigo="{{ p.codigo }}"
+                            data-nombre="{{ p.nombre }}"
+                            data-descripcion="{{ p.descripcion or '' }}"
+                            data-categoria-id="{{ p.categoria_id }}"
+                            data-principio-activo="{{ p.principio_activo or '' }}"
+                            data-presentacion="{{ p.presentacion or '' }}"
+                            data-unidad-base-id="{{ p.unidad_base_id }}"
+                            data-precio-costo="{{ p.precio_costo }}"
+                            data-precio-venta="{{ p.precio_venta }}"
+                            data-stock-actual="{{ p.stock_actual }}"
+                            data-stock-minimo="{{ p.stock_minimo }}"
+                            data-lote="{{ p.lote or '' }}"
+                            data-fecha-vencimiento="{{ p.fecha_vencimiento or '' }}"
+                            data-activo="{{ p.activo }}">
+                        Editar
+                    </button>
+                    
+                    <!-- Formulario para eliminar -->
+                    <form method="POST" action="{{ url_for('eliminar_producto', producto_id=p.id) }}" 
+                          style="display: inline;" 
+                          onsubmit="return confirm('¿Está seguro de eliminar este producto?');">
+                        <button type="submit" class="btn btn-small btn-danger">Eliminar</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="7" class="text-center">No hay productos registrados</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal para Nuevo Producto -->
+<div id="modalProducto" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Nuevo Producto</h2>
+            <button class="btn-close" onclick="cerrarModal('modalProducto')">&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('productos') }}" class="form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Código *</label>
+                    <input type="text" name="codigo" required>
+                </div>
+                <div class="form-group">
+                    <label>Nombre *</label>
+                    <input type="text" name="nombre" required>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Principio Activo</label>
+                    <input type="text" name="principio_activo">
+                </div>
+                <div class="form-group">
+                    <label>Presentación</label>
+                    <input type="text" name="presentacion">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Categoría *</label>
+                    <select name="categoria_id" required>
+                        <option value="">Seleccionar categoría</option>
+                        {% for categoria in categorias %}
+                            <option value="{{ categoria.id }}">{{ categoria.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Unidad Base *</label>
+                    <select name="unidad_base_id" required>
+                        <option value="">Seleccionar unidad</option>
+                        {% for unidad in unidades %}
+                            <option value="{{ unidad.id }}">{{ unidad.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Descripción</label>
+                <textarea name="descripcion" rows="3"></textarea>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Lote</label>
+                    <input type="text" name="lote">
+                </div>
+                <div class="form-group">
+                    <label>Fecha Vencimiento</label>
+                    <input type="date" name="fecha_vencimiento">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Stock Actual</label>
+                    <input type="number" name="stock_actual" value="0" min="0">
+                </div>
+                <div class="form-group">
+                    <label>Stock Mínimo</label>
+                    <input type="number" name="stock_minimo" value="5" min="0">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Precio Costo (C$) *</label>
+                    <input type="number" name="precio_costo" step="0.01" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label>Precio Venta (C$) *</label>
+                    <input type="number" name="precio_venta" step="0.01" min="0" required>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Guardar Producto</button>
+                <button type="button" class="btn btn-secondary" onclick="cerrarModal('modalProducto')">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal para Editar Producto -->
+<div id="modalEditarProducto" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Editar Producto</h2>
+            <button class="btn-close" onclick="cerrarModal('modalEditarProducto')">&times;</button>
+        </div>
+        <form method="POST" id="formEditarProducto" class="form">
+            <input type="hidden" name="id" id="edit_id">
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Código *</label>
+                    <input type="text" name="codigo" id="edit_codigo" required>
+                </div>
+                <div class="form-group">
+                    <label>Nombre *</label>
+                    <input type="text" name="nombre" id="edit_nombre" required>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Principio Activo</label>
+                    <input type="text" name="principio_activo" id="edit_principio_activo">
+                </div>
+                <div class="form-group">
+                    <label>Presentación</label>
+                    <input type="text" name="presentacion" id="edit_presentacion">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Categoría *</label>
+                    <select name="categoria_id" id="edit_categoria_id" required>
+                        <option value="">Seleccionar categoría</option>
+                        {% for categoria in categorias %}
+                            <option value="{{ categoria.id }}">{{ categoria.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Unidad Base *</label>
+                    <select name="unidad_base_id" id="edit_unidad_base_id" required>
+                        <option value="">Seleccionar unidad</option>
+                        {% for unidad in unidades %}
+                            <option value="{{ unidad.id }}">{{ unidad.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Descripción</label>
+                <textarea name="descripcion" id="edit_descripcion" rows="3"></textarea>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Lote</label>
+                    <input type="text" name="lote" id="edit_lote">
+                </div>
+                <div class="form-group">
+                    <label>Fecha Vencimiento</label>
+                    <input type="date" name="fecha_vencimiento" id="edit_fecha_vencimiento">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Stock Actual</label>
+                    <input type="number" name="stock_actual" id="edit_stock_actual" min="0">
+                </div>
+                <div class="form-group">
+                    <label>Stock Mínimo</label>
+                    <input type="number" name="stock_minimo" id="edit_stock_minimo" min="0">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Precio Costo (C$) *</label>
+                    <input type="number" name="precio_costo" id="edit_precio_costo" step="0.01" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label>Precio Venta (C$) *</label>
+                    <input type="number" name="precio_venta" id="edit_precio_venta" step="0.01" min="0" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="activo" id="edit_activo">
+                    Producto Activo
+                </label>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Actualizar Producto</button>
+                <button type="button" class="btn btn-secondary" onclick="cerrarModal('modalEditarProducto')">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// JavaScript para manejar modales
+function cerrarModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+
+// Configurar modal de edición
+document.addEventListener('DOMContentLoaded', function() {
+    const modalEditar = document.getElementById('modalEditarProducto');
+    
+    // Usar evento click ya que no tenemos Bootstrap JS
+    document.querySelectorAll('.btn-edit').forEach(button => {
+        button.addEventListener('click', function() {
+            const productoId = this.getAttribute('data-id');
+            const actionUrl = `/productos/${productoId}/editar`;;
+            
+            // Configurar formulario
+            const form = document.getElementById('formEditarProducto');
+            form.action = actionUrl;
+            
+            // Llenar campos
+            document.getElementById('edit_id').value = productoId;
+            document.getElementById('edit_codigo').value = this.getAttribute('data-codigo');
+            document.getElementById('edit_nombre').value = this.getAttribute('data-nombre');
+            document.getElementById('edit_descripcion').value = this.getAttribute('data-descripcion') || '';
+            document.getElementById('edit_categoria_id').value = this.getAttribute('data-categoria-id');
+            document.getElementById('edit_principio_activo').value = this.getAttribute('data-principio-activo') || '';
+            document.getElementById('edit_presentacion').value = this.getAttribute('data-presentacion') || '';
+            document.getElementById('edit_unidad_base_id').value = this.getAttribute('data-unidad-base-id');
+            document.getElementById('edit_precio_costo').value = this.getAttribute('data-precio-costo');
+            document.getElementById('edit_precio_venta').value = this.getAttribute('data-precio-venta');
+            document.getElementById('edit_stock_actual').value = this.getAttribute('data-stock-actual');
+            document.getElementById('edit_stock_minimo').value = this.getAttribute('data-stock-minimo');
+            document.getElementById('edit_lote').value = this.getAttribute('data-lote') || '';
+            document.getElementById('edit_fecha_vencimiento').value = this.getAttribute('data-fecha-vencimiento') || '';
+            
+            // CORRECCIÓN IMPORTANTE: Manejar valor booleano correctamente
+            const activoValue = this.getAttribute('data-activo');
+            document.getElementById('edit_activo').checked = (activoValue === 'True' || activoValue === 'true' || activoValue === '1');
+            
+            // Mostrar el modal
+            document.getElementById('modalEditarProducto').style.display = 'block';
+        });
+    });
+    
+    // Botón para abrir modal de nuevo producto
+    document.querySelector('[data-target="#modalProducto"]')?.addEventListener('click', function() {
+        document.getElementById('modalProducto').style.display = 'block';
+    });
+    
+    // Mostrar/ocultar modales
+    const modals = document.querySelectorAll('.modal');
+    modals.forEach(modal => {
+        // Cerrar con botón X
+        modal.querySelector('.btn-close').addEventListener('click', function() {
+            modal.style.display = 'none';
+        });
+        
+        // Cerrar haciendo clic fuera del contenido
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                this.style.display = 'none';
+            }
+        });
+    });
+    
+    // Mostrar modal de nuevo producto si hay parámetro
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('nuevo') === '1') {
+        document.getElementById('modalProducto').style.display = 'block';
+    }
+});
+
+// Función auxiliar para abrir modal de nuevo producto
+function abrirModalProducto() {
+    document.getElementById('modalProducto').style.display = 'block';
+}
+</script>
+
+<style>
+/* Estilos para los modales */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+}
+
+.modal-content {
+    background-color: white;
+    margin: 5% auto;
+    padding: 20px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 800px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+}
+
+.modal-header h2 {
+    margin: 0;
+}
+
+.btn-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #666;
+}
+
+.btn-close:hover {
+    color: #333;
+}
+
+/* Estilos para la tabla */
+.stock-cell.bajo-stock {
+    color: #dc3545;
+    font-weight: bold;
+}
+</style>
+{% endblock %}

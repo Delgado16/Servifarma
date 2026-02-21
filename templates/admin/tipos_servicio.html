@@ -1,0 +1,541 @@
+{% extends "base.html" %}
+
+{% block title %}Gestión de Tipos de Servicio - ServiFarma{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>🔧 Gestión de Tipos de Servicio</h1>
+    <button class="btn btn-primary" onclick="abrirModal('modalCrear')">+ Nuevo Tipo</button>
+    <a href="{{ url_for('ver_tipos_servicio', mostrar_inactivos=0 if mostrando_inactivos else 1) }}" 
+       class="btn btn-secondary">
+        {{ 'Ocultar Inactivos' if mostrando_inactivos else 'Ver Inactivos' }}
+    </a>
+</div>
+
+<!-- Notificaciones -->
+<div id="notificacion" style="display: none; position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 300px;"></div>
+
+
+<!-- Tabla de Tipos de Servicio -->
+<div class="table-container">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nombre</th>
+                <th>Descripción</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody id="tabla-tipos-body">
+            {% for tipo in tipos %}
+            <tr class="{% if not tipo.activo %}inactivo-row{% endif %}"
+                data-id="{{ tipo.id }}"
+                data-nombre="{{ tipo.nombre }}"
+                data-descripcion="{{ tipo.descripcion or '' }}"
+                data-activo="{{ 'true' if tipo.activo else 'false' }}">
+                <td><strong>#{{ tipo.id }}</strong></td>
+                <td>{{ tipo.nombre }}</td>
+                <td>{{ tipo.descripcion or 'Sin descripción' }}</td>
+                <td>
+                    <span class="badge {% if tipo.activo %}badge-activo{% else %}badge-inactivo{% endif %}">
+                        {{ 'Activo' if tipo.activo else 'Inactivo' }}
+                    </span>
+                </td>
+                <td>
+                    <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                        <button class="btn btn-small btn-edit" 
+                                onclick='editarTipo({{ tipo.id }}, {{ tipo.nombre|tojson }}, {{ (tipo.descripcion or '')|tojson }})'>
+                            Editar
+                        </button>
+                        
+                        {% if tipo.activo %}
+                        <button class="btn btn-small btn-warning" 
+                                onclick='desactivarTipo({{ tipo.id }}, {{ tipo.nombre|tojson }})'>
+                            Desactivar
+                        </button>
+                        {% else %}
+                        <button class="btn btn-small btn-success" 
+                                onclick='activarTipo({{ tipo.id }}, {{ tipo.nombre|tojson }})'>
+                            Activar
+                        </button>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% else %}
+            <tr id="fila-vacia">
+                <td colspan="5" class="text-center" style="padding: 40px;">
+                    <i class="fas fa-tools" style="font-size: 48px; color: #ccc; margin-bottom: 10px; display: block;"></i>
+                    <h5 style="color: #999; margin: 0;">No hay tipos de servicio registrados</h5>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- MODAL CREAR TIPO -->
+<div id="modalCrear" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Nuevo Tipo de Servicio</h2>
+            <button class="btn-close" onclick="cerrarModal('modalCrear')">&times;</button>
+        </div>
+        <form id="formCrear" class="form">
+            <div class="form-group">
+                <label>Nombre *</label>
+                <input type="text" id="nombre" name="nombre" required maxlength="50" 
+                       placeholder="Ej: Consulta Médica">
+            </div>
+            <div class="form-group">
+                <label>Descripción</label>
+                <textarea id="descripcion" name="descripcion" rows="3" 
+                          placeholder="Descripción del servicio..."></textarea>
+            </div>
+
+            <div class="form-notice">
+                <small><i class="fas fa-info-circle"></i> Los campos marcados con * son obligatorios</small>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="cerrarModal('modalCrear')">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar Tipo</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL EDITAR TIPO -->
+<div id="modalEditar" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Editar Tipo de Servicio</h2>
+            <button class="btn-close" onclick="cerrarModal('modalEditar')">&times;</button>
+        </div>
+        <form id="formEditar" class="form">
+            <input type="hidden" id="edit_id" value="">
+            
+            <div class="form-group">
+                <label>Nombre *</label>
+                <input type="text" id="edit_nombre" name="nombre" required maxlength="50">
+            </div>
+            <div class="form-group">
+                <label>Descripción</label>
+                <textarea id="edit_descripcion" name="descripcion" rows="3"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="edit_activo">
+                    Tipo Activo
+                </label>
+            </div>
+
+            <div class="form-notice">
+                <small><i class="fas fa-info-circle"></i> Los campos marcados con * son obligatorios</small>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="cerrarModal('modalEditar')">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Actualizar Tipo</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL CAMBIAR ESTADO -->
+<div id="modalEstado" class="modal">
+    <div class="modal-content" style="max-width: 400px;">
+        <div class="modal-header">
+            <h2 id="estadoModalTitle">Cambiar Estado</h2>
+            <button class="btn-close" onclick="cerrarModal('modalEstado')">&times;</button>
+        </div>
+        <form id="formEstado" class="form">
+            <input type="hidden" id="estado_id" value="">
+            <input type="hidden" id="estado_accion" value="">
+            
+            <div style="padding: 20px; text-align: center;">
+                <i class="fas fa-question-circle" style="font-size: 48px; color: #ffc107; margin-bottom: 15px;"></i>
+                <p id="estadoMensaje" style="font-size: 16px; margin-bottom: 20px;"></p>
+            </div>
+
+            <div class="form-actions" style="justify-content: center;">
+                <button type="button" class="btn btn-secondary" onclick="cerrarModal('modalEstado')">Cancelar</button>
+                <button type="submit" class="btn" id="estadoBoton">Confirmar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Función para mostrar notificaciones
+function mostrarNotificacion(mensaje, tipo = 'success') {
+    const notificacion = document.getElementById('notificacion');
+    const colores = {
+        'success': '#28a745',
+        'error': '#dc3545',
+        'warning': '#ffc107',
+        'info': '#17a2b8'
+    };
+    
+    notificacion.innerHTML = `
+        <div style="background-color: ${colores[tipo]}; color: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+            <i class="fas fa-${tipo === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+            ${mensaje}
+        </div>
+    `;
+    notificacion.style.display = 'block';
+    
+    setTimeout(() => {
+        notificacion.style.display = 'none';
+    }, 3000);
+}
+
+// Función para cerrar modales
+function cerrarModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+    const form = document.querySelector(`#${modalId} form`);
+    if (form && modalId !== 'modalEstado') {
+        form.reset();
+    }
+}
+
+// Función para abrir modales
+function abrirModal(modalId) {
+    document.getElementById(modalId).style.display = 'block';
+}
+
+// Función para editar tipo
+function editarTipo(id, nombre, descripcion) {
+    document.getElementById('edit_id').value = id;
+    document.getElementById('edit_nombre').value = nombre;
+    document.getElementById('edit_descripcion').value = descripcion;
+    
+    const fila = document.querySelector(`tr[data-id="${id}"]`);
+    if (fila) {
+        const activo = fila.dataset.activo === 'true';
+        document.getElementById('edit_activo').checked = activo;
+    }
+    
+    abrirModal('modalEditar');
+}
+
+// Función para activar tipo
+function activarTipo(id, nombre) {
+    document.getElementById('estado_id').value = id;
+    document.getElementById('estado_accion').value = '1';
+    document.getElementById('estadoModalTitle').innerHTML = 'Activar Tipo de Servicio';
+    document.getElementById('estadoMensaje').innerHTML = `¿Está seguro que desea activar el tipo: <strong>"${nombre}"</strong>?`;
+    
+    const boton = document.getElementById('estadoBoton');
+    boton.innerHTML = '<i class="fas fa-check"></i> Activar';
+    boton.className = 'btn btn-success';
+    
+    abrirModal('modalEstado');
+}
+
+// Función para desactivar tipo
+function desactivarTipo(id, nombre) {
+    document.getElementById('estado_id').value = id;
+    document.getElementById('estado_accion').value = '0';
+    document.getElementById('estadoModalTitle').innerHTML = 'Desactivar Tipo de Servicio';
+    document.getElementById('estadoMensaje').innerHTML = `¿Está seguro que desea desactivar el tipo: <strong>"${nombre}"</strong>?`;
+    
+    const boton = document.getElementById('estadoBoton');
+    boton.innerHTML = '<i class="fas fa-ban"></i> Desactivar';
+    boton.className = 'btn btn-warning';
+    
+    abrirModal('modalEstado');
+}
+
+// Función para agregar nueva fila a la tabla
+function agregarFilaTabla(tipo) {
+    const tbody = document.getElementById('tabla-tipos-body');
+    const filaVacia = document.getElementById('fila-vacia');
+    
+    if (filaVacia) {
+        filaVacia.remove();
+    }
+    
+    const nuevaFila = document.createElement('tr');
+    nuevaFila.setAttribute('data-id', tipo.id);
+    nuevaFila.setAttribute('data-nombre', tipo.nombre);
+    nuevaFila.setAttribute('data-descripcion', tipo.descripcion || '');
+    nuevaFila.setAttribute('data-activo', 'true');
+    
+    nuevaFila.innerHTML = `
+        <td><strong>#${tipo.id}</strong></td>
+        <td>${tipo.nombre}</td>
+        <td>${tipo.descripcion || 'Sin descripción'}</td>
+        <td><span class="badge badge-activo">Activo</span></td>
+        <td>
+            <div style="display: flex; gap: 5px;">
+                <button class="btn btn-small btn-edit" onclick='editarTipo(${tipo.id}, ${JSON.stringify(tipo.nombre)}, ${JSON.stringify(tipo.descripcion || '')})'>Editar</button>
+                <button class="btn btn-small btn-warning" onclick='desactivarTipo(${tipo.id}, ${JSON.stringify(tipo.nombre)})'>Desactivar</button>
+            </div>
+        </td>
+    `;
+    
+    tbody.appendChild(nuevaFila);
+}
+
+// Función para actualizar fila en la tabla
+function actualizarFilaTabla(id, nombre, descripcion, activo) {
+    const fila = document.querySelector(`tr[data-id="${id}"]`);
+    if (fila) {
+        fila.setAttribute('data-nombre', nombre);
+        fila.setAttribute('data-descripcion', descripcion);
+        fila.setAttribute('data-activo', activo ? 'true' : 'false');
+        
+        if (activo) {
+            fila.classList.remove('inactivo-row');
+        } else {
+            fila.classList.add('inactivo-row');
+        }
+        
+        const celdas = fila.cells;
+        celdas[1].textContent = nombre;
+        celdas[2].textContent = descripcion || 'Sin descripción';
+        
+        const badge = celdas[3].querySelector('.badge');
+        badge.className = `badge ${activo ? 'badge-activo' : 'badge-inactivo'}`;
+        badge.textContent = activo ? 'Activo' : 'Inactivo';
+        
+        const accionesDiv = celdas[4].querySelector('div');
+        if (activo) {
+            accionesDiv.innerHTML = `
+                <button class="btn btn-small btn-edit" onclick='editarTipo(${id}, ${JSON.stringify(nombre)}, ${JSON.stringify(descripcion)})'>Editar</button>
+                <button class="btn btn-small btn-warning" onclick='desactivarTipo(${id}, ${JSON.stringify(nombre)})'>Desactivar</button>
+            `;
+        } else {
+            accionesDiv.innerHTML = `
+                <button class="btn btn-small btn-edit" onclick='editarTipo(${id}, ${JSON.stringify(nombre)}, ${JSON.stringify(descripcion)})'>Editar</button>
+                <button class="btn btn-small btn-success" onclick='activarTipo(${id}, ${JSON.stringify(nombre)})'>Activar</button>
+            `;
+        }
+    }
+}
+
+// Event Listeners
+document.addEventListener('DOMContentLoaded', function() {
+    // Formulario de creación
+    document.getElementById('formCrear').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const nombre = document.getElementById('nombre').value.trim();
+        if (!nombre || nombre.length < 2) {
+            alert('El nombre es requerido (mínimo 2 caracteres)');
+            document.getElementById('nombre').focus();
+            return;
+        }
+        
+        const data = {
+            nombre: nombre,
+            descripcion: document.getElementById('descripcion').value.trim() || null
+        };
+        
+        try {
+            const response = await fetch('/api/tipos-servicio', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                mostrarNotificacion('Tipo de servicio creado exitosamente', 'success');
+                cerrarModal('modalCrear');
+                agregarFilaTabla({
+                    id: result.id,
+                    nombre: data.nombre,
+                    descripcion: data.descripcion
+                });
+            } else {
+                mostrarNotificacion('Error: ' + result.error, 'error');
+            }
+        } catch (error) {
+            mostrarNotificacion('Error de conexión', 'error');
+        }
+    });
+    
+    // Formulario de edición
+    document.getElementById('formEditar').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const id = document.getElementById('edit_id').value;
+        const nombre = document.getElementById('edit_nombre').value.trim();
+        
+        if (!nombre || nombre.length < 2) {
+            alert('El nombre es requerido (mínimo 2 caracteres)');
+            document.getElementById('edit_nombre').focus();
+            return;
+        }
+        
+        const data = {
+            nombre: nombre,
+            descripcion: document.getElementById('edit_descripcion').value.trim() || null
+        };
+        
+        try {
+            const response = await fetch('/api/tipos-servicio/' + id, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                mostrarNotificacion('Tipo de servicio actualizado exitosamente', 'success');
+                cerrarModal('modalEditar');
+                actualizarFilaTabla(
+                    id, 
+                    data.nombre, 
+                    data.descripcion,
+                    document.getElementById('edit_activo').checked
+                );
+            } else {
+                mostrarNotificacion('Error: ' + result.error, 'error');
+            }
+        } catch (error) {
+            mostrarNotificacion('Error de conexión', 'error');
+        }
+    });
+    
+    // Formulario de cambio de estado
+    document.getElementById('formEstado').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const id = document.getElementById('estado_id').value;
+        const activo = document.getElementById('estado_accion').value === '1';
+        
+        try {
+            const response = await fetch('/api/tipos-servicio/' + id + '/estado', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ activo: activo ? 1 : 0 })
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                const estado = activo ? 'activado' : 'desactivado';
+                mostrarNotificacion(`Tipo de servicio ${estado} exitosamente`, 'success');
+                cerrarModal('modalEstado');
+                
+                const fila = document.querySelector(`tr[data-id="${id}"]`);
+                const nombre = fila.dataset.nombre;
+                const descripcion = fila.dataset.descripcion;
+                
+                actualizarFilaTabla(id, nombre, descripcion, activo);
+            } else {
+                mostrarNotificacion('Error: ' + result.error, 'error');
+            }
+        } catch (error) {
+            mostrarNotificacion('Error de conexión', 'error');
+        }
+    });
+    
+    // Cerrar modales al hacer clic fuera
+    window.addEventListener('click', function(event) {
+        if (event.target.classList.contains('modal')) {
+            event.target.style.display = 'none';
+            const form = event.target.querySelector('form');
+            if (form && event.target.id !== 'modalEstado') {
+                form.reset();
+            }
+        }
+    });
+    
+    // Cerrar modales con tecla ESC
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            document.querySelectorAll('.modal').forEach(modal => {
+                modal.style.display = 'none';
+                const form = modal.querySelector('form');
+                if (form && modal.id !== 'modalEstado') {
+                    form.reset();
+                }
+            });
+        }
+    });
+});
+</script>
+
+<!-- Estilos adicionales -->
+<style>
+.badge-activo {
+    background-color: #d4edda;
+    color: #155724;
+    padding: 4px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.badge-inactivo {
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 4px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.inactivo-row {
+    opacity: 0.7;
+    background-color: #f8f9fa;
+}
+
+#modalEstado .modal-content {
+    text-align: center;
+}
+
+#modalEstado .form-actions {
+    border-top: none;
+    margin-top: 10px;
+}
+
+.btn-small.btn-warning {
+    background-color: #ffc107;
+    color: #000;
+}
+
+.btn-small.btn-warning:hover {
+    background-color: #ffca2c;
+}
+
+.btn-small.btn-success {
+    background-color: #28a745;
+    color: white;
+}
+
+.btn-small.btn-success:hover {
+    background-color: #218838;
+}
+
+#notificacion {
+    animation: slideIn 0.3s ease-in-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+</style>
+{% endblock %}

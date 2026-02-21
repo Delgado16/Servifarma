@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar Sesión - ServiFarma</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <style>
+        /* Estilos responsivos manteniendo el diseño original */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body.login-page {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 450px;
+        }
+
+        .login-box {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+            padding: 3rem;
+            width: 100%;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Logo centrado y más grande */
+        .login-header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+
+        .logo-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .logo-image {
+            width: 180px;
+            height: auto;
+            max-width: 100%;
+            object-fit: contain;
+            margin-bottom: 1rem;
+            filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
+        }
+
+        .login-header h1 {
+            color: #333;
+            font-size: 2.2rem;
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .login-header p {
+            color: #666;
+            font-size: 1.1rem;
+            font-weight: 400;
+        }
+
+        /* Alertas */
+        .alert {
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .alert-danger {
+            background-color: #fee;
+            color: #c00;
+            border: 1px solid #fcc;
+        }
+
+        .alert i {
+            font-size: 1.2rem;
+        }
+
+        /* Formulario */
+        .form-login {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.6rem;
+            color: #333;
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 14px 18px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 1rem;
+            transition: all 0.3s;
+            background-color: #f8f9fa;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            background-color: white;
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-group input::placeholder {
+            color: #999;
+            font-size: 0.95rem;
+        }
+
+        .btn {
+            padding: 14px 28px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-block {
+            display: block;
+            width: 100%;
+        }
+
+        .login-footer {
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 2px solid #f0f0f0;
+            font-size: 0.95rem;
+            color: #666;
+            text-align: center;
+        }
+
+        .login-footer p {
+            margin-bottom: 0.5rem;
+        }
+
+        .login-footer a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.3s;
+        }
+
+        .login-footer a:hover {
+            color: #764ba2;
+            text-decoration: underline;
+        }
+
+        /* Media Queries para responsividad */
+        @media (max-width: 768px) {
+            .login-box {
+                padding: 2.5rem;
+            }
+            
+            .logo-image {
+                width: 150px;
+            }
+            
+            .login-header h1 {
+                font-size: 2rem;
+            }
+            
+            .login-header p {
+                font-size: 1rem;
+            }
+            
+            .btn {
+                font-size: 1rem;
+                padding: 12px 24px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body.login-page {
+                padding: 15px;
+                align-items: flex-start;
+                padding-top: 30px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            }
+            
+            .login-box {
+                padding: 2rem;
+                border-radius: 20px;
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            }
+            
+            .logo-image {
+                width: 130px;
+            }
+            
+            .login-header h1 {
+                font-size: 1.8rem;
+            }
+            
+            .login-header p {
+                font-size: 0.95rem;
+            }
+            
+            .form-group input {
+                padding: 12px 16px;
+                font-size: 0.95rem;
+            }
+            
+            .btn {
+                padding: 12px 20px;
+                font-size: 1rem;
+            }
+            
+            .alert {
+                padding: 12px 16px;
+                margin-bottom: 1.5rem;
+            }
+        }
+
+        @media (max-width: 360px) {
+            .login-box {
+                padding: 1.5rem;
+            }
+            
+            .logo-image {
+                width: 110px;
+            }
+            
+            .login-header h1 {
+                font-size: 1.6rem;
+            }
+            
+            .login-header p {
+                font-size: 0.9rem;
+            }
+            
+            .form-group {
+                margin-bottom: 1.25rem;
+            }
+            
+            .form-group label {
+                font-size: 0.95rem;
+            }
+            
+            .form-group input {
+                padding: 10px 14px;
+            }
+            
+            .btn {
+                padding: 10px 18px;
+                font-size: 0.95rem;
+            }
+            
+            .login-footer {
+                font-size: 0.85rem;
+                margin-top: 1.5rem;
+                padding-top: 1.25rem;
+            }
+        }
+
+        /* Para pantallas muy grandes */
+        @media (min-width: 1200px) {
+            .login-container {
+                max-width: 500px;
+            }
+            
+            .login-box {
+                padding: 3.5rem;
+            }
+            
+            .logo-image {
+                width: 200px;
+            }
+            
+            .login-header h1 {
+                font-size: 2.4rem;
+            }
+        }
+
+        /* Mejora de accesibilidad en focus */
+        .btn:focus,
+        input:focus {
+            outline: 2px solid #667eea;
+            outline-offset: 2px;
+        }
+
+        /* Para evitar zoom en iOS al hacer focus en inputs */
+        @media screen and (max-width: 768px) {
+            input,
+            select,
+            textarea {
+                font-size: 16px;
+            }
+        }
+
+        /* Efecto de fondo animado */
+        body.login-page::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            z-index: -1;
+        }
+
+        body.login-page::after {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"><circle cx="30" cy="30" r="1.5" fill="rgba(255,255,255,0.05)"/></svg>');
+            opacity: 0.5;
+            pointer-events: none;
+            z-index: -1;
+        }
+    </style>
+    <!-- Agregar Font Awesome para iconos (opcional) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="login-page">
+    <div class="login-container">
+        <div class="login-box">
+            <div class="login-header">
+                <!-- Logo centrado y más grande -->
+                <div class="logo-container">
+                    <img src="{{ url_for('static', filename='servifarma.jpeg') }}" alt="ServiFarma" class="logo-image">
+                </div>
+            </div>
+
+            {% if error %}
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-circle"></i>
+                {{ error }}
+            </div>
+            {% endif %}
+
+            <form method="POST" class="form-login">
+                <div class="form-group">
+                    <label for="email">
+                        <i class="fas fa-envelope" style="margin-right: 8px; color: #667eea;"></i>
+                        Email
+                    </label>
+                    <input type="email" id="email" name="email" required placeholder="correo@ejemplo.com">
+                </div>
+
+                <div class="form-group">
+                    <label for="contrasena">
+                        <i class="fas fa-lock" style="margin-right: 8px; color: #667eea;"></i>
+                        Contraseña
+                    </label>
+                    <input type="password" id="contrasena" name="contrasena" required placeholder="••••••••">
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block">
+                    <i class="fas fa-sign-in-alt" style="margin-right: 8px;"></i>
+                    Iniciar Sesión
+                </button>
+            </form>
+
+            <div class="login-footer">
+                <p>© 2026 ServiFarma. Todos los derechos reservados.</p>
+                <p>Versión 1.0.0</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Script para mejor experiencia móvil
+        document.addEventListener('DOMContentLoaded', function() {
+            // Prevenir zoom en iOS al hacer focus
+            const inputs = document.querySelectorAll('input');
+            inputs.forEach(input => {
+                input.addEventListener('focus', function() {
+                    if (window.innerWidth <= 768) {
+                        this.style.fontSize = '16px';
+                    }
+                });
+                
+                input.addEventListener('blur', function() {
+                    this.style.fontSize = '';
+                });
+            });
+            
+            // Auto-focus en el primer campo
+            setTimeout(() => {
+                document.getElementById('email')?.focus();
+            }, 100);
+
+            // Efecto de fade out para alertas después de 5 segundos
+            const alertElement = document.querySelector('.alert');
+            if (alertElement) {
+                setTimeout(() => {
+                    alertElement.style.transition = 'opacity 0.5s ease';
+                    alertElement.style.opacity = '0';
+                    setTimeout(() => {
+                        if (alertElement.parentNode) {
+                            alertElement.style.display = 'none';
+                        }
+                    }, 500);
+                }, 5000);
+            }
+        });
+    </script>
+</body>
+</html>

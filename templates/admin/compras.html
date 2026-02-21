@@ -1,0 +1,1148 @@
+{% extends "base.html" %}
+
+{% block title %}Compras - Sistema de Gestión{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ===== VARIABLES GLOBALES ===== */
+:root {
+    --primary: #3498db;
+    --primary-dark: #2980b9;
+    --success: #48bb78;
+    --success-dark: #38a169;
+    --danger: #f56565;
+    --danger-dark: #e53e3e;
+    --dark: #2c3e50;
+    --dark-light: #1e2b38;
+    --gray-100: #f7fafc;
+    --gray-200: #edf2f7;
+    --gray-300: #e2e8f0;
+    --gray-400: #cbd5e0;
+    --gray-500: #a0aec0;
+    --gray-600: #718096;
+    --gray-700: #4a5568;
+    --gray-800: #2d3748;
+}
+
+/* ===== ESTILOS BASE ===== */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+/* ===== MODAL RESPONSIVE ===== */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(5px);
+    z-index: 9999;
+    justify-content: center;
+    align-items: center;
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+.modal-content {
+    background: white;
+    padding: 0;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 1200px;
+    max-height: 95vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: linear-gradient(135deg, var(--dark) 0%, var(--dark-light) 100%);
+    border-radius: 16px 16px 0 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.modal-title {
+    margin: 0;
+    color: white;
+    font-size: clamp(1.2rem, 4vw, 1.6rem);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.modal-title i {
+    color: var(--primary);
+    font-size: clamp(1.3rem, 4vw, 1.8rem);
+}
+
+.btn-close {
+    background: rgba(255,255,255,0.1);
+    border: none;
+    font-size: 1.8rem;
+    cursor: pointer;
+    color: white;
+    transition: all 0.3s;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.btn-close:hover {
+    background: rgba(231, 76, 60, 0.9);
+    transform: rotate(90deg);
+}
+
+.form-container {
+    padding: 20px;
+}
+
+/* ===== GRID RESPONSIVE ===== */
+.grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+}
+
+/* ===== TARJETAS ===== */
+.section-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    border: 1px solid var(--gray-200);
+    transition: all 0.3s;
+    height: fit-content;
+}
+
+.section-card:hover {
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.1);
+    border-color: var(--gray-400);
+}
+
+.section-title {
+    font-size: clamp(1rem, 3vw, 1.1rem);
+    color: var(--gray-800);
+    margin-top: 0;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--gray-200);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+}
+
+.section-title i {
+    color: var(--primary);
+    font-size: 1rem;
+    background: rgba(52, 152, 219, 0.1);
+    padding: 6px;
+    border-radius: 8px;
+}
+
+/* ===== FORMULARIOS ===== */
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group:last-child {
+    margin-bottom: 0;
+}
+
+.form-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 5px;
+    font-weight: 500;
+    color: var(--gray-700);
+    font-size: 0.9rem;
+}
+
+.form-label i {
+    color: var(--primary);
+    width: 16px;
+    font-size: 0.9rem;
+}
+
+.form-control {
+    width: 100%;
+    padding: 10px 14px;
+    border: 2px solid var(--gray-300);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    transition: all 0.2s;
+    background-color: var(--gray-100);
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+    background-color: white;
+}
+
+.form-control[readonly] {
+    background-color: var(--gray-100);
+    border-color: var(--gray-300);
+    color: var(--gray-700);
+}
+
+/* ===== INPUT GROUP ===== */
+.input-group {
+    display: flex;
+    align-items: stretch;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 2px solid var(--gray-300);
+    transition: all 0.2s;
+    background: white;
+}
+
+.input-group:focus-within {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.input-group-prepend {
+    background: linear-gradient(135deg, var(--gray-100) 0%, var(--gray-200) 100%);
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    border-right: 2px solid var(--gray-300);
+    color: var(--gray-700);
+    font-weight: 600;
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+.input-group .form-control {
+    border: none;
+    box-shadow: none;
+    background: white;
+    padding-left: 12px;
+}
+
+/* ===== DETALLE DE PRODUCTOS ===== */
+.detalle-item {
+    margin-bottom: 15px;
+}
+
+.detalle-item:last-child {
+    margin-bottom: 0;
+}
+
+.detalle-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1.2fr 1fr;
+    gap: 15px;
+    align-items: start;
+    padding: 15px;
+    background: white;
+    border-radius: 10px;
+    border: 1px solid var(--gray-200);
+    transition: all 0.3s;
+}
+
+.detalle-grid:hover {
+    border-color: var(--primary);
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.1);
+}
+
+.subtotal-display {
+    background: #f0fff4;
+    border: 2px solid #c6f6d5;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #276749;
+    text-align: center;
+    width: 100%;
+}
+
+/* ===== BADGES Y ALERTAS ===== */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 25px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.alert {
+    padding: 12px 16px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-left: 4px solid;
+    font-size: 0.9rem;
+}
+
+.alert-warning {
+    background: #fffaf0;
+    border-color: #ed8936;
+    color: #744210;
+}
+
+/* ===== BOTONES ===== */
+.btn {
+    padding: 10px 18px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 600;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+.btn:active {
+    transform: translateY(0);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+}
+
+.btn-success {
+    background: linear-gradient(135deg, var(--success) 0%, var(--success-dark) 100%);
+    color: white;
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, var(--danger) 0%, var(--danger-dark) 100%);
+    color: white;
+}
+
+.btn-danger:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-secondary {
+    background: linear-gradient(135deg, var(--gray-500) 0%, var(--gray-600) 100%);
+    color: white;
+}
+
+.btn-icon {
+    padding: 8px;
+    min-width: 38px;
+    height: 38px;
+}
+
+/* ===== TABLA RESPONSIVE ===== */
+.table-container {
+    overflow-x: auto;
+    margin: 0 -20px;
+    padding: 0 20px;
+    -webkit-overflow-scrolling: touch;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 700px;
+}
+
+th {
+    padding: 14px 12px;
+    text-align: left;
+    color: var(--gray-700);
+    font-weight: 600;
+    font-size: 0.9rem;
+    background: var(--gray-100);
+    border-bottom: 2px solid var(--gray-300);
+}
+
+td {
+    padding: 12px;
+    border-bottom: 1px solid var(--gray-200);
+    font-size: 0.9rem;
+}
+
+/* ===== BREAKPOINTS RESPONSIVE ===== */
+@media (max-width: 992px) {
+    .grid-2 {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .grid-3 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .detalle-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+    
+    .modal-content {
+        max-width: 95%;
+    }
+}
+
+@media (max-width: 768px) {
+    .modal-header {
+        padding: 12px 15px;
+    }
+    
+    .form-container {
+        padding: 15px;
+    }
+    
+    .section-card {
+        padding: 15px;
+    }
+    
+    .grid-3 {
+        grid-template-columns: 1fr;
+    }
+    
+    .btn {
+        padding: 8px 14px;
+        font-size: 0.9rem;
+    }
+    
+    .badge {
+        padding: 4px 10px;
+        font-size: 0.8rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .modal-overlay {
+        padding: 5px;
+    }
+    
+    .modal-content {
+        max-height: 98vh;
+    }
+    
+    .form-container {
+        padding: 12px;
+    }
+    
+    .section-card {
+        padding: 12px;
+    }
+    
+    .section-title {
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+    }
+    
+    .input-group-prepend {
+        padding: 0 8px;
+        font-size: 0.8rem;
+    }
+    
+    .form-control {
+        padding: 8px 12px;
+        font-size: 0.9rem;
+    }
+    
+    .btn {
+        width: 100%;
+        margin-bottom: 5px;
+    }
+    
+    .action-buttons {
+        flex-direction: column;
+    }
+}
+
+/* ===== UTILIDADES ===== */
+.text-right {
+    text-align: right;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.d-flex {
+    display: flex;
+}
+
+.flex-wrap {
+    flex-wrap: wrap;
+}
+
+.align-center {
+    align-items: center;
+}
+
+.justify-between {
+    justify-content: space-between;
+}
+
+.gap-10 {
+    gap: 10px;
+}
+
+.gap-15 {
+    gap: 15px;
+}
+
+.mt-15 {
+    margin-top: 15px;
+}
+
+.mb-15 {
+    margin-bottom: 15px;
+}
+
+.w-100 {
+    width: 100%;
+}
+
+/* ===== SCROLLBAR PERSONALIZADA ===== */
+.modal-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+    background: var(--gray-100);
+    border-radius: 10px;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+    background: var(--gray-400);
+    border-radius: 10px;
+}
+
+.modal-content::-webkit-scrollbar-thumb:hover {
+    background: var(--gray-500);
+}
+
+/* ===== ANIMACIONES ===== */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease;
+}
+
+/* ===== TOUCH OPTIMIZATIONS ===== */
+@media (hover: none) and (pointer: coarse) {
+    .btn:hover {
+        transform: none;
+    }
+    
+    .btn:active {
+        transform: scale(0.98);
+    }
+    
+    .form-control, 
+    .btn,
+    select {
+        font-size: 16px !important; /* Previene zoom en iOS */
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container" style="padding: 15px;">
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}" style="margin-bottom: 15px;">
+                    <i class="fas {% if category == 'success' %}fa-check-circle{% elif category == 'danger' %}fa-exclamation-circle{% else %}fa-info-circle{% endif %}"></i>
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- Encabezado Responsive -->
+    <div class="d-flex flex-wrap align-center justify-between" style="margin-bottom: 20px; gap: 15px;">
+        <div>
+            <h1 style="font-size: clamp(1.5rem, 5vw, 1.8rem); color: var(--dark); margin-bottom: 5px;">
+                <i class="fas fa-shopping-cart" style="color: var(--primary);"></i>
+                Gestión de Compras
+            </h1>
+            <p style="color: var(--gray-600); margin: 0; font-size: clamp(0.9rem, 3vw, 1rem);">
+                Registro y administración de compras a proveedores
+            </p>
+        </div>
+        <button class="btn btn-primary" onclick="abrirModal()" style="white-space: nowrap;">
+            <i class="fas fa-plus-circle"></i>
+            <span class="btn-text">Nueva Compra</span>
+        </button>
+    </div>
+
+    <!-- Tabla de Compras Responsive -->
+    <div class="section-card" style="padding: 20px;">
+        <div class="d-flex flex-wrap align-center justify-between" style="margin-bottom: 15px; gap: 10px;">
+            <h2 class="section-title" style="margin-bottom: 0; border-bottom: none;">
+                <i class="fas fa-history"></i>
+                Historial de Compras
+            </h2>
+            <span class="badge" style="background: var(--gray-200); color: var(--gray-700);">
+                Total: {{ compras|length }} compras
+            </span>
+        </div>
+        
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Documento</th>
+                        <th>Proveedor</th>
+                        <th>Fecha</th>
+                        <th>Factura</th>
+                        <th>Total</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if compras %}
+                        {% for compra in compras %}
+                        <tr>
+                            <td><strong>{{ compra.numero_documento }}</strong></td>
+                            <td>{{ compra.proveedor_nombre or 'N/A' }}</td>
+                            <td>{{ compra.fecha_compra.strftime('%d/%m/%Y') if compra.fecha_compra else 'N/A' }}</td>
+                            <td>{{ compra.numero_factura or 'N/A' }}</td>
+                            <td style="color: #276749; font-weight: 600;">C$ {{ "%.2f"|format(compra.total_costo|float) }}</td>
+                            <td>
+                                <span class="badge" style="background: #c6f6d5; color: #22543d;">
+                                    {{ compra.estado or 'completada' }}
+                                </span>
+                            </td>
+                            <td>
+                                <button onclick="verDetalle({{ compra.id }})" class="btn btn-primary" style="padding: 6px 12px; font-size: 0.85rem;">
+                                    <i class="fas fa-eye"></i>
+                                    <span class="btn-text">Ver</span>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center" style="padding: 40px; color: var(--gray-500);">
+                                <i class="fas fa-inbox" style="font-size: 3rem; margin-bottom: 10px; display: block; opacity: 0.5;"></i>
+                                <p style="font-size: 1.1rem; margin-bottom: 5px; color: var(--gray-700);">No hay compras registradas</p>
+                                <p style="margin: 0;">Haz clic en "Nueva Compra" para comenzar</p>
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ===== MODAL DE NUEVA COMPRA - TOTALMENTE RESPONSIVE ===== -->
+<div id="modalCompra" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="modal-title">
+                <i class="fas fa-cart-plus"></i>
+                Registrar Nueva Compra
+            </h2>
+            <button type="button" class="btn-close" onclick="cerrarModal()">&times;</button>
+        </div>
+        
+        <div class="form-container">
+            <form method="POST" action="{{ url_for('registrar_compra') }}" id="formCompra">
+                
+                <!-- Grid Responsive de 2 columnas -->
+                <div class="grid-2">
+                    
+                    <!-- Tarjeta: Documento -->
+                    <div class="section-card">
+                        <h3 class="section-title">
+                            <i class="fas fa-file-invoice"></i>
+                            Documento
+                        </h3>
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fas fa-hashtag"></i>
+                                Número de Documento *
+                            </label>
+                            <input type="text" class="form-control" name="numero_documento" required 
+                                   value="COMP-{{ '%03d' % (compras|length + 1) }}" 
+                                   placeholder="Ej: COMP-001">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fas fa-file-invoice-dollar"></i>
+                                Número de Factura
+                            </label>
+                            <input type="text" class="form-control" name="numero_factura" 
+                                   placeholder="Factura del proveedor">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fas fa-calendar-alt"></i>
+                                Fecha de Compra *
+                            </label>
+                            <input type="date" class="form-control" name="fecha_compra" required 
+                                   value="{{ today }}" max="{{ today }}">
+                        </div>
+                    </div>
+                    
+                    <!-- Tarjeta: Proveedor -->
+                    <div class="section-card">
+                        <h3 class="section-title">
+                            <i class="fas fa-truck"></i>
+                            Proveedor
+                        </h3>
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fas fa-user-tie"></i>
+                                Proveedor *
+                            </label>
+                            <select class="form-control" name="proveedor_id" required 
+                                    onchange="cargarDatosProveedor(this)">
+                                <option value="">-- Seleccionar proveedor --</option>
+                                {% for proveedor in proveedores %}
+                                <option value="{{ proveedor.id }}" 
+                                        data-ruc="{{ proveedor.ruc if proveedor.ruc else '' }}"
+                                        data-telefono="{{ proveedor.telefono if proveedor.telefono else '' }}"
+                                        data-direccion="{{ proveedor.direccion if proveedor.direccion else '' }}">
+                                    {{ proveedor.nombre }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <!-- Grid interno responsive -->
+                        <div class="grid-3" style="margin-bottom: 15px;">
+                            <div class="form-group">
+                                <label class="form-label" style="font-size: 0.85rem;">
+                                    <i class="fas fa-id-card"></i>
+                                    RUC
+                                </label>
+                                <input type="text" class="form-control" id="proveedor_ruc" readonly 
+                                       placeholder="RUC">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" style="font-size: 0.85rem;">
+                                    <i class="fas fa-phone"></i>
+                                    Teléfono
+                                </label>
+                                <input type="text" class="form-control" id="proveedor_telefono" readonly 
+                                       placeholder="Teléfono">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" style="font-size: 0.85rem;">
+                                    <i class="fas fa-map-marker-alt"></i>
+                                    Dirección
+                                </label>
+                                <input type="text" class="form-control" id="proveedor_direccion" readonly 
+                                       placeholder="Dirección">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- SECCIÓN: Productos -->
+                <div class="section-card">
+                    <div class="d-flex flex-wrap align-center justify-between" style="margin-bottom: 15px; gap: 10px;">
+                        <h3 class="section-title" style="margin-bottom: 0; border-bottom: none;">
+                            <i class="fas fa-boxes"></i>
+                            Productos
+                        </h3>
+                        <button type="button" class="btn btn-success" onclick="agregarDetalle()">
+                            <i class="fas fa-plus-circle"></i>
+                            <span class="btn-text">Agregar Producto</span>
+                        </button>
+                    </div>
+                    
+                    <!-- Cabecera (oculta en móviles) -->
+                    <div class="detalle-grid" style="padding: 8px 15px; background: var(--gray-100); margin-bottom: 10px; border: none;">
+                        <div style="color: var(--gray-700); font-weight: 600;">PRODUCTO</div>
+                        <div style="color: var(--gray-700); font-weight: 600;">CANTIDAD</div>
+                        <div style="color: var(--gray-700); font-weight: 600;">PRECIO UNIT.</div>
+                        <div style="color: var(--gray-700); font-weight: 600; text-align: right;">SUBTOTAL</div>
+                    </div>
+                    
+                    <!-- Contenedor de productos dinámicos -->
+                    <div id="detallesContainer"></div>
+                    
+                    <!-- Alertas y contadores responsive -->
+                    <div class="d-flex flex-wrap align-center justify-between" style="margin-top: 20px; gap: 15px;">
+                        <div class="alert alert-warning" id="detallesAlert" style="display: none; flex: 1;">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <span>Debe agregar al menos un producto</span>
+                        </div>
+                        <div class="d-flex flex-wrap gap-10">
+                            <span class="badge" style="background: #ebf8ff; color: #2c5282;">
+                                <i class="fas fa-cubes"></i>
+                                <span>Productos: <strong id="totalProductosCount">0</strong></span>
+                            </span>
+                            <span class="badge" style="background: #f0fff4; color: #276749;">
+                                <i class="fas fa-sort-numeric-up"></i>
+                                <span>Unidades: <strong id="totalUnidadesCount">0</strong></span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- SECCIÓN: Total (responsive) -->
+                <div class="section-card" style="background: linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%);">
+                    <div class="d-flex flex-wrap align-center justify-between" style="gap: 15px;">
+                        <div class="d-flex align-center gap-10">
+                            <i class="fas fa-calculator" style="color: var(--primary); font-size: 1.2rem;"></i>
+                            <span style="font-weight: 600; color: var(--gray-800);">TOTAL DE LA COMPRA:</span>
+                        </div>
+                        <div>
+                            <span style="font-size: clamp(1.5rem, 5vw, 1.8rem); font-weight: 800; color: #276749;" id="totalDisplay">0.00</span>
+                            <span style="color: var(--gray-600); margin-left: 5px;">C$</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- BOTONES DE ACCIÓN RESPONSIVE -->
+                <div class="d-flex flex-wrap action-buttons" style="justify-content: flex-end; gap: 12px; padding-top: 15px; border-top: 2px solid var(--gray-200);">
+                    <button type="button" class="btn btn-secondary" onclick="cerrarModal()">
+                        <i class="fas fa-times"></i>
+                        <span class="btn-text">Cancelar</span>
+                    </button>
+                    <button type="submit" class="btn btn-primary" id="btnRegistrar">
+                        <i class="fas fa-check-circle"></i>
+                        <span class="btn-text">Registrar Compra</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// ========== VARIABLES GLOBALES ==========
+let productos = {{ productos|tojson|safe }};
+let detalleCount = 0;
+
+// Detectar si es dispositivo móvil
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+// ========== FUNCIONES DEL MODAL ==========
+function abrirModal() {
+    const modal = document.getElementById('modalCompra');
+    if (modal) {
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        
+        // Prevenir scroll en iOS
+        if (isMobile) {
+            document.body.style.position = 'fixed';
+            document.body.style.width = '100%';
+        }
+        
+        const container = document.getElementById('detallesContainer');
+        if (container) {
+            container.innerHTML = '';
+            detalleCount = 0;
+        }
+        
+        agregarDetalle();
+        calcularTotal();
+    }
+}
+
+function cerrarModal() {
+    const modal = document.getElementById('modalCompra');
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = 'auto';
+        
+        // Restaurar scroll en iOS
+        if (isMobile) {
+            document.body.style.position = '';
+            document.body.style.width = '';
+        }
+        
+        const form = document.getElementById('formCompra');
+        if (form) form.reset();
+        
+        document.getElementById('detallesContainer').innerHTML = '';
+        document.getElementById('proveedor_ruc').value = '';
+        document.getElementById('proveedor_telefono').value = '';
+        document.getElementById('proveedor_direccion').value = '';
+        
+        detalleCount = 0;
+    }
+}
+
+// ========== FUNCIONES DE PROVEEDOR ==========
+function cargarDatosProveedor(select) {
+    const selectedOption = select.options[select.selectedIndex];
+    
+    document.getElementById('proveedor_ruc').value = selectedOption?.dataset.ruc || '';
+    document.getElementById('proveedor_telefono').value = selectedOption?.dataset.telefono || '';
+    document.getElementById('proveedor_direccion').value = selectedOption?.dataset.direccion || '';
+}
+
+// ========== FUNCIONES DE PRODUCTOS ==========
+function agregarDetalle() {
+    detalleCount++;
+    const container = document.getElementById('detallesContainer');
+    
+    let options = '<option value="">-- Seleccionar --</option>';
+    productos.forEach(p => {
+        options += `<option value="${p.id}" 
+                        data-precio="${p.precio_costo || 0}"
+                        data-nombre="${p.nombre || ''}">
+                        ${p.nombre} (C$ ${(p.precio_costo || 0).toFixed(2)})
+                    </option>`;
+    });
+    
+    const detalleItem = document.createElement('div');
+    detalleItem.className = 'detalle-item';
+    detalleItem.innerHTML = `
+        <div class="detalle-grid">
+            <select class="form-control producto-select" name="producto_id[]" required onchange="cargarPrecioProducto(this)">
+                ${options}
+            </select>
+            
+            <div class="input-group">
+                <div class="input-group-prepend">Unid.</div>
+                <input type="number" class="form-control cantidad-input" name="cantidad[]" 
+                       min="1" value="1" required oninput="calcularTotal()" 
+                       inputmode="numeric" pattern="[0-9]*">
+            </div>
+            
+            <div class="input-group">
+                <div class="input-group-prepend">C$</div>
+                <input type="number" class="form-control precio-input" name="precio_unitario[]" 
+                       step="0.01" min="0.01" required placeholder="0.00" oninput="calcularTotal()"
+                       inputmode="decimal">
+            </div>
+            
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="text" class="subtotal-display" readonly value="C$ 0.00">
+                <button type="button" class="btn btn-danger btn-icon" onclick="eliminarDetalle(this)" 
+                        ${detalleCount === 1 ? 'disabled' : ''}>
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+    `;
+    
+    container.appendChild(detalleItem);
+    actualizarContadores();
+    calcularTotal();
+}
+
+function eliminarDetalle(button) {
+    const detalleItem = button.closest('.detalle-item');
+    if (document.querySelectorAll('.detalle-item').length > 1) {
+        detalleItem.remove();
+        detalleCount--;
+        actualizarContadores();
+        calcularTotal();
+    }
+}
+
+function cargarPrecioProducto(select) {
+    if (select.value) {
+        const precio = parseFloat(select.selectedOptions[0].dataset.precio) || 0;
+        const precioInput = select.closest('.detalle-grid').querySelector('.precio-input');
+        precioInput.value = precio.toFixed(2);
+        calcularTotal();
+    }
+}
+
+// ========== FUNCIÓN DE CÁLCULO ==========
+function calcularTotal() {
+    let total = 0;
+    let productosValidos = 0;
+    let totalUnidades = 0;
+    
+    document.querySelectorAll('.detalle-item').forEach(item => {
+        const cantidad = parseFloat(item.querySelector('.cantidad-input')?.value) || 0;
+        const precio = parseFloat(item.querySelector('.precio-input')?.value) || 0;
+        const subtotal = cantidad * precio;
+        
+        const subtotalDisplay = item.querySelector('.subtotal-display');
+        if (subtotalDisplay) {
+            subtotalDisplay.value = `C$ ${subtotal.toFixed(2)}`;
+        }
+        
+        if (cantidad > 0 && precio > 0) {
+            total += subtotal;
+            totalUnidades += cantidad;
+            productosValidos++;
+        }
+    });
+    
+    document.getElementById('totalDisplay').textContent = total.toFixed(2);
+    document.getElementById('totalProductosCount').textContent = productosValidos;
+    document.getElementById('totalUnidadesCount').textContent = totalUnidades;
+    
+    const alerta = document.getElementById('detallesAlert');
+    if (alerta) alerta.style.display = productosValidos === 0 ? 'flex' : 'none';
+    
+    document.getElementById('btnRegistrar').disabled = productosValidos === 0;
+}
+
+function actualizarContadores() {
+    const totalProductos = document.querySelectorAll('.detalle-item').length;
+    let totalUnidades = 0;
+    
+    document.querySelectorAll('.cantidad-input').forEach(input => {
+        totalUnidades += parseFloat(input.value) || 0;
+    });
+    
+    document.getElementById('totalProductosCount').textContent = totalProductos;
+    document.getElementById('totalUnidadesCount').textContent = totalUnidades;
+}
+
+// ========== VALIDACIÓN ==========
+document.getElementById('formCompra')?.addEventListener('submit', function(e) {
+    let errores = [];
+    
+    // Validar campos requeridos
+    if (!document.querySelector('select[name="proveedor_id"]')?.value) {
+        errores.push('Debe seleccionar un proveedor');
+    }
+    
+    if (!document.querySelector('input[name="numero_documento"]')?.value.trim()) {
+        errores.push('Debe ingresar el número de documento');
+    }
+    
+    if (!document.querySelector('input[name="fecha_compra"]')?.value) {
+        errores.push('Debe seleccionar la fecha de compra');
+    }
+    
+    // Validar productos
+    let productosValidos = 0;
+    document.querySelectorAll('.detalle-item').forEach((item, index) => {
+        const producto = item.querySelector('.producto-select');
+        const cantidad = item.querySelector('.cantidad-input');
+        const precio = item.querySelector('.precio-input');
+        
+        if (!producto?.value) {
+            errores.push(`Producto #${index + 1}: Seleccione un producto`);
+        }
+        
+        if (!cantidad?.value || parseFloat(cantidad.value) <= 0) {
+            errores.push(`Producto #${index + 1}: Cantidad inválida`);
+        }
+        
+        if (!precio?.value || parseFloat(precio.value) <= 0) {
+            errores.push(`Producto #${index + 1}: Precio inválido`);
+        }
+        
+        if (producto?.value && parseFloat(cantidad?.value) > 0 && parseFloat(precio?.value) > 0) {
+            productosValidos++;
+        }
+    });
+    
+    if (productosValidos === 0) {
+        errores.push('Debe agregar al menos un producto válido');
+    }
+    
+    if (errores.length > 0) {
+        e.preventDefault();
+        
+        // En móviles, usar alert nativo
+        if (isMobile) {
+            alert('❌ Errores:\n• ' + errores.join('\n• '));
+        } else {
+            // En desktop, mostrar mensaje más elegante
+            let mensaje = '❌ Por favor corrija los siguientes errores:\n\n';
+            errores.forEach(error => {
+                mensaje += `• ${error}\n`;
+            });
+            alert(mensaje);
+        }
+        return false;
+    }
+    
+    // Deshabilitar botón
+    const btn = document.getElementById('btnRegistrar');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span class="btn-text">Procesando...</span>';
+    btn.disabled = true;
+});
+
+// ========== INICIALIZACIÓN ==========
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = document.getElementById('modalCompra');
+    if (modal) modal.style.display = 'none';
+    
+    // Cerrar con ESC (solo en desktop)
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && modal?.style.display === 'flex' && !isMobile) {
+            cerrarModal();
+        }
+    });
+    
+    // Cerrar al hacer clic fuera
+    modal?.addEventListener('click', function(e) {
+        if (e.target === this) cerrarModal();
+    });
+    
+    // Prevenir zoom en inputs en móviles
+    if (isMobile) {
+        const inputs = document.querySelectorAll('input[type="number"], input[type="text"], select');
+        inputs.forEach(input => {
+            input.addEventListener('focus', function() {
+                this.style.fontSize = '16px';
+            });
+        });
+    }
+});
+
+function verDetalle(compraId) {
+    alert(`Ver detalle de compra #${compraId}`);
+}
+</script>
+{% endblock %}

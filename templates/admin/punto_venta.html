@@ -1,0 +1,1230 @@
+{% extends "base.html" %}
+
+{% block title %}Punto de Venta - ServiFarma{% endblock %}
+
+{% block content %}
+<style>
+    /* Variables y estilos base */
+    :root {
+        --primary-color: #0d6efd;
+        --success-color: #28a745;
+        --warning-color: #ffc107;
+        --danger-color: #dc3545;
+        --info-color: #17a2b8;
+        --dark-color: #343a40;
+        --light-color: #f8f9fa;
+        --border-color: #dee2e6;
+    }
+
+    .vendedor-grid {
+        display: grid;
+        grid-template-columns: 400px 1fr;
+        gap: 20px;
+        padding: 20px 0;
+    }
+
+    /* Sección Carrito */
+    .section-carrito {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        height: fit-content;
+        position: sticky;
+        top: 20px;
+    }
+
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid var(--light-color);
+    }
+
+    .section-header h2 {
+        margin: 0;
+        font-size: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .usuario-badge {
+        background: var(--info-color);
+        color: white;
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: normal;
+    }
+
+    /* Items del carrito */
+    .carrito-items {
+        max-height: 400px;
+        overflow-y: auto;
+        margin: 15px 0;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+    }
+
+    .carrito-item {
+        display: grid;
+        grid-template-columns: 1fr auto auto auto;
+        gap: 10px;
+        align-items: center;
+        padding: 12px;
+        border-bottom: 1px solid var(--border-color);
+        transition: background-color 0.2s;
+    }
+
+    .carrito-item:hover {
+        background-color: var(--light-color);
+    }
+
+    .carrito-item:last-child {
+        border-bottom: none;
+    }
+
+    .item-info h4 {
+        margin: 0;
+        font-size: 0.95rem;
+        font-weight: 600;
+    }
+
+    .item-info p {
+        margin: 4px 0 0;
+        font-size: 0.8rem;
+        color: #6c757d;
+    }
+
+    .item-controls {
+        display: flex;
+        align-items: center;
+    }
+
+    .item-cantidad {
+        width: 60px;
+        padding: 5px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        text-align: center;
+    }
+
+    .item-precio {
+        font-weight: bold;
+        color: var(--success-color);
+        min-width: 80px;
+        text-align: right;
+    }
+
+    .btn-remove {
+        background: none;
+        border: none;
+        color: var(--danger-color);
+        cursor: pointer;
+        padding: 5px 8px;
+        border-radius: 4px;
+        transition: all 0.2s;
+    }
+
+    .btn-remove:hover {
+        background-color: var(--danger-color);
+        color: white;
+    }
+
+    /* Resumen del carrito */
+    .carrito-resumen {
+        background: var(--light-color);
+        padding: 15px;
+        border-radius: 8px;
+        margin: 15px 0;
+    }
+
+    .resumen-line {
+        display: flex;
+        justify-content: space-between;
+        margin: 8px 0;
+        font-size: 1rem;
+    }
+
+    .resumen-line.total {
+        font-size: 1.3rem;
+        font-weight: bold;
+        color: var(--success-color);
+        border-top: 2px solid var(--border-color);
+        padding-top: 10px;
+        margin-top: 10px;
+    }
+
+    /* Sección de productos y servicios */
+    .section-productos, .section-servicios, .section-combos {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    .tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        border-bottom: 2px solid var(--light-color);
+        padding-bottom: 10px;
+    }
+
+    .tab {
+        padding: 10px 20px;
+        border: none;
+        background: none;
+        cursor: pointer;
+        font-size: 1rem;
+        font-weight: 500;
+        color: #6c757d;
+        border-radius: 20px;
+        transition: all 0.2s;
+    }
+
+    .tab:hover {
+        background: var(--light-color);
+    }
+
+    .tab.active {
+        background: var(--primary-color);
+        color: white;
+    }
+
+    .tab-content {
+        display: none;
+    }
+
+    .tab-content.active {
+        display: block;
+    }
+
+    .search-bar {
+        margin-bottom: 20px;
+    }
+
+    .input-search {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        font-size: 0.95rem;
+        transition: all 0.2s;
+    }
+
+    .input-search:focus {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(13,110,253,0.1);
+    }
+
+    .items-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 15px;
+        max-height: 500px;
+        overflow-y: auto;
+        padding: 5px;
+    }
+
+    .item-card {
+        background: var(--light-color);
+        border-radius: 10px;
+        padding: 15px;
+        transition: all 0.2s;
+        border: 1px solid var(--border-color);
+    }
+
+    .item-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+        border-color: var(--primary-color);
+    }
+
+    .item-card h4 {
+        margin: 0 0 8px 0;
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--dark-color);
+    }
+
+    .item-card .descripcion {
+        font-size: 0.85rem;
+        color: #6c757d;
+        margin: 5px 0;
+    }
+
+    .item-card .precio {
+        font-size: 1.3rem;
+        font-weight: bold;
+        color: var(--success-color);
+        margin: 10px 0;
+    }
+
+    .item-card .stock {
+        font-size: 0.85rem;
+        color: #6c757d;
+        margin: 5px 0;
+        padding: 5px 0;
+        border-top: 1px dashed var(--border-color);
+    }
+
+    .item-footer {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+    }
+
+    .btn-small {
+        padding: 6px 12px;
+        font-size: 0.85rem;
+        flex: 1;
+    }
+
+    .variaciones-select {
+        width: 100%;
+        padding: 6px;
+        margin: 5px 0;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        font-size: 0.85rem;
+    }
+
+    /* Modal de pago */
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1050;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.5);
+        overflow-y: auto;
+    }
+
+    .modal-content {
+        background-color: white;
+        margin: 50px auto;
+        padding: 25px;
+        border-radius: 12px;
+        max-width: 450px;
+        position: relative;
+        animation: modalSlideIn 0.3s;
+    }
+
+    @keyframes modalSlideIn {
+        from {
+            transform: translateY(-30px);
+            opacity: 0;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid var(--light-color);
+    }
+
+    .modal-header h2 {
+        margin: 0;
+        font-size: 1.5rem;
+        color: var(--dark-color);
+    }
+
+    .btn-close {
+        background: none;
+        border: none;
+        font-size: 1.8rem;
+        cursor: pointer;
+        color: #6c757d;
+        line-height: 1;
+    }
+
+    .btn-close:hover {
+        color: var(--danger-color);
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 500;
+        color: var(--dark-color);
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        font-size: 1rem;
+        transition: all 0.2s;
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(13,110,253,0.1);
+    }
+
+    .form-control[readonly] {
+        background-color: var(--light-color);
+        font-weight: bold;
+        color: var(--success-color);
+    }
+
+    .resumen-pago {
+        background: var(--light-color);
+        padding: 15px;
+        border-radius: 8px;
+        margin: 20px 0;
+        text-align: center;
+    }
+
+    .resumen-pago strong {
+        font-size: 1.2rem;
+        color: var(--dark-color);
+    }
+
+    .resumen-pago .total {
+        font-size: 1.8rem;
+        color: var(--success-color);
+        display: block;
+        margin-top: 5px;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        margin-top: 25px;
+    }
+
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.95rem;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+
+    .btn-primary {
+        background-color: var(--primary-color);
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background-color: #0b5ed7;
+        transform: translateY(-1px);
+    }
+
+    .btn-success {
+        background-color: var(--success-color);
+        color: white;
+    }
+
+    .btn-success:hover {
+        background-color: #218838;
+        transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+        background-color: #6c757d;
+        color: white;
+    }
+
+    .btn-secondary:hover {
+        background-color: #5c636a;
+    }
+
+    .btn-danger {
+        background-color: var(--danger-color);
+        color: white;
+    }
+
+    .btn-danger:hover {
+        background-color: #c82333;
+    }
+
+    .btn-block {
+        width: 100%;
+        margin: 5px 0;
+    }
+
+    .btn-large {
+        padding: 12px 24px;
+        font-size: 1.1rem;
+    }
+
+    .alert {
+        padding: 12px;
+        border-radius: 6px;
+        margin: 15px 0;
+    }
+
+    .alert-success {
+        background-color: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+    }
+
+    .alert-danger {
+        background-color: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+    }
+
+    .loading {
+        text-align: center;
+        color: #6c757d;
+        padding: 40px;
+        font-style: italic;
+    }
+
+    .empty {
+        text-align: center;
+        color: #6c757d;
+        padding: 40px;
+    }
+
+    .badge {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-size: 0.7rem;
+        font-weight: 500;
+        text-transform: uppercase;
+    }
+
+    .badge-warning {
+        background-color: #fff3cd;
+        color: #856404;
+    }
+
+    .badge-info {
+        background-color: #d1ecf1;
+        color: #0c5460;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .vendedor-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .section-carrito {
+            position: static;
+            margin-bottom: 20px;
+        }
+        
+        .items-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .modal-content {
+            margin: 20px;
+            padding: 15px;
+        }
+    }
+</style>
+
+<div class="page-header responsive-header">
+    <div style="display: flex; align-items: center; gap: 15px;">
+        <h1>🛒 Punto de Venta</h1>
+        <span class="usuario-badge">
+            👤 {{ session.usuario_nombre or 'Vendedor' }}
+        </span>
+    </div>
+</div>
+
+<div class="vendedor-grid">
+    <!-- SECCIÓN CARRITO -->
+    <section class="section-carrito">
+        <div class="section-header">
+            <h2>
+                <i class="fas fa-shopping-cart" style="color: var(--primary-color);"></i>
+                Carrito de Venta
+            </h2>
+            <span class="badge badge-info" id="itemCount">0 items</span>
+        </div>
+
+        <!-- Items del carrito -->
+        <div id="carritoItems" class="carrito-items">
+            <div class="empty">
+                <i class="fas fa-box-open" style="font-size: 2rem; color: #ccc; margin-bottom: 10px;"></i>
+                <p>El carrito está vacío</p>
+            </div>
+        </div>
+
+        <!-- Resumen -->
+        <div class="carrito-resumen">
+            <div class="resumen-line">
+                <span>Subtotal:</span>
+                <span id="subtotal">C$ 0.00</span>
+            </div>
+            <div class="resumen-line total">
+                <span>TOTAL:</span>
+                <span id="total">C$ 0.00</span>
+            </div>
+        </div>
+
+        <!-- Botones de acción -->
+        <button class="btn btn-success btn-block btn-large" onclick="abrirModalPago()">
+            <i class="fas fa-cash-register"></i>
+            Cobrar (F8)
+        </button>
+        <button class="btn btn-secondary btn-block" onclick="limpiarCarrito()">
+            <i class="fas fa-trash"></i>
+            Limpiar Carrito
+        </button>
+    </section>
+
+    <!-- SECCIÓN PRODUCTOS Y SERVICIOS -->
+    <div style="display: flex; flex-direction: column; gap: 20px;">
+        <!-- Tabs de navegación -->
+        <div class="tabs">
+            <button class="tab active" onclick="cambiarTab('productos')">
+                <i class="fas fa-pills"></i> Productos
+            </button>
+            <button class="tab" onclick="cambiarTab('servicios')">
+                <i class="fas fa-syringe"></i> Servicios
+            </button>
+            <button class="tab" onclick="cambiarTab('combos')">
+                <i class="fas fa-gift"></i> Combos
+            </button>
+        </div>
+
+        <!-- SECCIÓN PRODUCTOS -->
+        <div id="tab-productos" class="tab-content active">
+            <section class="section-productos">
+                <h3><i class="fas fa-pills" style="color: var(--primary-color);"></i> Productos Disponibles</h3>
+                
+                <div class="search-bar">
+                    <input type="text" id="buscarProducto" placeholder="🔍 Buscar producto por nombre o código..." class="input-search">
+                </div>
+
+                <div id="productosDisponibles" class="items-grid">
+                    <div class="loading">Cargando productos...</div>
+                </div>
+            </section>
+        </div>
+
+        <!-- SECCIÓN SERVICIOS -->
+        <div id="tab-servicios" class="tab-content">
+            <section class="section-servicios">
+                <h3><i class="fas fa-syringe" style="color: var(--success-color);"></i> Servicios Disponibles</h3>
+                
+                <div class="search-bar">
+                    <input type="text" id="buscarServicio" placeholder="🔍 Buscar servicio..." class="input-search">
+                </div>
+
+                <div id="serviciosDisponibles" class="items-grid">
+                    <div class="loading">Cargando servicios...</div>
+                </div>
+            </section>
+        </div>
+
+        <!-- SECCIÓN COMBOS -->
+        <div id="tab-combos" class="tab-content">
+            <section class="section-combos">
+                <h3><i class="fas fa-gift" style="color: var(--warning-color);"></i> Combos Disponibles</h3>
+                
+                <div class="search-bar">
+                    <input type="text" id="buscarCombo" placeholder="🔍 Buscar combo..." class="input-search">
+                </div>
+
+                <div id="combosDisponibles" class="items-grid">
+                    <div class="loading">Cargando combos...</div>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL DE PAGO -->
+<div id="modalPago" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2><i class="fas fa-cash-register"></i> Cobrar Venta</h2>
+            <button class="btn-close" onclick="cerrarModalPago()">&times;</button>
+        </div>
+        
+        <form id="formVenta">
+            <div class="form-group">
+                <label>💵 Efectivo recibido (C$)</label>
+                <input type="number" class="form-control" id="efectivo" name="efectivo" 
+                       step="0.01" min="0" value="0" oninput="calcularCambio()" autofocus>
+            </div>
+            
+            <div class="form-group">
+                <label>🔄 Cambio a devolver (C$)</label>
+                <input type="text" class="form-control" id="cambio" readonly value="0.00">
+            </div>
+
+            <div class="form-group">
+                <label>📝 Observaciones (opcional)</label>
+                <textarea class="form-control" id="observaciones" name="observaciones" 
+                          rows="2" placeholder="Notas adicionales..."></textarea>
+            </div>
+
+            <div class="resumen-pago">
+                <strong>Total a pagar:</strong>
+                <span class="total" id="modalTotal">C$ 0.00</span>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-success btn-large">
+                    <i class="fas fa-check-circle"></i> Completar Venta
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="cerrarModalPago()">
+                    Cancelar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// ============================================
+// VARIABLES GLOBALES
+// ============================================
+let carrito = [];
+let productos = [];
+let servicios = [];
+let combos = [];
+
+// ============================================
+// FUNCIONES DE CARGA DE DATOS
+// ============================================
+async function cargarProductos() {
+    try {
+        const response = await fetch('/api/productos/disponibles', {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Error HTTP: ${response.status}`);
+        }
+        
+        productos = await response.json();
+        mostrarProductos(productos);
+    } catch (error) {
+        console.error('Error cargando productos:', error);
+        document.getElementById('productosDisponibles').innerHTML = `
+            <div class="empty">
+                <i class="fas fa-exclamation-triangle" style="color: var(--warning-color);"></i>
+                <p>Error al cargar productos</p>
+                <small>${error.message}</small>
+            </div>
+        `;
+    }
+}
+
+async function cargarServicios() {
+    try {
+        const response = await fetch('/api/servicios/disponibles', {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Error HTTP: ${response.status}`);
+        }
+        
+        servicios = await response.json();
+        mostrarServicios(servicios);
+    } catch (error) {
+        console.error('Error cargando servicios:', error);
+        document.getElementById('serviciosDisponibles').innerHTML = `
+            <div class="empty">
+                <i class="fas fa-exclamation-triangle" style="color: var(--warning-color);"></i>
+                <p>Error al cargar servicios</p>
+            </div>
+        `;
+    }
+}
+
+async function cargarCombos() {
+    try {
+        const response = await fetch('/api/combos/disponibles', {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Error HTTP: ${response.status}`);
+        }
+        
+        combos = await response.json();
+        mostrarCombos(combos);
+    } catch (error) {
+        console.error('Error cargando combos:', error);
+        document.getElementById('combosDisponibles').innerHTML = `
+            <div class="empty">
+                <i class="fas fa-exclamation-triangle" style="color: var(--warning-color);"></i>
+                <p>Error al cargar combos</p>
+            </div>
+        `;
+    }
+}
+
+// ============================================
+// FUNCIONES DE VISUALIZACIÓN
+// ============================================
+function mostrarProductos(prods) {
+    if (!prods || prods.length === 0) {
+        document.getElementById('productosDisponibles').innerHTML = `
+            <div class="empty">
+                <i class="fas fa-box-open"></i>
+                <p>No hay productos disponibles</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const html = prods.map(p => {
+        // Determinar si tiene variaciones
+        const tieneVariaciones = p.variaciones && p.variaciones.length > 0;
+        
+        return `
+        <div class="item-card">
+            <h4>${p.nombre}</h4>
+            ${p.descripcion ? `<p class="descripcion">${p.descripcion.substring(0, 50)}...</p>` : ''}
+            <p class="precio">C$ ${parseFloat(p.precio_venta).toFixed(2)}</p>
+            <div class="stock">
+                <small>📦 Stock: ${p.stock_actual} ${p.unidad_abrev || 'unid'}</small>
+                ${p.lote ? `<br><small>🏷️ Lote: ${p.lote}</small>` : ''}
+                ${p.fecha_vencimiento ? `<br><small>⏰ Vence: ${new Date(p.fecha_vencimiento).toLocaleDateString()}</small>` : ''}
+            </div>
+            ${tieneVariaciones ? `
+                <select class="variaciones-select" id="variacion-${p.id}">
+                    <option value="">Seleccionar presentación</option>
+                    ${p.variaciones.map(v => `
+                        <option value="${v.id}" data-precio="${v.precio_venta || p.precio_venta}" data-unidad="${v.unidad_abrev}">
+                            ${v.descripcion || v.unidad_nombre} - C$ ${(v.precio_venta || p.precio_venta).toFixed(2)}
+                        </option>
+                    `).join('')}
+                </select>
+                <button class="btn btn-small btn-primary" onclick="agregarProductoConVariacion(${p.id})">
+                    Agregar
+                </button>
+            ` : `
+                <div class="item-footer">
+                    <button class="btn btn-small btn-primary" 
+                            onclick="agregarAlCarrito('producto', ${p.id}, '${p.nombre.replace(/'/g, "\\'")}', ${p.precio_venta}, ${p.unidad_id || 'null'}, '${p.unidad_abrev || ''}')">
+                        <i class="fas fa-cart-plus"></i> Agregar
+                    </button>
+                </div>
+            `}
+        </div>
+    `}).join('');
+    
+    document.getElementById('productosDisponibles').innerHTML = html;
+}
+
+function mostrarServicios(servs) {
+    if (!servs || servs.length === 0) {
+        document.getElementById('serviciosDisponibles').innerHTML = `
+            <div class="empty">
+                <i class="fas fa-syringe"></i>
+                <p>No hay servicios disponibles</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const html = servs.map(s => `
+        <div class="item-card">
+            <h4>${s.nombre}</h4>
+            ${s.descripcion ? `<p class="descripcion">${s.descripcion.substring(0, 50)}...</p>` : ''}
+            <p class="precio">C$ ${parseFloat(s.precio).toFixed(2)}</p>
+            <div class="item-footer">
+                <button class="btn btn-small btn-primary" 
+                        onclick="agregarAlCarrito('servicio', ${s.id}, '${s.nombre.replace(/'/g, "\\'")}', ${s.precio})">
+                    <i class="fas fa-cart-plus"></i> Agregar
+                </button>
+            </div>
+        </div>
+    `).join('');
+    
+    document.getElementById('serviciosDisponibles').innerHTML = html;
+}
+
+function mostrarCombos(combs) {
+    if (!combs || combs.length === 0) {
+        document.getElementById('combosDisponibles').innerHTML = `
+            <div class="empty">
+                <i class="fas fa-gift"></i>
+                <p>No hay combos disponibles</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const html = combs.map(c => `
+        <div class="item-card ${!c.disponible ? 'disabled' : ''}" style="${!c.disponible ? 'opacity: 0.6;' : ''}">
+            <h4>${c.nombre}</h4>
+            ${c.descripcion ? `<p class="descripcion">${c.descripcion.substring(0, 50)}...</p>` : ''}
+            <p class="precio">C$ ${parseFloat(c.precio_combo).toFixed(2)}</p>
+            <div class="stock">
+                <small>🎁 ${c.total_productos || 0} productos</small>
+                ${!c.disponible ? '<br><small class="badge-warning" style="padding: 2px 5px;">⚠️ Sin stock suficiente</small>' : ''}
+            </div>
+            <div class="item-footer">
+                <button class="btn btn-small btn-primary" 
+                        onclick="agregarAlCarrito('combo', ${c.id}, '${c.nombre.replace(/'/g, "\\'")}', ${c.precio_combo})"
+                        ${!c.disponible ? 'disabled' : ''}>
+                    <i class="fas fa-cart-plus"></i> Agregar
+                </button>
+            </div>
+        </div>
+    `).join('');
+    
+    document.getElementById('combosDisponibles').innerHTML = html;
+}
+
+// ============================================
+// FUNCIONES DEL CARRITO
+// ============================================
+function agregarProductoConVariacion(productoId) {
+    const select = document.getElementById(`variacion-${productoId}`);
+    const option = select.options[select.selectedIndex];
+    
+    if (!select.value) {
+        alert('Por favor seleccione una presentación');
+        return;
+    }
+    
+    const producto = productos.find(p => p.id === productoId);
+    const precio = parseFloat(option.dataset.precio);
+    const unidadNombre = option.dataset.unidad;
+    
+    agregarAlCarrito('producto', productoId, producto.nombre, precio, select.value, unidadNombre);
+}
+
+function agregarAlCarrito(tipo, id, nombre, precio, unidadId = null, unidadNombre = '') {
+    // Verificar si ya existe (considerando unidad para productos)
+    let existente;
+    if (tipo === 'producto') {
+        existente = carrito.find(item => 
+            item.tipo === tipo && item.id === id && item.unidad_id === unidadId
+        );
+    } else {
+        existente = carrito.find(item => item.tipo === tipo && item.id === id);
+    }
+    
+    if (existente) {
+        existente.cantidad += 1;
+    } else {
+        carrito.push({
+            tipo: tipo,
+            id: id,
+            nombre: nombre,
+            precio: precio,
+            cantidad: 1,
+            unidad_id: unidadId,
+            unidad_nombre: unidadNombre
+        });
+    }
+    
+    actualizarCarrito();
+    
+    // Feedback visual
+    const btn = event.target;
+    btn.innerHTML = '<i class="fas fa-check"></i> Agregado';
+    setTimeout(() => {
+        btn.innerHTML = '<i class="fas fa-cart-plus"></i> Agregar';
+    }, 500);
+}
+
+function actualizarCarrito() {
+    const carritoContainer = document.getElementById('carritoItems');
+    const itemCount = document.getElementById('itemCount');
+    
+    if (carrito.length === 0) {
+        carritoContainer.innerHTML = `
+            <div class="empty">
+                <i class="fas fa-box-open" style="font-size: 2rem; color: #ccc; margin-bottom: 10px;"></i>
+                <p>El carrito está vacío</p>
+            </div>
+        `;
+        itemCount.textContent = '0 items';
+    } else {
+        const html = carrito.map((item, idx) => `
+            <div class="carrito-item">
+                <div class="item-info">
+                    <h4>${item.nombre}</h4>
+                    <p>${item.tipo === 'producto' ? (item.unidad_nombre || 'unidad') : 
+                         item.tipo === 'servicio' ? 'Servicio' : 'Combo'}</p>
+                </div>
+                <div class="item-controls">
+                    <input type="number" value="${item.cantidad}" min="1" 
+                           class="item-cantidad" 
+                           onchange="actualizarCantidad(${idx}, this.value)">
+                </div>
+                <div class="item-precio">
+                    C$ ${(item.precio * item.cantidad).toFixed(2)}
+                </div>
+                <button class="btn-remove" onclick="eliminarDelCarrito(${idx})" title="Eliminar">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `).join('');
+        
+        carritoContainer.innerHTML = html;
+        itemCount.textContent = `${carrito.length} items`;
+    }
+    
+    calcularTotales();
+}
+
+function actualizarCantidad(idx, cantidad) {
+    cantidad = parseInt(cantidad);
+    if (cantidad < 1) cantidad = 1;
+    carrito[idx].cantidad = cantidad;
+    actualizarCarrito();
+}
+
+function eliminarDelCarrito(idx) {
+    carrito.splice(idx, 1);
+    actualizarCarrito();
+}
+
+function limpiarCarrito() {
+    if (carrito.length > 0 && confirm('¿Está seguro de limpiar todo el carrito?')) {
+        carrito = [];
+        actualizarCarrito();
+    }
+}
+
+function calcularTotales() {
+    const total = carrito.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
+    
+    document.getElementById('subtotal').textContent = `C$ ${total.toFixed(2)}`;
+    document.getElementById('total').textContent = `C$ ${total.toFixed(2)}`;
+    document.getElementById('modalTotal').textContent = `C$ ${total.toFixed(2)}`;
+}
+
+// ============================================
+// FUNCIONES DEL MODAL DE PAGO
+// ============================================
+function abrirModalPago() {
+    if (carrito.length === 0) {
+        alert('El carrito está vacío');
+        return;
+    }
+    
+    document.getElementById('modalPago').style.display = 'block';
+    document.getElementById('efectivo').value = '';
+    document.getElementById('cambio').value = '0.00';
+    document.getElementById('efectivo').focus();
+}
+
+function cerrarModalPago() {
+    document.getElementById('modalPago').style.display = 'none';
+    document.getElementById('formVenta').reset();
+}
+
+function calcularCambio() {
+    const efectivo = parseFloat(document.getElementById('efectivo').value) || 0;
+    const total = parseFloat(document.getElementById('total').textContent.replace('C$ ', ''));
+    const cambio = Math.max(0, efectivo - total);
+    document.getElementById('cambio').value = cambio.toFixed(2);
+}
+
+// ============================================
+// PROCESAR VENTA (POST) - VERSIÓN CORREGIDA
+// ============================================
+document.getElementById('formVenta').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const efectivo = parseFloat(document.getElementById('efectivo').value) || 0;
+    const total = parseFloat(document.getElementById('total').textContent.replace('C$ ', ''));
+    
+    if (efectivo < total) {
+        alert(`❌ El efectivo (C$ ${efectivo.toFixed(2)}) es menor al total (C$ ${total.toFixed(2)})`);
+        return;
+    }
+    
+    if (carrito.length === 0) {
+        alert('❌ No hay items en el carrito');
+        return;
+    }
+    
+    // Determinar tipo de venta basado en los items
+    let tipoVenta = 'mixta';
+    if (carrito.every(item => item.tipo === 'producto')) {
+        tipoVenta = 'producto';
+    } else if (carrito.every(item => item.tipo === 'servicio')) {
+        tipoVenta = 'servicio';
+    } else if (carrito.every(item => item.tipo === 'combo')) {
+        tipoVenta = 'combo';
+    }
+    
+    // Crear FormData en lugar de JSON
+    const formData = new FormData();
+    formData.append('tipo_venta', tipoVenta);
+    formData.append('total_venta', total.toString());
+    formData.append('efectivo', efectivo.toString());
+    
+    // Preparar items en el formato que espera el backend
+    const items = carrito.map(item => ({
+        tipo_detalle: item.tipo,
+        referencia_id: item.id,
+        cantidad: item.cantidad,
+        precio_unitario: item.precio,
+        subtotal: item.precio * item.cantidad,
+        unidad_id: item.unidad_id || null
+    }));
+    
+    // Los items se envían como string JSON
+    formData.append('items', JSON.stringify(items));
+    
+    // Agregar observaciones si existen
+    const observaciones = document.getElementById('observaciones').value;
+    if (observaciones) {
+        formData.append('observaciones', observaciones);
+    }
+    
+    // Mostrar indicador de carga
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
+    submitBtn.disabled = true;
+    
+    try {
+        const response = await fetch('/ventas/nueva', {
+            method: 'POST',
+            body: formData  // Importante: No poner Content-Type header
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // Mostrar mensaje de éxito con detalles
+            alert(`✅ Venta #${result.venta_id} completada exitosamente\n\n💰 Total: C$ ${total.toFixed(2)}\n💵 Efectivo: C$ ${efectivo.toFixed(2)}\n🔄 Cambio: C$ ${result.cambio.toFixed(2)}`);
+            
+            // Limpiar y cerrar
+            limpiarCarrito();
+            cerrarModalPago();
+            
+            // Recargar productos (para actualizar stocks)
+            cargarProductos();
+            cargarServicios();
+            cargarCombos();
+        } else {
+            alert('❌ Error: ' + result.message);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('❌ Error de conexión: ' + error.message);
+    } finally {
+        // Restaurar botón
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    }
+});
+
+// ============================================
+// FUNCIONES DE BÚSQUEDA
+// ============================================
+document.getElementById('buscarProducto').addEventListener('input', (e) => {
+    const busqueda = e.target.value.toLowerCase();
+    const filtrados = productos.filter(p => 
+        p.nombre.toLowerCase().includes(busqueda) || 
+        (p.codigo && p.codigo.toLowerCase().includes(busqueda))
+    );
+    mostrarProductos(filtrados);
+});
+
+document.getElementById('buscarServicio').addEventListener('input', (e) => {
+    const busqueda = e.target.value.toLowerCase();
+    const filtrados = servicios.filter(s => 
+        s.nombre.toLowerCase().includes(busqueda) ||
+        (s.descripcion && s.descripcion.toLowerCase().includes(busqueda))
+    );
+    mostrarServicios(filtrados);
+});
+
+document.getElementById('buscarCombo').addEventListener('input', (e) => {
+    const busqueda = e.target.value.toLowerCase();
+    const filtrados = combos.filter(c => 
+        c.nombre.toLowerCase().includes(busqueda) ||
+        (c.descripcion && c.descripcion.toLowerCase().includes(busqueda))
+    );
+    mostrarCombos(filtrados);
+});
+
+// ============================================
+// FUNCIONES DE NAVEGACIÓN
+// ============================================
+function cambiarTab(tab) {
+    // Actualizar tabs
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    
+    event.target.classList.add('active');
+    document.getElementById(`tab-${tab}`).classList.add('active');
+}
+
+// ============================================
+// INICIALIZACIÓN
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+    cargarProductos();
+    cargarServicios();
+    cargarCombos();
+    
+    // Atajos de teclado
+    document.addEventListener('keydown', (e) => {
+        // F8 para abrir modal de pago
+        if (e.key === 'F8') {
+            e.preventDefault();
+            abrirModalPago();
+        }
+        
+        // Escape para cerrar modal
+        if (e.key === 'Escape') {
+            cerrarModalPago();
+        }
+    });
+    
+    // Enter en campo efectivo
+    document.getElementById('efectivo')?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            document.getElementById('formVenta').dispatchEvent(new Event('submit'));
+        }
+    });
+});
+</script>
+{% endblock %}

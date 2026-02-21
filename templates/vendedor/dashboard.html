@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard Vendedor - FarmaControl{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>🛍️ Punto de Venta</h1>
+    <button class="btn btn-primary btn-large" onclick="abrirModalVenta()">+ Nueva Venta</button>
+</div>
+
+<div class="vendedor-grid">
+    <section class="section-carrito">
+        <h2>🛒 Carrito de Venta</h2>
+        <div id="carritoItems" class="carrito-items">
+            <p class="empty">El carrito está vacío</p>
+        </div>
+        <div class="carrito-resumen">
+            <div class="resumen-line">
+                <span>Subtotal:</span>
+                <span id="subtotal">C$ 0.00</span>
+            </div>
+            <div class="resumen-line">
+                <span>IVA (18%):</span>
+                <span id="iva">C$ 0.00</span>
+            </div>
+            <div class="resumen-line total">
+                <span>TOTAL:</span>
+                <span id="total">C$ 0.00</span>
+            </div>
+        </div>
+        <button class="btn btn-primary btn-block" onclick="procesarVenta()">Procesar Venta</button>
+        <button class="btn btn-secondary btn-block" onclick="limpiarCarrito()">Limpiar Carrito</button>
+    </section>
+
+    <section class="section-productos">
+        <h2>💊 Productos Disponibles</h2>
+        
+        <div class="search-bar">
+            <input type="text" id="buscarProducto" placeholder="Buscar producto..." class="input-search">
+        </div>
+
+        <div id="productosDisponibles" class="productos-grid">
+            <p class="loading">Cargando productos...</p>
+        </div>
+    </section>
+
+    <section class="section-servicios">
+        <h2>💉 Servicios Disponibles</h2>
+        <div id="serviciosDisponibles" class="servicios-grid">
+            <p class="loading">Cargando servicios...</p>
+        </div>
+    </section>
+</div>
+
+<!-- Modal Datos Cliente -->
+<div id="modalVenta" class="modal">
+    <div class="modal-content modal-large">
+        <div class="modal-header">
+            <h2>Finalizar Venta</h2>
+            <button class="btn-close" onclick="cerrarModalVenta()">&times;</button>
+        </div>
+        <form id="formVenta" class="form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Nombre Cliente (Opcional)</label>
+                    <input type="text" name="cliente_nombre">
+                </div>
+                <div class="form-group">
+                    <label>Cédula/RNC (Opcional)</label>
+                    <input type="text" name="cliente_cedula">
+                </div>
+            </div>
+
+            <h3>Forma de Pago</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Efectivo (C$)</label>
+                    <input type="number" name="efectivo" step="0.01" value="0">
+                </div>
+                <div class="form-group">
+                    <label>Tarjeta (C$)</label>
+                    <input type="number" name="tarjeta" step="0.01" value="0">
+                </div>
+                <div class="form-group">
+                    <label>Transferencia (C$)</label>
+                    <input type="number" name="transferencia" step="0.01" value="0">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Observaciones</label>
+                <textarea name="observaciones" rows="3"></textarea>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary btn-large">Completar Venta</button>
+                <button type="button" class="btn btn-secondary" onclick="cerrarModalVenta()">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+let carrito = [];
+let productos = [];
+let servicios = [];
+
+// Cargar productos y servicios
+function cargarDatos() {
+    Promise.all([
+        fetch('/api/productos').then(r => r.json()),
+        fetch('/api/servicios').then(r => r.json())
+    ]).then(([prods, servs]) => {
+        productos = prods;
+        servicios = servs;
+        mostrarProductos(prods);
+        mostrarServicios(servs);
+    });
+}
+
+function mostrarProductos(prods) {
+    const html = prods.map(p => `
+        <div class="producto-card">
+            <h4>${p.nombre}</h4>
+            <p class="precio">RD$ ${parseFloat(p.precio_venta).toFixed(2)}</p>
+            <p class="stock">Stock: ${p.stock_actual} ${p.unidad_nombre}</p>
+            <button class="btn btn-small btn-primary" onclick="agregarAlCarrito('producto', ${p.id}, '${p.nombre}', ${p.precio_venta}, '${p.unidad_nombre}')">Agregar</button>
+        </div>
+    `).join('');
+    
+    document.getElementById('productosDisponibles').innerHTML = html || '<p class="empty">No hay productos disponibles</p>';
+}
+
+function mostrarServicios(servs) {
+    const html = servs.map(s => `
+        <div class="servicio-card">
+            <h4>${s.nombre}</h4>
+            <p>${s.descripcion || ''}</p>
+            <p class="precio">RD$ ${parseFloat(s.precio).toFixed(2)}</p>
+            <button class="btn btn-small btn-primary" onclick="agregarAlCarrito('servicio', ${s.id}, '${s.nombre}', ${s.precio})">Agregar</button>
+        </div>
+    `).join('');
+    
+    document.getElementById('serviciosDisponibles').innerHTML = html || '<p class="empty">No hay servicios disponibles</p>';
+}
+
+function agregarAlCarrito(tipo, id, nombre, precio, unidad = '1') {
+    carrito.push({
+        tipo: tipo,
+        id: id,
+        nombre: nombre,
+        precio: precio,
+        cantidad: 1,
+        unidad: unidad
+    });
+    
+    actualizarCarrito();
+}
+
+function actualizarCarrito() {
+    const html = carrito.map((item, idx) => `
+        <div class="carrito-item">
+            <div class="item-info">
+                <h4>${item.nombre}</h4>
+                <p>${item.tipo === 'producto' ? `${item.unidad}` : 'Servicio'}</p>
+            </div>
+            <div class="item-controls">
+                <input type="number" value="${item.cantidad}" min="1" class="item-cantidad" 
+                       onchange="actualizarCantidad(${idx}, this.value)">
+            </div>
+            <div class="item-price">
+                C$ ${(item.precio * item.cantidad).toFixed(2)}
+            </div>
+            <button class="btn btn-small btn-danger" onclick="eliminarDelCarrito(${idx})">✕</button>
+        </div>
+    `).join('');
+    
+    document.getElementById('carritoItems').innerHTML = html || '<p class="empty">El carrito está vacío</p>';
+    calcularTotales();
+}
+
+function actualizarCantidad(idx, cantidad) {
+    carrito[idx].cantidad = parseInt(cantidad);
+    actualizarCarrito();
+}
+
+function eliminarDelCarrito(idx) {
+    carrito.splice(idx, 1);
+    actualizarCarrito();
+}
+
+function limpiarCarrito() {
+    carrito = [];
+    actualizarCarrito();
+}
+
+function calcularTotales() {
+    const subtotal = carrito.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
+    const iva = subtotal * 0.18;
+    const total = subtotal + iva;
+    
+    document.getElementById('subtotal').textContent = `C$ ${subtotal.toFixed(2)}`;
+    document.getElementById('iva').textContent = `C$ ${iva.toFixed(2)}`;
+    document.getElementById('total').textContent = `C$ ${total.toFixed(2)}`;
+}
+
+function abrirModalVenta() {
+    if (carrito.length === 0) {
+        alert('El carrito está vacío');
+        return;
+    }
+    document.getElementById('modalVenta').style.display = 'block';
+}
+
+function cerrarModalVenta() {
+    document.getElementById('modalVenta').style.display = 'none';
+}
+
+function procesarVenta() {
+    if (carrito.length === 0) {
+        alert('El carrito está vacío');
+        return;
+    }
+    abrirModalVenta();
+}
+
+document.getElementById('formVenta').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    if (carrito.length === 0) {
+        alert('El carrito está vacío');
+        return;
+    }
+    
+    const formData = new FormData(e.target);
+    const efectivo = parseFloat(formData.get('efectivo')) || 0;
+    const tarjeta = parseFloat(formData.get('tarjeta')) || 0;
+    const transferencia = parseFloat(formData.get('transferencia')) || 0;
+    const total = parseFloat(document.getElementById('total').textContent.replace('C$ ', ''));
+    
+    if (efectivo + tarjeta + transferencia < total) {
+        alert('El monto pagado es menor al total');
+        return;
+    }
+    
+    const data = {
+        numero_comprobante: `VTA-${Date.now()}`,
+        cliente_nombre: formData.get('cliente_nombre'),
+        cliente_cedula: formData.get('cliente_cedula'),
+        fecha_venta: new Date().toISOString().split('T')[0],
+        tipo_venta: 'producto',
+        total_venta: total,
+        efectivo: efectivo,
+        tarjeta: tarjeta,
+        transferencia: transferencia,
+        observaciones: formData.get('observaciones'),
+        detalles: carrito.map(item => ({
+            tipo: item.tipo === 'producto' ? 'producto' : 'servicio',
+            id: item.id,
+            cantidad: item.cantidad,
+            precio: item.precio,
+            subtotal: item.precio * item.cantidad
+        }))
+    };
+    
+    try {
+        const res = await fetch('/api/ventas', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        if (res.ok) {
+            alert('Venta completada exitosamente');
+            limpiarCarrito();
+            cerrarModalVenta();
+            document.getElementById('formVenta').reset();
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+});
+
+document.getElementById('buscarProducto').addEventListener('input', (e) => {
+    const busqueda = e.target.value.toLowerCase();
+    const filtrados = productos.filter(p => 
+        p.nombre.toLowerCase().includes(busqueda) || 
+        p.codigo.toLowerCase().includes(busqueda)
+    );
+    mostrarProductos(filtrados);
+});
+
+cargarDatos();
+</script>
+{% endblock %}
