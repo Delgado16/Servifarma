@@ -1,295 +1,440 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard Vendedor - FarmaControl{% endblock %}
+{% block title %}Mi Dashboard - Vendedor{% endblock %}
 
 {% block content %}
 <div class="page-header">
-    <h1>🛍️ Punto de Venta</h1>
-    <button class="btn btn-primary btn-large" onclick="abrirModalVenta()">+ Nueva Venta</button>
+    <h1>
+        <i class="fas fa-chart-line"></i> 
+        Dashboard de Ventas
+    </h1>
+    <p class="text-muted" style="margin: 0;">Bienvenido a tu panel de control</p>
 </div>
 
-<div class="vendedor-grid">
-    <section class="section-carrito">
-        <h2>🛒 Carrito de Venta</h2>
-        <div id="carritoItems" class="carrito-items">
-            <p class="empty">El carrito está vacío</p>
-        </div>
-        <div class="carrito-resumen">
-            <div class="resumen-line">
-                <span>Subtotal:</span>
-                <span id="subtotal">C$ 0.00</span>
-            </div>
-            <div class="resumen-line">
-                <span>IVA (18%):</span>
-                <span id="iva">C$ 0.00</span>
-            </div>
-            <div class="resumen-line total">
-                <span>TOTAL:</span>
-                <span id="total">C$ 0.00</span>
-            </div>
-        </div>
-        <button class="btn btn-primary btn-block" onclick="procesarVenta()">Procesar Venta</button>
-        <button class="btn btn-secondary btn-block" onclick="limpiarCarrito()">Limpiar Carrito</button>
-    </section>
-
-    <section class="section-productos">
-        <h2>💊 Productos Disponibles</h2>
-        
-        <div class="search-bar">
-            <input type="text" id="buscarProducto" placeholder="Buscar producto..." class="input-search">
-        </div>
-
-        <div id="productosDisponibles" class="productos-grid">
-            <p class="loading">Cargando productos...</p>
-        </div>
-    </section>
-
-    <section class="section-servicios">
-        <h2>💉 Servicios Disponibles</h2>
-        <div id="serviciosDisponibles" class="servicios-grid">
-            <p class="loading">Cargando servicios...</p>
-        </div>
-    </section>
+<!-- Saludo personalizado -->
+<div style="margin-bottom: 20px;">
+    <h2 style="margin-bottom: 5px;">¡Hola, {{ nombre_vendedor }}!</h2>
+    <p class="text-muted">Aquí tienes un resumen de tu actividad</p>
 </div>
 
-<!-- Modal Datos Cliente -->
-<div id="modalVenta" class="modal">
-    <div class="modal-content modal-large">
-        <div class="modal-header">
-            <h2>Finalizar Venta</h2>
-            <button class="btn-close" onclick="cerrarModalVenta()">&times;</button>
+<!-- Métricas principales del vendedor -->
+<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 20px;">
+    <div class="stats-card stats-card-primary">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <div class="stats-label">MIS VENTAS HOY</div>
+                <div class="stats-value">{{ ventas_hoy.total_ventas_hoy or 0 }}</div>
+                <small style="opacity: 0.8;">Total: C$ {{ "{:,.0f}".format(ventas_hoy.monto_total_hoy or 0) }}</small>
+            </div>
+            <i class="fas fa-calendar-day stats-icon"></i>
         </div>
-        <form id="formVenta" class="form">
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Nombre Cliente (Opcional)</label>
-                    <input type="text" name="cliente_nombre">
-                </div>
-                <div class="form-group">
-                    <label>Cédula/RNC (Opcional)</label>
-                    <input type="text" name="cliente_cedula">
-                </div>
+    </div>
+    
+    <div class="stats-card stats-card-success">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <div class="stats-label">MIS VENTAS SEMANA</div>
+                <div class="stats-value">{{ ventas_semana.total_ventas_semana or 0 }}</div>
+                <small style="opacity: 0.8;">Total: C$ {{ "{:,.0f}".format(ventas_semana.monto_total_semana or 0) }}</small>
             </div>
-
-            <h3>Forma de Pago</h3>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Efectivo (C$)</label>
-                    <input type="number" name="efectivo" step="0.01" value="0">
-                </div>
-                <div class="form-group">
-                    <label>Tarjeta (C$)</label>
-                    <input type="number" name="tarjeta" step="0.01" value="0">
-                </div>
-                <div class="form-group">
-                    <label>Transferencia (C$)</label>
-                    <input type="number" name="transferencia" step="0.01" value="0">
-                </div>
+            <i class="fas fa-calendar-week stats-icon"></i>
+        </div>
+    </div>
+    
+    <div class="stats-card stats-card-info">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <div class="stats-label">MIS VENTAS MES</div>
+                <div class="stats-value">{{ ventas_mes.total_ventas_mes or 0 }}</div>
+                <small style="opacity: 0.8;">Total: C$ {{ "{:,.0f}".format(ventas_mes.monto_total_mes or 0) }}</small>
             </div>
-
-            <div class="form-group">
-                <label>Observaciones</label>
-                <textarea name="observaciones" rows="3"></textarea>
-            </div>
-
-            <div class="form-actions">
-                <button type="submit" class="btn btn-primary btn-large">Completar Venta</button>
-                <button type="button" class="btn btn-secondary" onclick="cerrarModalVenta()">Cancelar</button>
-            </div>
-        </form>
+            <i class="fas fa-calendar-alt stats-icon"></i>
+        </div>
     </div>
 </div>
 
+<!-- Gráfico de ventas y resumen por tipo -->
+<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 20px;">
+    <!-- Gráfico de ventas -->
+    <div class="table-container" style="padding: 20px;">
+        <h3 style="margin-bottom: 15px; font-size: 1.1rem; color: #333;">
+            <i class="fas fa-chart-line" style="color: #0d6efd;"></i> 
+            Mis Ventas - Últimos 7 Días
+        </h3>
+        {% if ventas_por_dia %}
+        <div style="height: 250px;">
+            <canvas id="ventasChart"></canvas>
+        </div>
+        {% else %}
+        <div style="text-align: center; padding: 40px; color: #666;">
+            <i class="fas fa-chart-line" style="font-size: 48px; color: #ccc; margin-bottom: 10px;"></i>
+            <p>No hay ventas en los últimos 7 días</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Resumen por tipo -->
+    <div class="table-container" style="padding: 20px;">
+        <h3 style="margin-bottom: 15px; font-size: 1.1rem; color: #333;">
+            <i class="fas fa-pie-chart" style="color: #28a745;"></i> 
+            Ventas por Tipo (30 días)
+        </h3>
+        {% if resumen_tipos %}
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+            {% for tipo in resumen_tipos %}
+            <div style="border: 1px solid #dee2e6; border-radius: 8px; padding: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                    <span style="font-weight: 600; color: #495057;">{{ tipo.tipo_detalle }}</span>
+                    <span style="font-weight: bold; color: #0d6efd;">C$ {{ "{:,.0f}".format(tipo.total_ingresos or 0) }}</span>
+                </div>
+                <small style="color: #666;">{{ tipo.num_ventas }} ventas | {{ tipo.total_items }} items</small>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div style="text-align: center; padding: 40px; color: #666;">
+            <i class="fas fa-pie-chart" style="font-size: 48px; color: #ccc; margin-bottom: 10px;"></i>
+            <p>No hay datos disponibles</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Últimas ventas y bajo stock -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+    <!-- Últimas ventas -->
+    <div class="table-container">
+        <div style="padding: 15px 20px; border-bottom: 1px solid #eee; background-color: #f8f9fa;">
+            <h3 style="margin: 0; font-size: 1.1rem;">
+                <i class="fas fa-clock" style="color: #0d6efd;"></i> 
+                Mis Últimas Ventas
+            </h3>
+        </div>
+        <div style="padding: 20px;">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Hora</th>
+                        <th class="text-right">Total</th>
+                        <th class="text-right">Efectivo</th>
+                        <th class="text-right">Cambio</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for venta in ultimas_ventas %}
+                    <tr>
+                        <td>{{ venta.fecha_formateada }}</td>
+                        <td>{{ venta.hora }}</td>
+                        <td class="text-right">C$ {{ "{:,.0f}".format(venta.total_venta) }}</td>
+                        <td class="text-right">C$ {{ "{:,.0f}".format(venta.efectivo or 0) }}</td>
+                        <td class="text-right">C$ {{ "{:,.0f}".format(venta.cambio or 0) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center" style="padding: 40px;">No has realizado ventas aún</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Bajo stock -->
+    <div class="table-container">
+        <div style="padding: 15px 20px; border-bottom: 1px solid #eee; background-color: #f8f9fa;">
+            <h3 style="margin: 0; font-size: 1.1rem;">
+                <i class="fas fa-exclamation-triangle" style="color: #ffc107;"></i> 
+                Productos con Bajo Stock
+            </h3>
+        </div>
+        <div style="padding: 20px;">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Producto</th>
+                        <th class="text-right">Stock</th>
+                        <th class="text-right">Mínimo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for producto in productos_bajo_stock %}
+                    <tr>
+                        <td>{{ producto.codigo }}</td>
+                        <td>{{ producto.nombre }}</td>
+                        <td class="text-right">
+                            <span class="badge {% if producto.stock_actual == 0 %}badge-danger{% else %}badge-warning{% endif %}">
+                                {{ producto.stock_actual }} {{ producto.unidad }}
+                            </span>
+                        </td>
+                        <td class="text-right">{{ producto.stock_minimo }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center" style="padding: 40px;">Todos los productos tienen stock suficiente</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Más y menos vendidos -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+    <!-- Más vendidos -->
+    <div class="table-container">
+        <div style="padding: 15px 20px; border-bottom: 1px solid #eee; background-color: #f8f9fa;">
+            <h3 style="margin: 0; font-size: 1.1rem;">
+                <i class="fas fa-arrow-up" style="color: #28a745;"></i> 
+                Mis Productos Más Vendidos (30 días)
+            </h3>
+        </div>
+        <div style="padding: 20px;">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th>Categoría</th>
+                        <th class="text-right">Cantidad</th>
+                        <th class="text-right">Ingresos</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for producto in productos_mas_vendidos %}
+                    <tr>
+                        <td>{{ producto.producto_nombre }}</td>
+                        <td>{{ producto.categoria_nombre }}</td>
+                        <td class="text-right">{{ producto.total_vendido }}</td>
+                        <td class="text-right">C$ {{ "{:,.0f}".format(producto.total_ingresos) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center" style="padding: 40px;">No hay ventas en los últimos 30 días</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Menos vendidos -->
+    <div class="table-container">
+        <div style="padding: 15px 20px; border-bottom: 1px solid #eee; background-color: #f8f9fa;">
+            <h3 style="margin: 0; font-size: 1.1rem;">
+                <i class="fas fa-arrow-down" style="color: #dc3545;"></i> 
+                Mis Productos Menos Vendidos (30 días)
+            </h3>
+        </div>
+        <div style="padding: 20px;">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th>Categoría</th>
+                        <th class="text-right">Stock</th>
+                        <th class="text-right">Vendidos</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for producto in productos_menos_vendidos %}
+                    <tr>
+                        <td>{{ producto.producto_nombre }}</td>
+                        <td>{{ producto.categoria_nombre }}</td>
+                        <td class="text-right">{{ producto.stock_actual }}</td>
+                        <td class="text-right">
+                            <span class="badge badge-secondary">{{ producto.total_vendido }}</span>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center" style="padding: 40px;">No hay datos disponibles</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Productos próximos a vencer -->
+<div class="table-container" style="margin-bottom: 20px;">
+    <div style="padding: 15px 20px; border-bottom: 1px solid #eee; background-color: #f8f9fa;">
+        <h3 style="margin: 0; font-size: 1.1rem;">
+            <i class="fas fa-calendar-exclamation" style="color: #dc3545;"></i> 
+            Productos Próximos a Vencer
+        </h3>
+    </div>
+    <div style="padding: 20px;">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Producto</th>
+                    <th>Lote</th>
+                    <th class="text-right">Stock</th>
+                    <th class="text-center">Vence en</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for producto in productos_por_vencer %}
+                <tr>
+                    <td>{{ producto.codigo }}</td>
+                    <td>{{ producto.nombre }}</td>
+                    <td>{{ producto.lote or 'N/A' }}</td>
+                    <td class="text-right">{{ producto.stock_actual }}</td>
+                    <td class="text-center">
+                        <span class="badge {% if producto.dias_para_vencer <= 7 %}badge-danger{% elif producto.dias_para_vencer <= 15 %}badge-warning{% else %}badge-info{% endif %}">
+                            {{ producto.dias_para_vencer }} días
+                        </span>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="text-center" style="padding: 40px;">No hay productos próximos a vencer</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-let carrito = [];
-let productos = [];
-let servicios = [];
-
-// Cargar productos y servicios
-function cargarDatos() {
-    Promise.all([
-        fetch('/api/productos').then(r => r.json()),
-        fetch('/api/servicios').then(r => r.json())
-    ]).then(([prods, servs]) => {
-        productos = prods;
-        servicios = servs;
-        mostrarProductos(prods);
-        mostrarServicios(servs);
-    });
-}
-
-function mostrarProductos(prods) {
-    const html = prods.map(p => `
-        <div class="producto-card">
-            <h4>${p.nombre}</h4>
-            <p class="precio">RD$ ${parseFloat(p.precio_venta).toFixed(2)}</p>
-            <p class="stock">Stock: ${p.stock_actual} ${p.unidad_nombre}</p>
-            <button class="btn btn-small btn-primary" onclick="agregarAlCarrito('producto', ${p.id}, '${p.nombre}', ${p.precio_venta}, '${p.unidad_nombre}')">Agregar</button>
-        </div>
-    `).join('');
-    
-    document.getElementById('productosDisponibles').innerHTML = html || '<p class="empty">No hay productos disponibles</p>';
-}
-
-function mostrarServicios(servs) {
-    const html = servs.map(s => `
-        <div class="servicio-card">
-            <h4>${s.nombre}</h4>
-            <p>${s.descripcion || ''}</p>
-            <p class="precio">RD$ ${parseFloat(s.precio).toFixed(2)}</p>
-            <button class="btn btn-small btn-primary" onclick="agregarAlCarrito('servicio', ${s.id}, '${s.nombre}', ${s.precio})">Agregar</button>
-        </div>
-    `).join('');
-    
-    document.getElementById('serviciosDisponibles').innerHTML = html || '<p class="empty">No hay servicios disponibles</p>';
-}
-
-function agregarAlCarrito(tipo, id, nombre, precio, unidad = '1') {
-    carrito.push({
-        tipo: tipo,
-        id: id,
-        nombre: nombre,
-        precio: precio,
-        cantidad: 1,
-        unidad: unidad
-    });
-    
-    actualizarCarrito();
-}
-
-function actualizarCarrito() {
-    const html = carrito.map((item, idx) => `
-        <div class="carrito-item">
-            <div class="item-info">
-                <h4>${item.nombre}</h4>
-                <p>${item.tipo === 'producto' ? `${item.unidad}` : 'Servicio'}</p>
-            </div>
-            <div class="item-controls">
-                <input type="number" value="${item.cantidad}" min="1" class="item-cantidad" 
-                       onchange="actualizarCantidad(${idx}, this.value)">
-            </div>
-            <div class="item-price">
-                C$ ${(item.precio * item.cantidad).toFixed(2)}
-            </div>
-            <button class="btn btn-small btn-danger" onclick="eliminarDelCarrito(${idx})">✕</button>
-        </div>
-    `).join('');
-    
-    document.getElementById('carritoItems').innerHTML = html || '<p class="empty">El carrito está vacío</p>';
-    calcularTotales();
-}
-
-function actualizarCantidad(idx, cantidad) {
-    carrito[idx].cantidad = parseInt(cantidad);
-    actualizarCarrito();
-}
-
-function eliminarDelCarrito(idx) {
-    carrito.splice(idx, 1);
-    actualizarCarrito();
-}
-
-function limpiarCarrito() {
-    carrito = [];
-    actualizarCarrito();
-}
-
-function calcularTotales() {
-    const subtotal = carrito.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
-    const iva = subtotal * 0.18;
-    const total = subtotal + iva;
-    
-    document.getElementById('subtotal').textContent = `C$ ${subtotal.toFixed(2)}`;
-    document.getElementById('iva').textContent = `C$ ${iva.toFixed(2)}`;
-    document.getElementById('total').textContent = `C$ ${total.toFixed(2)}`;
-}
-
-function abrirModalVenta() {
-    if (carrito.length === 0) {
-        alert('El carrito está vacío');
-        return;
-    }
-    document.getElementById('modalVenta').style.display = 'block';
-}
-
-function cerrarModalVenta() {
-    document.getElementById('modalVenta').style.display = 'none';
-}
-
-function procesarVenta() {
-    if (carrito.length === 0) {
-        alert('El carrito está vacío');
-        return;
-    }
-    abrirModalVenta();
-}
-
-document.getElementById('formVenta').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    if (carrito.length === 0) {
-        alert('El carrito está vacío');
-        return;
-    }
-    
-    const formData = new FormData(e.target);
-    const efectivo = parseFloat(formData.get('efectivo')) || 0;
-    const tarjeta = parseFloat(formData.get('tarjeta')) || 0;
-    const transferencia = parseFloat(formData.get('transferencia')) || 0;
-    const total = parseFloat(document.getElementById('total').textContent.replace('C$ ', ''));
-    
-    if (efectivo + tarjeta + transferencia < total) {
-        alert('El monto pagado es menor al total');
-        return;
-    }
-    
-    const data = {
-        numero_comprobante: `VTA-${Date.now()}`,
-        cliente_nombre: formData.get('cliente_nombre'),
-        cliente_cedula: formData.get('cliente_cedula'),
-        fecha_venta: new Date().toISOString().split('T')[0],
-        tipo_venta: 'producto',
-        total_venta: total,
-        efectivo: efectivo,
-        tarjeta: tarjeta,
-        transferencia: transferencia,
-        observaciones: formData.get('observaciones'),
-        detalles: carrito.map(item => ({
-            tipo: item.tipo === 'producto' ? 'producto' : 'servicio',
-            id: item.id,
-            cantidad: item.cantidad,
-            precio: item.precio,
-            subtotal: item.precio * item.cantidad
-        }))
-    };
-    
-    try {
-        const res = await fetch('/api/ventas', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
+    document.addEventListener('DOMContentLoaded', function() {
+        const ventasData = {{ ventas_por_dia|tojson }};
         
-        if (res.ok) {
-            alert('Venta completada exitosamente');
-            limpiarCarrito();
-            cerrarModalVenta();
-            document.getElementById('formVenta').reset();
+        if (ventasData && ventasData.length > 0) {
+            const ctx = document.getElementById('ventasChart').getContext('2d');
+            
+            const fechas = ventasData.map(v => v.fecha);
+            const cantidades = ventasData.map(v => v.cantidad_ventas);
+            const montos = ventasData.map(v => v.total_ventas);
+            
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: fechas,
+                    datasets: [{
+                        label: 'Cantidad de Ventas',
+                        data: cantidades,
+                        borderColor: 'rgb(13, 110, 253)',
+                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                        tension: 0.1,
+                        yAxisID: 'y'
+                    }, {
+                        label: 'Monto Total (C$)',
+                        data: montos,
+                        borderColor: 'rgb(220, 53, 69)',
+                        backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                        tension: 0.1,
+                        yAxisID: 'y1'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Cantidad'
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            grid: {
+                                drawOnChartArea: false
+                            },
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Monto (C$)'
+                            }
+                        }
+                    }
+                }
+            });
         }
-    } catch (error) {
-        alert('Error: ' + error.message);
-    }
-});
-
-document.getElementById('buscarProducto').addEventListener('input', (e) => {
-    const busqueda = e.target.value.toLowerCase();
-    const filtrados = productos.filter(p => 
-        p.nombre.toLowerCase().includes(busqueda) || 
-        p.codigo.toLowerCase().includes(busqueda)
-    );
-    mostrarProductos(filtrados);
-});
-
-cargarDatos();
+    });
 </script>
+
+
+<style>
+/* Badges personalizados */
+.badge-warning {
+    background-color: #fff3cd;
+    color: #856404;
+    padding: 4px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.badge-danger {
+    background-color: #f8d7da;
+    color: #842029;
+    padding: 4px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.badge-info {
+    background-color: #cff4fc;
+    color: #055160;
+    padding: 4px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.badge-secondary {
+    background-color: #e9ecef;
+    color: #41464b;
+    padding: 4px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+/* Alineación de texto */
+.text-right {
+    text-align: right;
+}
+
+.text-center {
+    text-align: center;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    [style*="grid-template-columns: repeat(3, 1fr)"] {
+        grid-template-columns: 1fr !important;
+    }
+    
+    [style*="grid-template-columns: 2fr 1fr"] {
+        grid-template-columns: 1fr !important;
+    }
+    
+    [style*="grid-template-columns: 1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+    }
+}
+</style>
 {% endblock %}

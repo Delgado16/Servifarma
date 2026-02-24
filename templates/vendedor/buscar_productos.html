@@ -1,0 +1,617 @@
+{% extends "base.html" %}
+
+{% block title %}Buscar Productos - Vendedor{% endblock %}
+
+{% block extra_css %}
+<style>
+    .buscador-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .buscador-card {
+        background: white;
+        border-radius: 15px;
+        padding: 30px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        margin-bottom: 30px;
+    }
+
+    h2 {
+        color: #333;
+        margin-bottom: 25px;
+        font-size: 28px;
+        border-bottom: 3px solid #667eea;
+        padding-bottom: 10px;
+        display: inline-block;
+    }
+
+    .filtros-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+        margin-bottom: 25px;
+    }
+
+    .filtro-grupo {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .filtro-grupo label {
+        font-weight: 600;
+        color: #555;
+        margin-bottom: 8px;
+        font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .filtro-grupo input,
+    .filtro-grupo select {
+        padding: 12px 15px;
+        border: 2px solid #e1e1e1;
+        border-radius: 8px;
+        font-size: 15px;
+        transition: all 0.3s ease;
+    }
+
+    .filtro-grupo input:focus,
+    .filtro-grupo select:focus {
+        border-color: #667eea;
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .checkbox-grupo {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 25px;
+    }
+
+    .checkbox-grupo input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+    }
+
+    .checkbox-grupo label {
+        cursor: pointer;
+        color: #555;
+        font-weight: 500;
+    }
+
+    .botones-accion {
+        display: flex;
+        gap: 15px;
+        margin-top: 25px;
+        flex-wrap: wrap;
+    }
+
+    .btn {
+        padding: 12px 30px;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+    }
+
+    .btn-secondary {
+        background: #f8f9fa;
+        color: #333;
+        border: 2px solid #e1e1e1;
+    }
+
+    .btn-secondary:hover {
+        background: #e9ecef;
+        border-color: #ced4da;
+    }
+
+    .resultados-card {
+        background: white;
+        border-radius: 15px;
+        padding: 30px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+    }
+
+    .resultados-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+
+    .total-resultados {
+        background: #667eea;
+        color: white;
+        padding: 8px 20px;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 14px;
+    }
+
+    .tabla-productos {
+        overflow-x: auto;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    th {
+        background: #f8f9fa;
+        color: #333;
+        font-weight: 600;
+        padding: 15px 10px;
+        text-align: left;
+        border-bottom: 3px solid #667eea;
+        font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    td {
+        padding: 15px 10px;
+        border-bottom: 1px solid #e1e1e1;
+        color: #555;
+    }
+
+    tr:hover {
+        background: #f8f9fa;
+    }
+
+    .estado-stock {
+        display: inline-block;
+        padding: 5px 10px;
+        border-radius: 15px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .estado-normal {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .estado-bajo {
+        background: #fff3cd;
+        color: #856404;
+    }
+
+    .estado-agotado {
+        background: #f8d7da;
+        color: #721c24;
+    }
+
+    .precio {
+        font-weight: 600;
+        color: #28a745;
+    }
+
+    .cargando {
+        text-align: center;
+        padding: 40px;
+        color: #667eea;
+        font-size: 18px;
+    }
+
+    .no-resultados {
+        text-align: center;
+        padding: 40px;
+        color: #999;
+        font-size: 16px;
+    }
+
+    .filtros-aplicados {
+        background: #f0f2f5;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        font-size: 14px;
+    }
+
+    .filtro-tag {
+        display: inline-block;
+        background: white;
+        padding: 5px 12px;
+        border-radius: 15px;
+        margin-right: 10px;
+        margin-bottom: 5px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+
+    @media (max-width: 768px) {
+        .buscador-card, .resultados-card {
+            padding: 20px;
+        }
+        
+        th, td {
+            padding: 10px 5px;
+            font-size: 13px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="buscador-container">
+    <!-- Tarjeta de búsqueda -->
+    <div class="buscador-card">
+        <h2>🔍 Buscar Productos</h2>
+        
+        <form id="formBusqueda">
+            <div class="filtros-grid">
+                <div class="filtro-grupo">
+                    <label for="buscar">
+                        <span>🔎 Buscar</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        id="buscar" 
+                        name="buscar" 
+                        placeholder="Nombre, código o principio activo..."
+                        value="{{ filtros.buscar if filtros else '' }}"
+                        autocomplete="off"
+                    >
+                </div>
+
+                <div class="filtro-grupo">
+                    <label for="categoria">
+                        <span>📋 Categoría</span>
+                    </label>
+                    <select id="categoria" name="categoria">
+                        <option value="">Todas las categorías</option>
+                        {% for cat in categorias %}
+                        <option value="{{ cat.id }}" {% if filtros and filtros.categoria|int == cat.id %}selected{% endif %}>
+                            {{ cat.nombre }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="checkbox-grupo">
+                <input 
+                    type="checkbox" 
+                    id="incluir_sin_stock" 
+                    name="incluir_sin_stock"
+                    value="true"
+                    {% if filtros and filtros.incluir_sin_stock %}checked{% endif %}
+                >
+                <label for="incluir_sin_stock">
+                    Incluir productos sin stock
+                </label>
+            </div>
+
+            <div class="botones-accion">
+                <button type="submit" class="btn btn-primary">
+                    <span>🔍</span> Buscar Productos
+                </button>
+                <button type="button" class="btn btn-secondary" id="btnLimpiar">
+                    <span>🗑️</span> Limpiar Filtros
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Tarjeta de resultados -->
+    <div class="resultados-card">
+        <div class="resultados-header">
+            <h3>📦 Resultados de Búsqueda</h3>
+            <span class="total-resultados" id="totalResultados">{{ total }} producto(s)</span>
+        </div>
+
+        <!-- Filtros aplicados -->
+        <div id="filtrosAplicados" class="filtros-aplicados" style="display: {% if filtros and (filtros.buscar or filtros.categoria or filtros.incluir_sin_stock) %}block{% else %}none{% endif %};">
+            {% if filtros and (filtros.buscar or filtros.categoria or filtros.incluir_sin_stock) %}
+            <strong>Filtros aplicados:</strong>
+                {% if filtros.buscar %}
+                <span class="filtro-tag">🔍 Búsqueda: "{{ filtros.buscar }}"</span>
+                {% endif %}
+                {% if filtros.categoria %}
+                <span class="filtro-tag">📋 Categoría: {{ filtros.categoria_nombre or filtros.categoria }}</span>
+                {% endif %}
+                {% if filtros.incluir_sin_stock %}
+                <span class="filtro-tag">📦 Incluyendo sin stock</span>
+                {% endif %}
+            {% endif %}
+        </div>
+
+        <!-- Tabla de resultados -->
+        <div class="tabla-productos">
+            <table id="tablaProductos">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Producto</th>
+                        <th>Presentación</th>
+                        <th>Principio Activo</th>
+                        <th>Precio</th>
+                        <th>Stock</th>
+                        <th>Lote</th>
+                        <th>Vencimiento</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody id="resultadosBody">
+                    {% if productos %}
+                        {% for p in productos %}
+                        <tr>
+                            <td><strong>{{ p.codigo or '-' }}</strong></td>
+                            <td>{{ p.nombre or '-' }}</td>
+                            <td>{{ p.presentacion_completa or p.presentacion or '-' }}</td>
+                            <td>{{ p.principio_activo or '-' }}</td>
+                            <td class="precio">C${{ "%.2f"|format(p.precio_venta) }}</td>
+                            <td>{{ p.stock_actual or 0 }} uds</td>
+                            <td>{{ p.lote or '-' }}</td>
+                            <td>{{ p.fecha_vencimiento or '-' }}</td>
+                            <td>
+                                <span class="estado-stock estado-{{ p.estado_stock }}">
+                                    {% if p.estado_stock == 'normal' %}Normal
+                                    {% elif p.estado_stock == 'bajo' %}Stock Bajo
+                                    {% elif p.estado_stock == 'agotado' %}Agotado
+                                    {% endif %}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                    <tr>
+                        <td colspan="9" class="no-resultados">
+                            Realiza una búsqueda para ver resultados
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Indicador de carga -->
+        <div id="cargando" class="cargando" style="display: none;">
+            <span>⏳ Buscando productos...</span>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Configuración
+    const API_URL = '/vendedor/buscar-productos';
+    const CATEGORIAS_API = '/api/categorias';
+    
+    // Elementos del DOM
+    const formBusqueda = document.getElementById('formBusqueda');
+    const buscarInput = document.getElementById('buscar');
+    const categoriaSelect = document.getElementById('categoria');
+    const incluirSinStockCheck = document.getElementById('incluir_sin_stock');
+    const resultadosBody = document.getElementById('resultadosBody');
+    const totalResultados = document.getElementById('totalResultados');
+    const filtrosAplicados = document.getElementById('filtrosAplicados');
+    const cargando = document.getElementById('cargando');
+    const btnLimpiar = document.getElementById('btnLimpiar');
+
+    // Función para escapar HTML y prevenir XSS
+    function escapeHtml(unsafe) {
+        return unsafe
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    // Buscar productos vía AJAX
+    async function buscarProductos(params) {
+        // Mostrar cargando
+        cargando.style.display = 'block';
+        resultadosBody.innerHTML = '';
+
+        try {
+            const url = new URL(API_URL, window.location.origin);
+            Object.keys(params).forEach(key => {
+                if (params[key] && params[key] !== '') {
+                    url.searchParams.append(key, params[key]);
+                }
+            });
+
+            const response = await fetch(url, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            const data = await response.json();
+
+            if (data.success) {
+                mostrarResultados(data);
+                mostrarFiltrosAplicados(data.filtros);
+            } else {
+                mostrarError('Error en la búsqueda');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            mostrarError('Error de conexión');
+        } finally {
+            cargando.style.display = 'none';
+        }
+    }
+
+    // Mostrar resultados en la tabla
+    function mostrarResultados(data) {
+        const { productos, total } = data;
+
+        totalResultados.textContent = `${total} producto${total !== 1 ? 's' : ''}`;
+
+        if (total === 0) {
+            resultadosBody.innerHTML = `
+                <tr>
+                    <td colspan="9" class="no-resultados">
+                        No se encontraron productos con los filtros seleccionados
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        let html = '';
+        productos.forEach(p => {
+            const estadoClass = {
+                'normal': 'estado-normal',
+                'bajo': 'estado-bajo',
+                'agotado': 'estado-agotado'
+            }[p.estado_stock] || '';
+
+            const estadoTexto = {
+                'normal': 'Normal',
+                'bajo': 'Stock Bajo',
+                'agotado': 'Agotado'
+            }[p.estado_stock] || p.estado_stock;
+
+            html += `
+                <tr>
+                    <td><strong>${escapeHtml(p.codigo || '-')}</strong></td>
+                    <td>${escapeHtml(p.nombre || '-')}</td>
+                    <td>${escapeHtml(p.presentacion_completa || p.presentacion || '-')}</td>
+                    <td>${escapeHtml(p.principio_activo || '-')}</td>
+                    <td class="precio">C$${p.precio_venta.toFixed(2)}</td>
+                    <td>${p.stock_actual || 0} uds</td>
+                    <td>${escapeHtml(p.lote || '-')}</td>
+                    <td>${escapeHtml(p.fecha_vencimiento || '-')}</td>
+                    <td><span class="estado-stock ${estadoClass}">${estadoTexto}</span></td>
+                </tr>
+            `;
+        });
+
+        resultadosBody.innerHTML = html;
+    }
+
+    // Mostrar filtros aplicados
+    function mostrarFiltrosAplicados(filtros) {
+        const filtrosActivos = [];
+        
+        if (filtros.buscar) {
+            filtrosActivos.push(`<span class="filtro-tag">🔍 Búsqueda: "${escapeHtml(filtros.buscar)}"</span>`);
+        }
+        
+        if (filtros.categoria) {
+            const categoriaText = categoriaSelect.options[categoriaSelect.selectedIndex]?.text || filtros.categoria;
+            filtrosActivos.push(`<span class="filtro-tag">📋 Categoría: ${escapeHtml(categoriaText)}</span>`);
+        }
+        
+        if (filtros.incluir_sin_stock) {
+            filtrosActivos.push(`<span class="filtro-tag">📦 Incluyendo sin stock</span>`);
+        }
+
+        if (filtrosActivos.length > 0) {
+            filtrosAplicados.innerHTML = '<strong>Filtros aplicados:</strong> ' + filtrosActivos.join(' ');
+            filtrosAplicados.style.display = 'block';
+        } else {
+            filtrosAplicados.style.display = 'none';
+        }
+    }
+
+    // Mostrar mensaje de error
+    function mostrarError(mensaje) {
+        resultadosBody.innerHTML = `
+            <tr>
+                <td colspan="9" class="no-resultados" style="color: #dc3545;">
+                    ❌ ${escapeHtml(mensaje)}
+                </td>
+            </tr>
+        `;
+        totalResultados.textContent = '0 productos';
+    }
+
+    // Manejar envío del formulario
+    formBusqueda.addEventListener('submit', (e) => {
+        e.preventDefault();
+        
+        const params = {
+            buscar: buscarInput.value.trim(),
+            categoria: categoriaSelect.value,
+            incluir_sin_stock: incluirSinStockCheck.checked ? 'true' : ''
+        };
+        
+        // Actualizar la URL sin recargar la página
+        const url = new URL(window.location);
+        url.search = '';
+        if (params.buscar) url.searchParams.set('buscar', params.buscar);
+        if (params.categoria) url.searchParams.set('categoria', params.categoria);
+        if (params.incluir_sin_stock) url.searchParams.set('incluir_sin_stock', 'true');
+        window.history.pushState({}, '', url);
+        
+        buscarProductos(params);
+    });
+
+    // Limpiar filtros
+    btnLimpiar.addEventListener('click', () => {
+        buscarInput.value = '';
+        categoriaSelect.value = '';
+        incluirSinStockCheck.checked = false;
+        
+        // Limpiar URL
+        const url = new URL(window.location);
+        url.search = '';
+        window.history.pushState({}, '', url);
+        
+        // Limpiar resultados
+        resultadosBody.innerHTML = `
+            <tr>
+                <td colspan="9" class="no-resultados">
+                    Realiza una búsqueda para ver resultados
+                </td>
+            </tr>
+        `;
+        totalResultados.textContent = '0 productos';
+        filtrosAplicados.style.display = 'none';
+    });
+
+    // Manejar botones atrás/adelante del navegador
+    window.addEventListener('popstate', () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        buscarInput.value = urlParams.get('buscar') || '';
+        categoriaSelect.value = urlParams.get('categoria') || '';
+        incluirSinStockCheck.checked = urlParams.get('incluir_sin_stock') === 'true';
+        
+        if (urlParams.has('buscar') || urlParams.has('categoria')) {
+            formBusqueda.dispatchEvent(new Event('submit'));
+        }
+    });
+
+    // Inicializar
+    document.addEventListener('DOMContentLoaded', () => {
+        // Cargar búsqueda inicial si hay parámetros en la URL
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('buscar') || urlParams.has('categoria')) {
+            buscarInput.value = urlParams.get('buscar') || '';
+            categoriaSelect.value = urlParams.get('categoria') || '';
+            incluirSinStockCheck.checked = urlParams.get('incluir_sin_stock') === 'true';
+            
+            formBusqueda.dispatchEvent(new Event('submit'));
+        }
+    });
+</script>
+{% endblock %}

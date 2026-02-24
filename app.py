@@ -803,11 +803,320 @@ def eliminar_proveedor(id):
 # ========================
 # DASHBOARD VENDEDOR
 # ========================
-
 @app.route('/vendedor/dashboard')
 @login_required
 def dashboard_vendedor():
-    return render_template('vendedor/dashboard.html')
+    cursor = mysql.connection.cursor(DictCursor)
+    usuario_id = session['usuario_id']
+    
+    # Obtener nombre del vendedor
+    cursor.execute("SELECT nombre FROM usuarios WHERE id = %s", (usuario_id,))
+    usuario = cursor.fetchone()
+    nombre_vendedor = usuario['nombre'] if usuario else 'Vendedor'
+    
+    # 1. Ventas del vendedor hoy
+    cursor.execute("""
+        SELECT 
+            COUNT(*) as total_ventas_hoy,
+            COALESCE(SUM(total_venta), 0) as monto_total_hoy
+        FROM ventas 
+        WHERE usuario_id = %s 
+        AND DATE(fecha_venta) = CURDATE()
+    """, (usuario_id,))
+    ventas_hoy = cursor.fetchone()
+    
+    # 2. Ventas del vendedor esta semana
+    cursor.execute("""
+        SELECT 
+            COUNT(*) as total_ventas_semana,
+            COALESCE(SUM(total_venta), 0) as monto_total_semana
+        FROM ventas 
+        WHERE usuario_id = %s 
+        AND YEARWEEK(fecha_venta) = YEARWEEK(CURDATE())
+    """, (usuario_id,))
+    ventas_semana = cursor.fetchone()
+    
+    # 3. Ventas del vendedor este mes
+    cursor.execute("""
+        SELECT 
+            COUNT(*) as total_ventas_mes,
+            COALESCE(SUM(total_venta), 0) as monto_total_mes
+        FROM ventas 
+        WHERE usuario_id = %s 
+        AND MONTH(fecha_venta) = MONTH(CURDATE()) 
+        AND YEAR(fecha_venta) = YEAR(CURDATE())
+    """, (usuario_id,))
+    ventas_mes = cursor.fetchone()
+    
+    # 4. Últimas 10 ventas del vendedor
+    cursor.execute("""
+        SELECT v.*, 
+               DATE_FORMAT(v.fecha_venta, '%%d/%%m/%%Y') as fecha_formateada,
+               DATE_FORMAT(v.fecha_creacion, '%%H:%%i:%%s') as hora
+        FROM ventas v
+        WHERE v.usuario_id = %s
+        ORDER BY v.fecha_creacion DESC
+        LIMIT 10
+    """, (usuario_id,))
+    ultimas_ventas = cursor.fetchall()
+    
+    # 5. Productos con bajo stock
+    cursor.execute("""
+        SELECT p.*, 
+               c.nombre as categoria_nombre,
+               u.abreviatura as unidad
+        FROM productos p
+        INNER JOIN categorias c ON p.categoria_id = c.id
+        INNER JOIN unidades_medida u ON p.unidad_base_id = u.id
+        WHERE p.stock_actual <= p.stock_minimo 
+        AND p.activo = 1
+        ORDER BY p.stock_actual ASC
+        LIMIT 10
+    """)
+    productos_bajo_stock = cursor.fetchall()
+    
+    # 6. Productos menos vendidos POR ESTE VENDEDOR
+    cursor.execute("""
+        SELECT 
+            p.id,
+            p.codigo,
+            p.nombre as producto_nombre,
+            p.stock_actual,
+            p.stock_minimo,
+            c.nombre as categoria_nombre,
+            COALESCE(SUM(dv.cantidad), 0) as total_vendido
+        FROM productos p
+        INNER JOIN categorias c ON p.categoria_id = c.id
+        LEFT JOIN detalles_venta dv ON p.id = dv.referencia_id AND dv.tipo_detalle = 'producto'
+        LEFT JOIN ventas v ON dv.venta_id = v.id AND v.usuario_id = %s AND v.fecha_venta >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+        WHERE p.activo = 1
+        GROUP BY p.id, p.codigo, p.nombre, p.stock_actual, p.stock_minimo, c.nombre
+        HAVING total_vendido > 0
+        ORDER BY total_vendido ASC
+        LIMIT 10
+    """, (usuario_id,))
+    productos_menos_vendidos = cursor.fetchall()
+    
+    # 7. Productos más vendidos POR ESTE VENDEDOR
+    cursor.execute("""
+        SELECT 
+            p.id,
+            p.codigo,
+            p.nombre as producto_nombre,
+            p.stock_actual,
+            c.nombre as categoria_nombre,
+            COALESCE(SUM(dv.cantidad), 0) as total_vendido,
+            COALESCE(SUM(dv.subtotal), 0) as total_ingresos
+        FROM productos p
+        INNER JOIN categorias c ON p.categoria_id = c.id
+        LEFT JOIN detalles_venta dv ON p.id = dv.referencia_id AND dv.tipo_detalle = 'producto'
+        LEFT JOIN ventas v ON dv.venta_id = v.id AND v.usuario_id = %s AND v.fecha_venta >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+        WHERE p.activo = 1
+        GROUP BY p.id, p.codigo, p.nombre, p.stock_actual, c.nombre
+        HAVING total_vendido > 0
+        ORDER BY total_vendido DESC
+        LIMIT 10
+    """, (usuario_id,))
+    productos_mas_vendidos = cursor.fetchall()
+    
+    # 8. Ventas por día (SIN GROUP BY problemático)
+    cursor.execute("""
+        SELECT 
+            DATE(v.fecha_venta) as fecha,
+            COUNT(*) as cantidad_ventas,
+            COALESCE(SUM(v.total_venta), 0) as total_ventas
+        FROM ventas v
+        WHERE v.usuario_id = %s
+        AND v.fecha_venta >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+        GROUP BY DATE(v.fecha_venta)
+        ORDER BY fecha DESC
+    """, (usuario_id,))
+    ventas_por_dia = cursor.fetchall()
+    
+    # Agregar día de semana en Python
+    dias_semana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+    for venta in ventas_por_dia:
+        from datetime import datetime
+        fecha_obj = datetime.strptime(str(venta['fecha']), '%Y-%m-%d')
+        venta['dia_semana'] = dias_semana[fecha_obj.weekday()]
+    
+    # 9. Productos próximos a vencer
+    cursor.execute("""
+        SELECT 
+            p.id,
+            p.codigo,
+            p.nombre,
+            p.lote,
+            p.stock_actual,
+            p.fecha_vencimiento,
+            c.nombre as categoria_nombre,
+            DATEDIFF(p.fecha_vencimiento, CURDATE()) as dias_para_vencer
+        FROM productos p
+        INNER JOIN categorias c ON p.categoria_id = c.id
+        WHERE p.fecha_vencimiento IS NOT NULL
+        AND p.fecha_vencimiento BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+        AND p.activo = 1
+        ORDER BY p.fecha_vencimiento ASC
+        LIMIT 10
+    """)
+    productos_por_vencer = cursor.fetchall()
+    
+    # 10. Resumen de ventas por tipo
+    cursor.execute("""
+        SELECT 
+            dv.tipo_detalle,
+            COUNT(DISTINCT dv.venta_id) as num_ventas,
+            COUNT(*) as total_items,
+            SUM(dv.subtotal) as total_ingresos
+        FROM detalles_venta dv
+        INNER JOIN ventas v ON dv.venta_id = v.id
+        WHERE v.usuario_id = %s
+        AND v.fecha_venta >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+        GROUP BY dv.tipo_detalle
+    """, (usuario_id,))
+    resumen_tipos = cursor.fetchall()
+    
+    cursor.close()
+    
+    return render_template('vendedor/dashboard.html',
+                          nombre_vendedor=nombre_vendedor,
+                          ventas_hoy=ventas_hoy,
+                          ventas_semana=ventas_semana,
+                          ventas_mes=ventas_mes,
+                          ultimas_ventas=ultimas_ventas,
+                          productos_bajo_stock=productos_bajo_stock,
+                          productos_menos_vendidos=productos_menos_vendidos,
+                          productos_mas_vendidos=productos_mas_vendidos,
+                          ventas_por_dia=ventas_por_dia,
+                          productos_por_vencer=productos_por_vencer,
+                          resumen_tipos=resumen_tipos)
+    
+
+@app.route('/vendedor/buscar-productos', methods=['GET'])
+@login_required
+def buscar_productos():
+    cursor = mysql.connection.cursor(DictCursor)
+    
+    # Obtener parámetros de búsqueda
+    buscar = request.args.get('buscar', '').strip()
+    categoria = request.args.get('categoria', '')
+    incluir_sin_stock = request.args.get('incluir_sin_stock', '').lower() == 'true'
+    
+    # Query base
+    query = '''
+        SELECT 
+            p.id, 
+            p.codigo, 
+            p.nombre, 
+            p.descripcion,
+            p.presentacion,
+            p.principio_activo,
+            p.precio_venta, 
+            p.stock_actual,
+            p.stock_minimo,
+            p.lote,
+            p.fecha_vencimiento,
+            c.nombre as categoria_nombre,
+            um.nombre as unidad_medida,
+            um.abreviatura as unidad_abreviatura
+        FROM productos p
+        LEFT JOIN categorias c ON p.categoria_id = c.id
+        LEFT JOIN unidades_medida um ON p.unidad_base_id = um.id
+        WHERE p.activo = TRUE
+    '''
+    params = []
+    
+    # Filtros
+    if not incluir_sin_stock:
+        query += ' AND p.stock_actual > 0'
+    
+    if buscar:
+        query += ' AND (p.nombre LIKE %s OR p.codigo LIKE %s OR p.principio_activo LIKE %s)'
+        like_param = f'%{buscar}%'
+        params.extend([like_param, like_param, like_param])
+    
+    if categoria and categoria.isdigit():
+        query += ' AND p.categoria_id = %s'
+        params.append(int(categoria))
+    
+    query += ' ORDER BY p.nombre LIMIT 50'
+    
+    try:
+        cursor.execute(query, params)
+        productos = cursor.fetchall()
+    except Exception as e:
+        print(f"Error en la consulta: {e}")
+        productos = []
+    
+    # Procesar productos
+    productos_procesados = []
+    for producto in productos:
+        producto_dict = dict(producto)
+        
+        # Formatear fecha
+        if producto_dict.get('fecha_vencimiento'):
+            producto_dict['fecha_vencimiento'] = producto_dict['fecha_vencimiento'].strftime('%Y-%m-%d')
+        
+        # Estado del stock
+        if producto_dict['stock_actual'] <= 0:
+            producto_dict['estado_stock'] = 'agotado'
+        elif producto_dict['stock_actual'] <= producto_dict['stock_minimo']:
+            producto_dict['estado_stock'] = 'bajo'
+        else:
+            producto_dict['estado_stock'] = 'normal'
+        
+        # Presentación completa
+        presentacion_parts = []
+        if producto_dict.get('presentacion'):
+            presentacion_parts.append(producto_dict['presentacion'])
+        if producto_dict.get('unidad_medida'):
+            presentacion_parts.append(f"({producto_dict['unidad_medida']})")
+        
+        producto_dict['presentacion_completa'] = ' '.join(presentacion_parts) if presentacion_parts else 'Sin presentación'
+        producto_dict['precio_venta'] = float(producto_dict['precio_venta']) if producto_dict.get('precio_venta') else 0
+        
+        productos_procesados.append(producto_dict)
+    
+    cursor.close()
+    
+    # Si es petición AJAX, devolver JSON
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({
+            'success': True,
+            'productos': productos_procesados,
+            'total': len(productos_procesados),
+            'filtros': {
+                'buscar': buscar,
+                'categoria': categoria,
+                'incluir_sin_stock': incluir_sin_stock
+            }
+        })
+    
+    # Si es petición normal, obtener categorías y renderizar template
+    cursor = mysql.connection.cursor(DictCursor)
+    cursor.execute('SELECT id, nombre FROM categorias WHERE activo = TRUE ORDER BY nombre')
+    categorias = cursor.fetchall()
+    cursor.close()
+    
+    return render_template('vendedor/buscar_productos.html',
+                         productos=productos_procesados,
+                         categorias=categorias,
+                         total=len(productos_procesados),
+                         filtros={
+                             'buscar': buscar,
+                             'categoria': categoria,
+                             'incluir_sin_stock': incluir_sin_stock
+                         })
+
+
+@app.route('/api/categorias', methods=['GET'])
+@login_required
+def api_categorias():
+    cursor = mysql.connection.cursor(DictCursor)
+    cursor.execute('SELECT id, nombre FROM categorias WHERE activo = TRUE ORDER BY nombre')
+    categorias = cursor.fetchall()
+    cursor.close()
+    return jsonify(categorias)
 
 # ========================
 # GESTIÓN DE VENTAS
@@ -1804,25 +2113,291 @@ def api_cambiar_estado_servicio(id):
 # ========================
 # GESTIÓN DE COMBOS
 # ========================
+@app.route('/combos')
+@admin_required
+def listado_combos():
+    """Vista para listar todos los combos activos"""
+    cursor = mysql.connection.cursor(DictCursor)
+    
+    cursor.execute('''
+        SELECT c.*, 
+               COUNT(dc.id) as total_productos,
+               COALESCE(SUM(p.precio_costo * dc.cantidad), 0) as costo_total
+        FROM combos c
+        LEFT JOIN detalles_combo dc ON c.id = dc.combo_id
+        LEFT JOIN productos p ON dc.producto_id = p.id
+        WHERE c.activo = 1
+        GROUP BY c.id
+        ORDER BY c.nombre
+    ''')
+    combos = cursor.fetchall()
+    
+    # Calcular márgenes
+    for combo in combos:
+        combo['margen'] = float(combo['precio_combo']) - float(combo['costo_total'])
+        combo['porcentaje_margen'] = (combo['margen'] / float(combo['precio_combo']) * 100) if float(combo['precio_combo']) > 0 else 0
+    
+    cursor.close()
+    
+    return render_template('admin/combos.html', combos=combos)
+
+
+@app.route('/combos/nuevo', methods=['GET', 'POST'])
+@admin_required
+def combo_nuevo():
+    """Vista para crear un nuevo combo"""
+    cursor = mysql.connection.cursor(DictCursor)
+    
+    if request.method == 'POST':
+        try:
+            nombre = request.form.get('nombre')
+            descripcion = request.form.get('descripcion', '')
+            precio_combo = request.form.get('precio_combo')
+            
+            # Validaciones básicas
+            if not nombre or not precio_combo:
+                flash('Nombre y precio son requeridos', 'error')
+                return redirect(url_for('combo_nuevo'))
+            
+            # Insertar combo
+            cursor.execute('''
+                INSERT INTO combos (nombre, descripcion, precio_combo)
+                VALUES (%s, %s, %s)
+            ''', (nombre, descripcion, precio_combo))
+            
+            combo_id = cursor.lastrowid
+            
+            # Procesar productos
+            productos_ids = request.form.getlist('productos[]')
+            cantidades = request.form.getlist('cantidades[]')
+            unidades_ids = request.form.getlist('unidades[]')
+            
+            stock_insuficiente = False
+            productos_sin_stock = []
+            
+            for i in range(len(productos_ids)):
+                if productos_ids[i] and cantidades[i] and unidades_ids[i]:
+                    # Verificar stock
+                    cursor.execute('SELECT stock_actual, nombre FROM productos WHERE id = %s', (productos_ids[i],))
+                    producto = cursor.fetchone()
+                    
+                    if producto:
+                        cantidad_requerida = float(cantidades[i])
+                        if cantidad_requerida > float(producto['stock_actual']):
+                            stock_insuficiente = True
+                            productos_sin_stock.append(producto['nombre'])
+                    
+                    # Insertar detalle
+                    cursor.execute('''
+                        INSERT INTO detalles_combo (combo_id, producto_id, cantidad, unidad_id)
+                        VALUES (%s, %s, %s, %s)
+                    ''', (combo_id, productos_ids[i], cantidades[i], unidades_ids[i]))
+            
+            mysql.connection.commit()
+            
+            if stock_insuficiente:
+                productos_str = ', '.join(productos_sin_stock)
+                flash(f'Combo creado pero hay stock insuficiente para: {productos_str}', 'warning')
+            else:
+                flash('Combo creado exitosamente', 'success')
+                
+            return redirect(url_for('listado_combos'))
+            
+        except Exception as e:
+            mysql.connection.rollback()
+            flash(f'Error al crear el combo: {str(e)}', 'error')
+            return redirect(url_for('combo_nuevo'))
+        finally:
+            cursor.close()
+    
+    # GET - mostrar formulario
+    cursor.execute('''
+        SELECT p.id, p.codigo, p.nombre, p.descripcion,
+               p.precio_costo, p.precio_venta, p.stock_actual,
+               p.unidad_base_id, p.activo,
+               u.nombre as unidad_nombre, u.abreviatura as unidad_abreviatura
+        FROM productos p
+        LEFT JOIN unidades_medida u ON p.unidad_base_id = u.id
+        WHERE p.activo = 1
+        ORDER BY p.nombre
+    ''')
+    productos = cursor.fetchall()
+    
+    cursor.execute('SELECT id, nombre, abreviatura FROM unidades_medida ORDER BY nombre')
+    unidades_medida = cursor.fetchall()
+    
+    cursor.close()
+    
+    return render_template('admin/combos.html', 
+                         productos=productos, 
+                         unidades_medida=unidades_medida,
+                         combo=None)
+
+
+@app.route('/combos/<int:combo_id>/editar', methods=['GET', 'POST'])
+@admin_required
+def combo_editar(combo_id):
+    """Vista para editar un combo existente"""
+    cursor = mysql.connection.cursor(DictCursor)
+    
+    if request.method == 'POST':
+        try:
+            nombre = request.form.get('nombre')
+            descripcion = request.form.get('descripcion', '')
+            precio_combo = request.form.get('precio_combo')
+            
+            if not nombre or not precio_combo:
+                flash('Nombre y precio son requeridos', 'error')
+                return redirect(url_for('combo_editar', combo_id=combo_id))
+            
+            # Actualizar combo
+            cursor.execute('''
+                UPDATE combos 
+                SET nombre = %s, descripcion = %s, precio_combo = %s
+                WHERE id = %s AND activo = 1
+            ''', (nombre, descripcion, precio_combo, combo_id))
+            
+            # Eliminar detalles antiguos
+            cursor.execute('DELETE FROM detalles_combo WHERE combo_id = %s', (combo_id,))
+            
+            # Insertar nuevos detalles
+            productos_ids = request.form.getlist('productos[]')
+            cantidades = request.form.getlist('cantidades[]')
+            unidades_ids = request.form.getlist('unidades[]')
+            
+            stock_insuficiente = False
+            productos_sin_stock = []
+            
+            for i in range(len(productos_ids)):
+                if productos_ids[i] and cantidades[i] and unidades_ids[i]:
+                    # Verificar stock
+                    cursor.execute('SELECT stock_actual, nombre FROM productos WHERE id = %s', (productos_ids[i],))
+                    producto = cursor.fetchone()
+                    
+                    if producto:
+                        cantidad_requerida = float(cantidades[i])
+                        if cantidad_requerida > float(producto['stock_actual']):
+                            stock_insuficiente = True
+                            productos_sin_stock.append(producto['nombre'])
+                    
+                    # Insertar detalle
+                    cursor.execute('''
+                        INSERT INTO detalles_combo (combo_id, producto_id, cantidad, unidad_id)
+                        VALUES (%s, %s, %s, %s)
+                    ''', (combo_id, productos_ids[i], cantidades[i], unidades_ids[i]))
+            
+            mysql.connection.commit()
+            
+            if stock_insuficiente:
+                productos_str = ', '.join(productos_sin_stock)
+                flash(f'Combo actualizado pero hay stock insuficiente para: {productos_str}', 'warning')
+            else:
+                flash('Combo actualizado exitosamente', 'success')
+                
+            return redirect(url_for('listado_combos'))
+            
+        except Exception as e:
+            mysql.connection.rollback()
+            flash(f'Error al actualizar el combo: {str(e)}', 'error')
+            return redirect(url_for('combo_editar', combo_id=combo_id))
+        finally:
+            cursor.close()
+    
+    # GET - mostrar formulario con datos
+    cursor.execute('SELECT * FROM combos WHERE id = %s AND activo = 1', (combo_id,))
+    combo = cursor.fetchone()
+    
+    if not combo:
+        cursor.close()
+        flash('Combo no encontrado', 'error')
+        return redirect(url_for('listado_combos'))
+    
+    # Obtener detalles del combo con precios actuales
+    cursor.execute('''
+        SELECT dc.*, p.nombre as producto_nombre, p.codigo,
+               p.precio_costo, p.precio_venta, p.stock_actual,
+               u.nombre as unidad_nombre, u.abreviatura as unidad_abreviatura
+        FROM detalles_combo dc
+        JOIN productos p ON dc.producto_id = p.id
+        LEFT JOIN unidades_medida u ON dc.unidad_id = u.id
+        WHERE dc.combo_id = %s
+    ''', (combo_id,))
+    combo['detalles'] = cursor.fetchall()
+    
+    # Productos activos para el select
+    cursor.execute('''
+        SELECT p.id, p.codigo, p.nombre, p.descripcion,
+               p.precio_costo, p.precio_venta, p.stock_actual,
+               p.unidad_base_id, p.activo,
+               u.nombre as unidad_nombre, u.abreviatura as unidad_abreviatura
+        FROM productos p
+        LEFT JOIN unidades_medida u ON p.unidad_base_id = u.id
+        WHERE p.activo = 1
+        ORDER BY p.nombre
+    ''')
+    productos = cursor.fetchall()
+    
+    # Unidades de medida
+    cursor.execute('SELECT id, nombre, abreviatura FROM unidades_medida ORDER BY nombre')
+    unidades_medida = cursor.fetchall()
+    
+    cursor.close()
+    
+    return render_template('admin/combos.html', 
+                         combo=combo,
+                         productos=productos, 
+                         unidades_medida=unidades_medida)
+
+
+@app.route('/combos/<int:combo_id>/eliminar', methods=['POST'])
+@admin_required
+def combo_eliminar(combo_id):
+    """Ruta para desactivar un combo"""
+    cursor = mysql.connection.cursor(DictCursor)
+    
+    try:
+        cursor.execute('UPDATE combos SET activo = 0 WHERE id = %s', (combo_id,))
+        mysql.connection.commit()
+        flash('Combo desactivado correctamente', 'success')
+    except Exception as e:
+        mysql.connection.rollback()
+        flash(f'Error al desactivar el combo: {str(e)}', 'error')
+    finally:
+        cursor.close()
+    
+    return redirect(url_for('listado_combos'))
+
+# ============================================
+# API RUTAS (SOLO LAS ESENCIALES)
+# ============================================
 
 @app.route('/api/combos', methods=['GET', 'POST'])
 @admin_required
 def api_combos():
+    """API para listar y crear combos"""
     cursor = mysql.connection.cursor(DictCursor)
     
     if request.method == 'GET':
-        cursor.execute('SELECT * FROM combos WHERE activo = TRUE')
+        cursor.execute('SELECT * FROM combos WHERE activo = 1 ORDER BY nombre')
         combos = cursor.fetchall()
         
         for combo in combos:
             cursor.execute('''
-                SELECT dc.*, p.nombre as producto_nombre, u.nombre as unidad_nombre
+                SELECT dc.*, p.nombre as producto_nombre, p.precio_costo,
+                       u.nombre as unidad_nombre, u.abreviatura
                 FROM detalles_combo dc
                 LEFT JOIN productos p ON dc.producto_id = p.id
                 LEFT JOIN unidades_medida u ON dc.unidad_id = u.id
                 WHERE dc.combo_id = %s
             ''', (combo['id'],))
             combo['detalles'] = cursor.fetchall()
+            
+            # Calcular costo total
+            costo_total = 0
+            for detalle in combo['detalles']:
+                if detalle.get('precio_costo'):
+                    costo_total += float(detalle['precio_costo']) * float(detalle['cantidad'])
+            combo['costo_total'] = round(costo_total, 2)
         
         cursor.close()
         return jsonify(combos)
@@ -1830,32 +2405,192 @@ def api_combos():
     elif request.method == 'POST':
         data = request.get_json()
         
-        cursor.execute('''
-            INSERT INTO combos (nombre, descripcion, precio_combo)
-            VALUES (%s, %s, %s)
-        ''', (
-            data['nombre'],
-            data.get('descripcion', ''),
-            data['precio_combo']
-        ))
-        
-        combo_id = cursor.lastrowid
-        
-        for detalle in data['detalles']:
+        try:
+            if not data.get('nombre') or not data.get('precio_combo'):
+                return jsonify({'error': 'Nombre y precio son requeridos'}), 400
+            
+            if not data.get('detalles') or len(data['detalles']) == 0:
+                return jsonify({'error': 'El combo debe tener al menos un producto'}), 400
+            
             cursor.execute('''
-                INSERT INTO detalles_combo (combo_id, producto_id, cantidad, unidad_id)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO combos (nombre, descripcion, precio_combo, activo)
+                VALUES (%s, %s, %s, 1)
             ''', (
-                combo_id,
-                detalle['producto_id'],
-                detalle['cantidad'],
-                detalle['unidad_id']
+                data['nombre'],
+                data.get('descripcion', ''),
+                data['precio_combo']
             ))
-        
-        mysql.connection.commit()
+            
+            combo_id = cursor.lastrowid
+            
+            for detalle in data['detalles']:
+                cursor.execute('SELECT id FROM productos WHERE id = %s', (detalle['producto_id'],))
+                if not cursor.fetchone():
+                    raise Exception(f"Producto ID {detalle['producto_id']} no existe")
+                
+                cursor.execute('''
+                    INSERT INTO detalles_combo (combo_id, producto_id, cantidad, unidad_id)
+                    VALUES (%s, %s, %s, %s)
+                ''', (
+                    combo_id,
+                    detalle['producto_id'],
+                    detalle['cantidad'],
+                    detalle['unidad_id']
+                ))
+            
+            mysql.connection.commit()
+            cursor.close()
+            
+            return jsonify({'success': True, 'combo_id': combo_id})
+            
+        except Exception as e:
+            mysql.connection.rollback()
+            cursor.close()
+            return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/combos/<int:combo_id>', methods=['GET', 'PUT'])
+@admin_required
+def api_combo_detail(combo_id):
+    """API para obtener o actualizar un combo específico"""
+    cursor = mysql.connection.cursor(DictCursor)
+    
+    cursor.execute('SELECT * FROM combos WHERE id = %s', (combo_id,))
+    combo = cursor.fetchone()
+    
+    if not combo:
         cursor.close()
+        return jsonify({'error': 'Combo no encontrado'}), 404
+    
+    if request.method == 'GET':
+        cursor.execute('''
+            SELECT dc.*, p.nombre as producto_nombre, p.codigo, p.precio_costo,
+                   u.nombre as unidad_nombre, u.abreviatura
+            FROM detalles_combo dc
+            LEFT JOIN productos p ON dc.producto_id = p.id
+            LEFT JOIN unidades_medida u ON dc.unidad_id = u.id
+            WHERE dc.combo_id = %s
+        ''', (combo_id,))
+        combo['detalles'] = cursor.fetchall()
         
-        return jsonify({'success': True, 'combo_id': combo_id})
+        costo_total = 0
+        for detalle in combo['detalles']:
+            if detalle.get('precio_costo'):
+                costo_total += float(detalle['precio_costo']) * float(detalle['cantidad'])
+        combo['costo_total'] = round(costo_total, 2)
+        
+        cursor.close()
+        return jsonify(combo)
+    
+    elif request.method == 'PUT':
+        data = request.get_json()
+        
+        try:
+            if not data.get('nombre') or not data.get('precio_combo'):
+                return jsonify({'error': 'Nombre y precio son requeridos'}), 400
+            
+            if not data.get('detalles') or len(data['detalles']) == 0:
+                return jsonify({'error': 'El combo debe tener al menos un producto'}), 400
+            
+            cursor.execute('''
+                UPDATE combos 
+                SET nombre = %s, descripcion = %s, precio_combo = %s
+                WHERE id = %s
+            ''', (
+                data['nombre'],
+                data.get('descripcion', ''),
+                data['precio_combo'],
+                combo_id
+            ))
+            
+            cursor.execute('DELETE FROM detalles_combo WHERE combo_id = %s', (combo_id,))
+            
+            for detalle in data['detalles']:
+                cursor.execute('SELECT id FROM productos WHERE id = %s', (detalle['producto_id'],))
+                if not cursor.fetchone():
+                    raise Exception(f"Producto ID {detalle['producto_id']} no existe")
+                
+                cursor.execute('''
+                    INSERT INTO detalles_combo (combo_id, producto_id, cantidad, unidad_id)
+                    VALUES (%s, %s, %s, %s)
+                ''', (
+                    combo_id,
+                    detalle['producto_id'],
+                    detalle['cantidad'],
+                    detalle['unidad_id']
+                ))
+            
+            mysql.connection.commit()
+            cursor.close()
+            
+            return jsonify({'success': True, 'message': 'Combo actualizado correctamente'})
+            
+        except Exception as e:
+            mysql.connection.rollback()
+            cursor.close()
+            return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/combos/productos/disponibles', methods=['GET'])
+@admin_required
+def api_combos_productos_disponibles():
+    """API para obtener productos disponibles para combos"""
+    cursor = mysql.connection.cursor(DictCursor)
+    
+    cursor.execute('''
+        SELECT p.id, p.nombre, p.codigo, 
+               p.precio_costo, p.precio_venta,
+               p.stock_actual, 
+               p.unidad_base_id,
+               u.nombre as unidad_nombre,
+               u.id as unidad_id,
+               u.abreviatura as unidad_abreviatura
+        FROM productos p
+        LEFT JOIN unidades_medida u ON p.unidad_base_id = u.id
+        WHERE p.activo = 1 AND p.stock_actual > 0
+        ORDER BY p.nombre
+    ''')
+    
+    productos = cursor.fetchall()
+    
+    for producto in productos:
+        producto['precio_costo'] = float(producto['precio_costo'])
+        producto['precio_venta'] = float(producto['precio_venta'])
+    
+    cursor.close()
+    return jsonify(productos)
+
+
+@app.route('/api/combos/calcular-costo', methods=['POST'])
+@admin_required
+def api_calcular_costo():
+    """API para calcular costo total de productos seleccionados"""
+    data = request.get_json()
+    detalles = data.get('detalles', [])
+    
+    if not detalles:
+        return jsonify({'costo_total': 0})
+    
+    cursor = mysql.connection.cursor(DictCursor)
+    costo_total = 0
+    
+    for detalle in detalles:
+        cursor.execute('SELECT precio_costo FROM productos WHERE id = %s', (detalle['producto_id'],))
+        producto = cursor.fetchone()
+        if producto:
+            costo_total += float(producto['precio_costo']) * float(detalle['cantidad'])
+    
+    cursor.close()
+    return jsonify({'costo_total': round(costo_total, 2)})
+
+# ===========================
+# MOVIMIENTOS DE INVENTARIOS
+# ===========================
+
+
+
+
+
 
 # ========================
 # REPORTES

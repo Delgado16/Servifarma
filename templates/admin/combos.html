@@ -1,0 +1,640 @@
+{% extends 'base.html' %}
+
+{% block title %}
+    {% if combo %}
+        Editar Combo: {{ combo.nombre }} - ServiFarma
+    {% else %}
+        Nuevo Combo - ServiFarma
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="fas fa-{% if combo %}edit{% else %}plus-circle{% endif %}"></i>
+        {% if combo %}
+            Editar Combo: {{ combo.nombre }}
+        {% else %}
+            Nuevo Combo
+        {% endif %}
+    </h1>
+    <a href="{{ url_for('listado_combos') }}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left"></i> Volver
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form id="formCombo" method="POST" action="{% if combo %}{{ url_for('combo_editar', combo_id=combo.id) }}{% else %}{{ url_for('combo_nuevo') }}{% endif %}">
+            <!-- Información básica del combo -->
+            <div class="mb-4">
+                <h3 class="section-title" style="color: #0d6efd;">
+                    <i class="fas fa-info-circle"></i> Información del Combo
+                </h3>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>
+                            Nombre del Combo <span class="required">*</span>
+                        </label>
+                        <input type="text" 
+                               id="nombre" 
+                               name="nombre" 
+                               value="{{ combo.nombre if combo else '' }}" 
+                               required
+                               placeholder="Ej: Combo Salud Familiar">
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            Precio de Venta <span class="required">*</span>
+                        </label>
+                        <div class="input-group">
+                            <span class="currency">C$</span>
+                            <input type="number" 
+                                   id="precio_combo" 
+                                   name="precio_combo" 
+                                   step="0.01" 
+                                   min="0"
+                                   value="{{ combo.precio_combo if combo else '' }}" 
+                                   required>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Descripción</label>
+                    <textarea id="descripcion" 
+                              name="descripcion" 
+                              rows="3"
+                              placeholder="Descripción del combo...">{{ combo.descripcion if combo else '' }}</textarea>
+                </div>
+
+                <!-- Resumen de costos -->
+                <div id="resumenCostos" class="alert alert-info" style="display: none; margin-top: 15px;">
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+                        <div>
+                            <strong>Costo Total:</strong> 
+                            <span id="costoTotal">0.00</span>
+                        </div>
+                        <div>
+                            <strong>Margen Estimado:</strong> 
+                            <span id="margenEstimado">0.00</span>
+                            <span id="porcentajeMargen"></span>
+                        </div>
+                        <div>
+                            <strong>Precio Venta:</strong> 
+                            <span id="totalCostos">0.00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Productos del combo -->
+            <div class="mb-4">
+                <h3 class="section-title" style="color: #28a745;">
+                    <i class="fas fa-boxes"></i> Productos del Combo
+                </h3>
+                
+                <div class="table-container">
+                    <table class="table" id="tablaProductos">
+                        <thead>
+                            <tr>
+                                <th>Producto</th>
+                                <th style="width: 100px;">Cantidad</th>
+                                <th style="width: 150px;">Unidad de Medida</th>
+                                <th style="width: 120px;">Precio Costo</th>
+                                <th style="width: 120px;">Subtotal</th>
+                                <th style="width: 80px;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="productosBody">
+                            {% if combo and combo.detalles %}
+                                {% for detalle in combo.detalles %}
+                                <tr class="producto-row">
+                                    <td>
+                                        <select class="producto-select" name="productos[]" required>
+                                            <option value="">Seleccionar producto</option>
+                                            {% for producto in productos %}
+                                            <option value="{{ producto.id }}" 
+                                                    data-precio="{{ producto.precio_costo }}"
+                                                    data-unidad-id="{{ producto.unidad_base_id }}"
+                                                    data-stock="{{ producto.stock_actual }}"
+                                                    {% if producto.id == detalle.producto_id %}selected{% endif %}>
+                                                {{ producto.nombre }} ({{ producto.codigo }}) - Stock: {{ producto.stock_actual }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <input type="number" 
+                                               class="cantidad-input" 
+                                               name="cantidades[]" 
+                                               value="{{ detalle.cantidad }}"
+                                               min="0.01" 
+                                               step="0.01" 
+                                               required>
+                                    </td>
+                                    <td>
+                                        <select class="unidad-select" name="unidades[]" required>
+                                            <option value="">Seleccionar</option>
+                                            {% for unidad in unidades_medida %}
+                                            <option value="{{ unidad.id }}" 
+                                                    {% if unidad.id == detalle.unidad_id %}selected{% endif %}>
+                                                {{ unidad.nombre }} ({{ unidad.abreviatura }})
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </td>
+                                    <td class="precio-costo text-right fw-medium">
+                                        C$ {{ "%.2f"|format(detalle.precio_costo|float) if detalle.precio_costo else "0.00" }}
+                                    </td>
+                                    <td class="subtotal text-right text-primary fw-medium">
+                                        C$ {{ "%.2f"|format((detalle.precio_costo|float * detalle.cantidad|float)) }}
+                                    </td>
+                                    <td class="text-center">
+                                        <button type="button" class="btn btn-small btn-danger" onclick="eliminarProducto(this)">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                            <tr class="producto-row">
+                                <td>
+                                    <select class="producto-select" name="productos[]" required>
+                                        <option value="">Seleccionar producto</option>
+                                        {% for producto in productos %}
+                                        <option value="{{ producto.id }}" 
+                                                data-precio="{{ producto.precio_costo }}"
+                                                data-unidad-id="{{ producto.unidad_base_id }}"
+                                                data-stock="{{ producto.stock_actual }}">
+                                            {{ producto.nombre }} ({{ producto.codigo }}) - Stock: {{ producto.stock_actual }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </td>
+                                <td>
+                                    <input type="number" 
+                                           class="cantidad-input" 
+                                           name="cantidades[]" 
+                                           value="1"
+                                           min="0.01" 
+                                           step="0.01" 
+                                           required>
+                                </td>
+                                <td>
+                                    <select class="unidad-select" name="unidades[]" required>
+                                        <option value="">Seleccionar</option>
+                                        {% for unidad in unidades_medida %}
+                                        <option value="{{ unidad.id }}">{{ unidad.nombre }} ({{ unidad.abreviatura }})</option>
+                                        {% endfor %}
+                                    </select>
+                                </td>
+                                <td class="precio-costo text-right fw-medium">C$ 0.00</td>
+                                <td class="subtotal text-right text-primary fw-medium">C$ 0.00</td>
+                                <td class="text-center">
+                                    <button type="button" class="btn btn-small btn-danger" onclick="eliminarProducto(this)">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="6" style="padding: 15px; background-color: #f8f9fa;">
+                                    <button type="button" class="btn btn-primary" onclick="agregarProducto()">
+                                        <i class="fas fa-plus"></i> Agregar Producto
+                                    </button>
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Botones de acción -->
+            <div class="form-actions">
+                <a href="{{ url_for('listado_combos') }}" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Cancelar
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-{% if combo %}save{% else %}plus-circle{% endif %}"></i>
+                    {% if combo %}Actualizar{% else %}Guardar{% endif %} Combo
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Template para nueva fila de producto -->
+<template id="producto-row-template">
+    <tr class="producto-row">
+        <td>
+            <select class="producto-select" name="productos[]" required>
+                <option value="">Seleccionar producto</option>
+                {% for producto in productos %}
+                <option value="{{ producto.id }}" 
+                        data-precio="{{ producto.precio_costo }}"
+                        data-unidad-id="{{ producto.unidad_base_id }}"
+                        data-stock="{{ producto.stock_actual }}">
+                    {{ producto.nombre }} ({{ producto.codigo }}) - Stock: {{ producto.stock_actual }}
+                </option>
+                {% endfor %}
+            </select>
+        </td>
+        <td>
+            <input type="number" 
+                   class="cantidad-input" 
+                   name="cantidades[]" 
+                   value="1"
+                   min="0.01" 
+                   step="0.01" 
+                   required>
+        </td>
+        <td>
+            <select class="unidad-select" name="unidades[]" required>
+                <option value="">Seleccionar</option>
+                {% for unidad in unidades_medida %}
+                <option value="{{ unidad.id }}">{{ unidad.nombre }} ({{ unidad.abreviatura }})</option>
+                {% endfor %}
+            </select>
+        </td>
+        <td class="precio-costo text-right fw-medium">C$ 0.00</td>
+        <td class="subtotal text-right text-primary fw-medium">C$ 0.00</td>
+        <td class="text-center">
+            <button type="button" class="btn btn-small btn-danger" onclick="eliminarProducto(this)">
+                <i class="fas fa-trash"></i>
+            </button>
+        </td>
+    </tr>
+</template>
+
+<script>
+// Variable para almacenar productos seleccionados
+let productosSeleccionados = [];
+
+document.addEventListener('DOMContentLoaded', function() {
+    inicializarEventos();
+    calcularCostos();
+    
+    const precioCombo = document.getElementById('precio_combo');
+    if (precioCombo) {
+        precioCombo.addEventListener('input', calcularCostos);
+    }
+});
+
+function inicializarEventos() {
+    document.querySelectorAll('.producto-select').forEach(select => {
+        select.addEventListener('change', function() {
+            actualizarPrecioYUnidad(this);
+            verificarProductosDuplicados();
+        });
+    });
+    
+    document.querySelectorAll('.cantidad-input').forEach(input => {
+        input.addEventListener('input', function() {
+            calcularSubtotal(this.closest('tr'));
+            calcularCostos();
+        });
+    });
+    
+    // Inicializar precios si ya hay productos seleccionados
+    document.querySelectorAll('.producto-select').forEach(select => {
+        if (select.value) {
+            actualizarPrecioYUnidad(select);
+        }
+    });
+}
+
+function actualizarPrecioYUnidad(select) {
+    const row = select.closest('tr');
+    const selectedOption = select.options[select.selectedIndex];
+    const precio = selectedOption.dataset.precio || '0';
+    const unidadId = selectedOption.dataset.unidadId;
+    
+    const precioCell = row.querySelector('.precio-costo');
+    if (precioCell) {
+        precioCell.textContent = 'C$ ' + parseFloat(precio).toFixed(2);
+    }
+    
+    if (unidadId) {
+        const unidadSelect = row.querySelector('.unidad-select');
+        if (unidadSelect) {
+            Array.from(unidadSelect.options).forEach(option => {
+                if (option.value == unidadId) {
+                    option.selected = true;
+                }
+            });
+        }
+    }
+    
+    calcularSubtotal(row);
+    calcularCostos();
+}
+
+function calcularSubtotal(row) {
+    const precioText = row.querySelector('.precio-costo')?.textContent.replace('C$', '') || '0';
+    const precio = parseFloat(precioText) || 0;
+    const cantidad = parseFloat(row.querySelector('.cantidad-input')?.value) || 0;
+    const subtotal = precio * cantidad;
+    
+    const subtotalCell = row.querySelector('.subtotal');
+    if (subtotalCell) {
+        subtotalCell.textContent = 'C$ ' + subtotal.toFixed(2);
+    }
+}
+
+function calcularCostos() {
+    let total = 0;
+    document.querySelectorAll('.producto-row').forEach(row => {
+        const subtotalText = row.querySelector('.subtotal')?.textContent.replace('C$', '') || '0';
+        const subtotal = parseFloat(subtotalText) || 0;
+        total += subtotal;
+    });
+    
+    const totalCostosEl = document.getElementById('totalCostos');
+    if (totalCostosEl) {
+        totalCostosEl.textContent = 'C$ ' + total.toFixed(2);
+    }
+    
+    const precioVenta = parseFloat(document.getElementById('precio_combo')?.value) || 0;
+    const resumenCostos = document.getElementById('resumenCostos');
+    const costoTotalEl = document.getElementById('costoTotal');
+    const margenEstimadoEl = document.getElementById('margenEstimado');
+    const porcentajeMargenEl = document.getElementById('porcentajeMargen');
+    
+    if (precioVenta > 0 && resumenCostos) {
+        const margen = precioVenta - total;
+        const porcentaje = ((margen / precioVenta) * 100).toFixed(1);
+        
+        if (costoTotalEl) costoTotalEl.textContent = 'C$ ' + total.toFixed(2);
+        if (margenEstimadoEl) margenEstimadoEl.textContent = 'C$ ' + margen.toFixed(2);
+        if (porcentajeMargenEl) porcentajeMargenEl.textContent = `(${porcentaje}%)`;
+        
+        resumenCostos.style.display = 'block';
+        
+        // Cambiar color según margen
+        resumenCostos.className = 'alert';
+        if (margen < 0) {
+            resumenCostos.classList.add('alert-danger');
+        } else if (margen < total * 0.2) {
+            resumenCostos.classList.add('alert-warning');
+        } else {
+            resumenCostos.classList.add('alert-success');
+        }
+    } else if (resumenCostos) {
+        resumenCostos.style.display = 'none';
+    }
+}
+
+function agregarProducto() {
+    const template = document.getElementById('producto-row-template');
+    const tbody = document.getElementById('productosBody');
+    const clone = document.importNode(template.content, true);
+    
+    tbody.appendChild(clone);
+    
+    const nuevaFila = tbody.lastElementChild;
+    const select = nuevaFila.querySelector('.producto-select');
+    if (select) {
+        select.addEventListener('change', function() {
+            actualizarPrecioYUnidad(this);
+            verificarProductosDuplicados();
+        });
+    }
+    
+    const cantidad = nuevaFila.querySelector('.cantidad-input');
+    if (cantidad) {
+        cantidad.addEventListener('input', function() {
+            calcularSubtotal(this.closest('tr'));
+            calcularCostos();
+        });
+    }
+}
+
+function eliminarProducto(btn) {
+    const row = btn.closest('tr');
+    if (document.querySelectorAll('.producto-row').length > 1) {
+        row.remove();
+        calcularCostos();
+        verificarProductosDuplicados();
+    } else {
+        mostrarAlerta('El combo debe tener al menos un producto', 'warning');
+    }
+}
+
+function verificarProductosDuplicados() {
+    productosSeleccionados = [];
+    let duplicados = false;
+    
+    document.querySelectorAll('.producto-select').forEach(select => {
+        if (select.value) {
+            if (productosSeleccionados.includes(select.value)) {
+                duplicados = true;
+                select.classList.add('is-invalid');
+            } else {
+                productosSeleccionados.push(select.value);
+                select.classList.remove('is-invalid');
+            }
+        }
+    });
+    
+    const btnGuardar = document.querySelector('.btn-primary[type="submit"]');
+    if (btnGuardar) {
+        if (duplicados) {
+            btnGuardar.disabled = true;
+            btnGuardar.style.opacity = '0.5';
+            btnGuardar.style.cursor = 'not-allowed';
+            mostrarAlerta('No puedes tener productos duplicados', 'warning');
+        } else {
+            btnGuardar.disabled = false;
+            btnGuardar.style.opacity = '1';
+            btnGuardar.style.cursor = 'pointer';
+        }
+    }
+}
+
+function mostrarAlerta(mensaje, tipo) {
+    // Crear alerta temporal
+    const alerta = document.createElement('div');
+    alerta.className = `alert alert-${tipo}`;
+    alerta.style.position = 'fixed';
+    alerta.style.top = '20px';
+    alerta.style.right = '20px';
+    alerta.style.zIndex = '9999';
+    alerta.style.minWidth = '300px';
+    alerta.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
+    alerta.innerHTML = `
+        <i class="fas fa-${tipo === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i>
+        ${mensaje}
+    `;
+    
+    document.body.appendChild(alerta);
+    
+    setTimeout(() => {
+        alerta.remove();
+    }, 3000);
+}
+
+// Validación antes de enviar el formulario
+document.getElementById('formCombo')?.addEventListener('submit', function(e) {
+    const productos = document.querySelectorAll('.producto-select');
+    let productosValidos = true;
+    
+    productos.forEach(select => {
+        if (!select.value) {
+            productosValidos = false;
+            select.classList.add('is-invalid');
+        }
+    });
+    
+    if (!productosValidos) {
+        e.preventDefault();
+        mostrarAlerta('Debes seleccionar un producto para cada fila', 'warning');
+    }
+});
+</script>
+
+<style>
+/* Estilos adicionales específicos para el formulario de combos */
+.section-title {
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid;
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+.card {
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.card-body {
+    padding: 25px;
+}
+
+/* Estilos para la tabla dentro del formulario */
+.table-container {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+}
+
+.table td {
+    vertical-align: middle;
+}
+
+/* Estilos para selects e inputs dentro de la tabla */
+.table select,
+.table input[type="number"] {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.table select:focus,
+.table input[type="number"]:focus {
+    outline: none;
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13,110,253,0.25);
+}
+
+/* Estilo para el input-group de precio */
+.input-group {
+    display: flex;
+    align-items: center;
+}
+
+.input-group .currency {
+    background: #e9ecef;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-right: none;
+    border-radius: 4px 0 0 4px;
+    font-weight: 500;
+}
+
+.input-group input {
+    flex: 1;
+    border-radius: 0 4px 4px 0;
+}
+
+/* Estilo para el resumen de costos */
+.alert {
+    border-radius: 4px;
+    border-left-width: 4px;
+    padding: 15px 20px;
+}
+
+.alert-success {
+    background-color: #d1e7dd;
+    color: #0f5132;
+    border-left-color: #198754;
+}
+
+.alert-warning {
+    background-color: #fff3cd;
+    color: #856404;
+    border-left-color: #ffc107;
+}
+
+.alert-danger {
+    background-color: #f8d7da;
+    color: #842029;
+    border-left-color: #dc3545;
+}
+
+.alert-info {
+    background-color: #cff4fc;
+    color: #055160;
+    border-left-color: #0dcaf0;
+}
+
+/* Clase para inputs inválidos */
+.is-invalid {
+    border-color: #dc3545 !important;
+}
+
+/* Estilo para el botón de eliminar */
+.btn-small.btn-danger {
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+/* Alineación de texto */
+.text-right {
+    text-align: right;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .form-row {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .table-container {
+        overflow-x: auto;
+    }
+    
+    .table th,
+    .table td {
+        min-width: 120px;
+    }
+    
+    .table td:first-child {
+        min-width: 200px;
+    }
+}
+</style>
+{% endblock %}

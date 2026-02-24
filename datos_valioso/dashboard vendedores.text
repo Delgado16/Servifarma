@@ -1,0 +1,479 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard Vendedor - Farmacia{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Métricas principales -->
+    <div class="row mb-4">
+        <div class="col-md-4 mb-3">
+            <div class="card card-dashboard bg-gradient-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="metric-label">Ventas Hoy</h6>
+                            <h2 class="metric-value">{{ ventas_hoy.total_ventas_hoy or 0 }}</h2>
+                            <p class="mb-0">Total: ${{ "{:,.0f}".format(ventas_hoy.monto_total_hoy or 0) }}</p>
+                        </div>
+                        <i class="bi bi-calendar-day fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mb-3">
+            <div class="card card-dashboard bg-gradient-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="metric-label">Ventas Esta Semana</h6>
+                            <h2 class="metric-value">{{ ventas_semana.total_ventas_semana or 0 }}</h2>
+                            <p class="mb-0">Total: ${{ "{:,.0f}".format(ventas_semana.monto_total_semana or 0) }}</p>
+                        </div>
+                        <i class="bi bi-calendar-week fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mb-3">
+            <div class="card card-dashboard bg-gradient-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="metric-label">Ventas Este Mes</h6>
+                            <h2 class="metric-value">{{ ventas_mes.total_ventas_mes or 0 }}</h2>
+                            <p class="mb-0">Total: ${{ "{:,.0f}".format(ventas_mes.monto_total_mes or 0) }}</p>
+                        </div>
+                        <i class="bi bi-calendar-month fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfico y ranking -->
+    <div class="row mb-4">
+        <div class="col-md-8 mb-3">
+            <div class="card card-dashboard">
+                <div class="card-header bg-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-graph-up"></i> Ventas Últimos 7 Días
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="ventasChart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mb-3">
+            <div class="card card-dashboard">
+                <div class="card-header bg-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-trophy"></i> Ranking de Vendedores
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-custom">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Vendedor</th>
+                                    <th>Ventas</th>
+                                    <th>Monto</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for vendedor in ranking_vendedores %}
+                                <tr>
+                                    <td>{{ loop.index }}</td>
+                                    <td>{{ vendedor.vendedor_nombre }}</td>
+                                    <td>{{ vendedor.total_ventas or 0 }}</td>
+                                    <td>${{ "{:,.0f}".format(vendedor.monto_total or 0) }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resumen por tipo de venta (NUEVO) -->
+    {% if resumen_tipos %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card card-dashboard">
+                <div class="card-header bg-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-pie-chart"></i> Resumen de Ventas (30 días)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for tipo in resumen_tipos %}
+                        <div class="col-md-4 mb-2">
+                            <div class="border rounded p-3">
+                                <h6 class="text-uppercase text-muted">{{ tipo.tipo_detalle }}</h6>
+                                <h3>${{ "{:,.0f}".format(tipo.total_ingresos or 0) }}</h3>
+                                <small>{{ tipo.num_ventas }} ventas | {{ tipo.total_items }} items</small>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Últimas ventas y productos bajo stock -->
+    <div class="row mb-4">
+        <div class="col-md-6 mb-3">
+            <div class="card card-dashboard">
+                <div class="card-header bg-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-clock-history"></i> Últimas Ventas
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-custom">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Hora</th>
+                                    <th>Total</th>
+                                    <th>Efectivo</th>
+                                    <th>Cambio</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for venta in ultimas_ventas %}
+                                <tr>
+                                    <td>{{ venta.fecha_formateada }}</td>
+                                    <td>{{ venta.hora }}</td>
+                                    <td>${{ "{:,.0f}".format(venta.total_venta) }}</td>
+                                    <td>${{ "{:,.0f}".format(venta.efectivo or 0) }}</td>
+                                    <td>${{ "{:,.0f}".format(venta.cambio or 0) }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center">No hay ventas recientes</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6 mb-3">
+            <div class="card card-dashboard">
+                <div class="card-header bg-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-exclamation-triangle text-warning"></i> Productos con Bajo Stock
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-custom">
+                            <thead>
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Producto</th>
+                                    <th>Categoría</th>
+                                    <th>Stock</th>
+                                    <th>Mínimo</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for producto in productos_bajo_stock %}
+                                <tr>
+                                    <td>{{ producto.codigo }}</td>
+                                    <td>{{ producto.nombre }}</td>
+                                    <td>{{ producto.categoria_nombre }}</td>
+                                    <td>
+                                        <span class="badge {% if producto.stock_actual == 0 %}bg-danger{% elif producto.stock_actual <= producto.stock_minimo %}bg-warning{% else %}bg-success{% endif %} badge-stock">
+                                            {{ producto.stock_actual }} {{ producto.unidad }}
+                                        </span>
+                                    </td>
+                                    <td>{{ producto.stock_minimo }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center">No hay productos con bajo stock</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Productos más y menos vendidos -->
+    <div class="row mb-4">
+        <div class="col-md-6 mb-3">
+            <div class="card card-dashboard">
+                <div class="card-header bg-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-graph-up-arrow text-success"></i> Productos Más Vendidos (30 días)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-custom">
+                            <thead>
+                                <tr>
+                                    <th>Producto</th>
+                                    <th>Categoría</th>
+                                    <th>Cantidad</th>
+                                    <th>Ingresos</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for producto in productos_mas_vendidos %}
+                                <tr>
+                                    <td>{{ producto.producto_nombre }}</td>
+                                    <td>{{ producto.categoria_nombre }}</td>
+                                    <td>{{ producto.total_vendido }}</td>
+                                    <td>${{ "{:,.0f}".format(producto.total_ingresos) }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="4" class="text-center">No hay ventas en los últimos 30 días</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6 mb-3">
+            <div class="card card-dashboard">
+                <div class="card-header bg-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-graph-down-arrow text-danger"></i> Productos Menos Vendidos (30 días)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-custom">
+                            <thead>
+                                <tr>
+                                    <th>Producto</th>
+                                    <th>Categoría</th>
+                                    <th>Stock</th>
+                                    <th>Vendidos</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for producto in productos_menos_vendidos %}
+                                <tr>
+                                    <td>{{ producto.producto_nombre }}</td>
+                                    <td>{{ producto.categoria_nombre }}</td>
+                                    <td>{{ producto.stock_actual }}</td>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ producto.total_vendido }}</span>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="4" class="text-center">No hay datos disponibles</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Productos próximos a vencer -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card card-dashboard">
+                <div class="card-header bg-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-calendar-exclamation text-danger"></i> Productos Próximos a Vencer (30 días)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-custom">
+                            <thead>
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Producto</th>
+                                    <th>Categoría</th>
+                                    <th>Lote</th>
+                                    <th>Stock</th>
+                                    <th>Días para vencer</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for producto in productos_por_vencer %}
+                                <tr>
+                                    <td>{{ producto.codigo }}</td>
+                                    <td>{{ producto.nombre }}</td>
+                                    <td>{{ producto.categoria_nombre }}</td>
+                                    <td>{{ producto.lote or 'N/A' }}</td>
+                                    <td>{{ producto.stock_actual }}</td>
+                                    <td>
+                                        <span class="badge {% if producto.dias_para_vencer <= 7 %}bg-danger{% elif producto.dias_para_vencer <= 15 %}bg-warning{% else %}bg-info{% endif %}">
+                                            {{ producto.dias_para_vencer }} días
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="6" class="text-center">No hay productos próximos a vencer</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block styles %}
+{{ super() }}
+<style>
+    .card-dashboard {
+        border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        transition: transform 0.3s;
+        height: 100%;
+    }
+    .card-dashboard:hover {
+        transform: translateY(-5px);
+    }
+    .bg-gradient-primary {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+    }
+    .bg-gradient-success {
+        background: linear-gradient(45deg, #28a745, #20c997);
+    }
+    .bg-gradient-info {
+        background: linear-gradient(45deg, #17a2b8, #0dcaf0);
+    }
+    .metric-value {
+        font-size: 2rem;
+        font-weight: bold;
+        line-height: 1.2;
+    }
+    .metric-label {
+        font-size: 0.9rem;
+        opacity: 0.9;
+        margin-bottom: 0.5rem;
+    }
+    .table-custom {
+        font-size: 0.9rem;
+    }
+    .table-custom td, .table-custom th {
+        padding: 0.75rem 0.5rem;
+    }
+    .badge-stock {
+        font-size: 0.8rem;
+        padding: 5px 10px;
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Gráfico de ventas
+    document.addEventListener('DOMContentLoaded', function() {
+        const ventasData = {{ ventas_por_dia|tojson }};
+        
+        if (ventasData && ventasData.length > 0) {
+            const ctx = document.getElementById('ventasChart').getContext('2d');
+            
+            const fechas = ventasData.map(v => v.fecha);
+            const cantidades = ventasData.map(v => v.cantidad_ventas);
+            const montos = ventasData.map(v => v.total_ventas);
+            
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: fechas,
+                    datasets: [{
+                        label: 'Cantidad de Ventas',
+                        data: cantidades,
+                        borderColor: 'rgb(75, 192, 192)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        tension: 0.1,
+                        yAxisID: 'y'
+                    }, {
+                        label: 'Monto Total ($)',
+                        data: montos,
+                        borderColor: 'rgb(255, 99, 132)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        tension: 0.1,
+                        yAxisID: 'y1'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    stacked: false,
+                    plugins: {
+                        title: {
+                            display: false
+                        },
+                        legend: {
+                            position: 'top',
+                        }
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'Cantidad de Ventas'
+                            },
+                            beginAtZero: true
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'Monto ($)'
+                            },
+                            grid: {
+                                drawOnChartArea: false
+                            },
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        } else {
+            document.getElementById('ventasChart').parentNode.innerHTML = '<p class="text-center text-muted my-5">No hay datos de ventas para mostrar</p>';
+        }
+    });
+</script>
+{% endblock %}

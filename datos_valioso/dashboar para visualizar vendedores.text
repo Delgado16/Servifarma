@@ -1,0 +1,207 @@
+@app.route('/vendedor/dashboard')
+@login_required
+def dashboard_vendedor():
+    cursor = mysql.connection.cursor(DictCursor)
+    usuario_id = session['usuario_id']
+    
+    # 1. Ventas del vendedor hoy
+    cursor.execute("""
+        SELECT 
+            COUNT(*) as total_ventas_hoy,
+            COALESCE(SUM(total_venta), 0) as monto_total_hoy
+        FROM ventas 
+        WHERE usuario_id = %s 
+        AND DATE(fecha_venta) = CURDATE()
+    """, (usuario_id,))
+    ventas_hoy = cursor.fetchone()
+    
+    # 2. Ventas del vendedor esta semana
+    cursor.execute("""
+        SELECT 
+            COUNT(*) as total_ventas_semana,
+            COALESCE(SUM(total_venta), 0) as monto_total_semana
+        FROM ventas 
+        WHERE usuario_id = %s 
+        AND YEARWEEK(fecha_venta) = YEARWEEK(CURDATE())
+    """, (usuario_id,))
+    ventas_semana = cursor.fetchone()
+    
+    # 3. Ventas del vendedor este mes
+    cursor.execute("""
+        SELECT 
+            COUNT(*) as total_ventas_mes,
+            COALESCE(SUM(total_venta), 0) as monto_total_mes
+        FROM ventas 
+        WHERE usuario_id = %s 
+        AND MONTH(fecha_venta) = MONTH(CURDATE()) 
+        AND YEAR(fecha_venta) = YEAR(CURDATE())
+    """, (usuario_id,))
+    ventas_mes = cursor.fetchone()
+    
+    # 4. Últimas 10 ventas del vendedor
+    cursor.execute("""
+        SELECT v.*, 
+               DATE_FORMAT(v.fecha_venta, '%%d/%%m/%%Y') as fecha_formateada,
+               DATE_FORMAT(v.fecha_creacion, '%%H:%%i:%%s') as hora
+        FROM ventas v
+        WHERE v.usuario_id = %s
+        ORDER BY v.fecha_creacion DESC
+        LIMIT 10
+    """, (usuario_id,))
+    ultimas_ventas = cursor.fetchall()
+    
+    # 5. Productos con bajo stock
+    cursor.execute("""
+        SELECT p.*, 
+               c.nombre as categoria_nombre,
+               u.abreviatura as unidad
+        FROM productos p
+        INNER JOIN categorias c ON p.categoria_id = c.id
+        INNER JOIN unidades_medida u ON p.unidad_base_id = u.id
+        WHERE p.stock_actual <= p.stock_minimo 
+        AND p.activo = 1
+        ORDER BY p.stock_actual ASC
+        LIMIT 10
+    """)
+    productos_bajo_stock = cursor.fetchall()
+    
+    # 6. Productos menos vendidos (últimos 30 días)
+    cursor.execute("""
+        SELECT 
+            p.id,
+            p.codigo,
+            p.nombre as producto_nombre,
+            p.stock_actual,
+            p.stock_minimo,
+            c.nombre as categoria_nombre,
+            COALESCE((
+                SELECT SUM(dv.cantidad) 
+                FROM detalles_venta dv
+                INNER JOIN ventas v ON dv.venta_id = v.id
+                WHERE dv.referencia_id = p.id 
+                AND dv.tipo_detalle = 'producto'
+                AND v.fecha_venta >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+            ), 0) as total_vendido
+        FROM productos p
+        INNER JOIN categorias c ON p.categoria_id = c.id
+        WHERE p.activo = 1
+        HAVING total_vendido > 0
+        ORDER BY total_vendido ASC
+        LIMIT 10
+    """)
+    productos_menos_vendidos = cursor.fetchall()
+    
+    # 7. Productos más vendidos (últimos 30 días)
+    cursor.execute("""
+        SELECT 
+            p.id,
+            p.codigo,
+            p.nombre as producto_nombre,
+            p.stock_actual,
+            c.nombre as categoria_nombre,
+            COALESCE((
+                SELECT SUM(dv.cantidad) 
+                FROM detalles_venta dv
+                INNER JOIN ventas v ON dv.venta_id = v.id
+                WHERE dv.referencia_id = p.id 
+                AND dv.tipo_detalle = 'producto'
+                AND v.fecha_venta >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+            ), 0) as total_vendido,
+            COALESCE((
+                SELECT SUM(dv.subtotal) 
+                FROM detalles_venta dv
+                INNER JOIN ventas v ON dv.venta_id = v.id
+                WHERE dv.referencia_id = p.id 
+                AND dv.tipo_detalle = 'producto'
+                AND v.fecha_venta >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+            ), 0) as total_ingresos
+        FROM productos p
+        INNER JOIN categorias c ON p.categoria_id = c.id
+        WHERE p.activo = 1
+        HAVING total_vendido > 0
+        ORDER BY total_vendido DESC
+        LIMIT 10
+    """)
+    productos_mas_vendidos = cursor.fetchall()
+    
+    # 8. Ventas por día (últimos 7 días)
+    cursor.execute("""
+        SELECT 
+            DATE(v.fecha_venta) as fecha,
+            COUNT(*) as cantidad_ventas,
+            COALESCE(SUM(v.total_venta), 0) as total_ventas,
+            DAYNAME(v.fecha_venta) as dia_semana
+        FROM ventas v
+        WHERE v.usuario_id = %s
+        AND v.fecha_venta >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+        GROUP BY DATE(v.fecha_venta), DAYNAME(v.fecha_venta)
+        ORDER BY DATE(v.fecha_venta) DESC
+    """, (usuario_id,))
+    ventas_por_dia = cursor.fetchall()
+    
+    # 9. Productos próximos a vencer
+    cursor.execute("""
+        SELECT 
+            p.id,
+            p.codigo,
+            p.nombre,
+            p.lote,
+            p.stock_actual,
+            p.fecha_vencimiento,
+            c.nombre as categoria_nombre,
+            DATEDIFF(p.fecha_vencimiento, CURDATE()) as dias_para_vencer
+        FROM productos p
+        INNER JOIN categorias c ON p.categoria_id = c.id
+        WHERE p.fecha_vencimiento IS NOT NULL
+        AND p.fecha_vencimiento BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+        AND p.activo = 1
+        ORDER BY p.fecha_vencimiento ASC
+        LIMIT 10
+    """)
+    productos_por_vencer = cursor.fetchall()
+    
+    # 10. Ranking de usuarios (sin filtro de rol)
+    cursor.execute("""
+        SELECT 
+            u.nombre as vendedor_nombre,
+            COUNT(v.id) as total_ventas,
+            COALESCE(SUM(v.total_venta), 0) as monto_total
+        FROM usuarios u
+        LEFT JOIN ventas v ON u.id = v.usuario_id 
+            AND MONTH(v.fecha_venta) = MONTH(CURDATE())
+            AND YEAR(v.fecha_venta) = YEAR(CURDATE())
+        GROUP BY u.id, u.nombre
+        ORDER BY monto_total DESC
+        LIMIT 5
+    """)
+    ranking_vendedores = cursor.fetchall()
+    
+    # 11. Resumen de ventas por tipo de producto
+    cursor.execute("""
+        SELECT 
+            dv.tipo_detalle,
+            COUNT(DISTINCT dv.venta_id) as num_ventas,
+            COUNT(*) as total_items,
+            SUM(dv.subtotal) as total_ingresos
+        FROM detalles_venta dv
+        INNER JOIN ventas v ON dv.venta_id = v.id
+        WHERE v.usuario_id = %s
+        AND v.fecha_venta >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+        GROUP BY dv.tipo_detalle
+    """, (usuario_id,))
+    resumen_tipos = cursor.fetchall()
+    
+    cursor.close()
+    
+    return render_template('vendedor/dashboard.html',
+                          ventas_hoy=ventas_hoy,
+                          ventas_semana=ventas_semana,
+                          ventas_mes=ventas_mes,
+                          ultimas_ventas=ultimas_ventas,
+                          productos_bajo_stock=productos_bajo_stock,
+                          productos_menos_vendidos=productos_menos_vendidos,
+                          productos_mas_vendidos=productos_mas_vendidos,
+                          ventas_por_dia=ventas_por_dia,
+                          productos_por_vencer=productos_por_vencer,
+                          ranking_vendedores=ranking_vendedores,
+                          resumen_tipos=resumen_tipos)

@@ -136,6 +136,13 @@ CREATE TABLE detalles_combo (
     FOREIGN KEY (unidad_id) REFERENCES unidades_medida(id)
 );
 
+CREATE TABLE tipos_servicio (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(50) NOT NULL UNIQUE,
+    descripcion TEXT NULL,
+    activo BOOLEAN DEFAULT TRUE
+);
+
 -- Tabla de servicios (inyecciones, canalizaciones, consultas)
 CREATE TABLE servicios (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -143,16 +150,18 @@ CREATE TABLE servicios (
     descripcion TEXT,
     precio DECIMAL(10, 2) NOT NULL,
     activo BOOLEAN DEFAULT TRUE,
-    tipo ENUM('inyeccion', 'canalizacion', 'consulta') NOT NULL,
-    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    tipo_servicio_id INT NOT NULL,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (tipo_servicio_id) REFERENCES tipos_servicio(id) ON DELETE RESTRICT ON UPDATE CASCADE
 );
+
+drop table servicios;
 
 -- Tabla de ventas
 CREATE TABLE ventas (
     id INT AUTO_INCREMENT PRIMARY KEY,
     usuario_id INT NOT NULL,
     fecha_venta DATE NOT NULL,
-    tipo_venta ENUM('producto', 'servicio', 'combo') NOT NULL,
     total_venta DECIMAL(15, 2) NOT NULL,
     efectivo DECIMAL(15, 2) DEFAULT 0,
     cambio DECIMAL(15, 2) DEFAULT 0,
