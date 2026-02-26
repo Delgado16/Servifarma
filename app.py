@@ -1118,6 +1118,175 @@ def api_categorias():
     cursor.close()
     return jsonify(categorias)
 
+@app.route('/vendedor/mis-ventas', methods=['GET'])
+def mis_ventas():
+    # IMPRIMIR TODO EL CONTENIDO DE LA SESIÓN PARA DEBUG
+    print("="*50)
+    print("CONTENIDO COMPLETO DE LA SESIÓN:")
+    for key, value in session.items():
+        print(f"  {key}: {value}")
+    print("="*50)
+    
+    # VERIFICAR USUARIO EN SESIÓN - USANDO 'usuario_id' EN LUGAR DE 'user_id'
+    if 'usuario_id' not in session:
+        print("❌ NO HAY 'usuario_id' EN LA SESIÓN")
+        print(f"Claves disponibles en sesión: {list(session.keys())}")
+        flash('Debe iniciar sesión primero', 'danger')
+        return redirect(url_for('login'))
+    
+    usuario_id = session['usuario_id']
+    usuario_nombre = session.get('usuario_nombre', 'Desconocido')
+    usuario_rol = session.get('usuario_rol', '')
+    
+    print(f"✅ USUARIO EN SESIÓN: ID={usuario_id}, Nombre={usuario_nombre}, Rol={usuario_rol}")
+    
+    cursor = mysql.connection.cursor(DictCursor)
+    
+    try:
+        # VERIFICAR QUE EL USUARIO EXISTE EN LA BD
+        cursor.execute("""
+            SELECT id, nombre, email, rol, activo 
+            FROM usuarios 
+            WHERE id = %s AND activo = 1
+        """, (usuario_id,))
+        
+        usuario = cursor.fetchone()
+        
+        if not usuario:
+            print(f"❌ USUARIO ID {usuario_id} NO ENCONTRADO EN BD")
+            # Limpiar sesión inválida
+            session.clear()
+            flash('Usuario no encontrado. Por favor inicie sesión nuevamente.', 'danger')
+            return redirect(url_for('login'))
+        
+        print(f"✅ USUARIO VERIFICADO EN BD: {usuario}")
+        
+        # OPCIONAL: Verificar rol (si quieres que solo vendedores accedan)
+        if usuario_rol != 'vendedor' and usuario_rol != 'admin':
+            print(f"❌ ROL NO AUTORIZADO: {usuario_rol}")
+            flash('Acceso no autorizado', 'danger')
+            return redirect(url_for('login'))
+        
+        # ============================================
+        # OBTENER FILTRO DE LA URL
+        # ============================================
+        filtro = request.args.get('filtro', 'todo')
+        print(f"Filtro seleccionado: {filtro}")
+        
+        # ============================================
+        # CONSULTA DE VENTAS CON FILTROS
+        # ============================================
+        query_ventas = """
+            SELECT v.*, u.nombre as nombre_vendedor
+            FROM ventas v
+            INNER JOIN usuarios u ON v.usuario_id = u.id
+            WHERE v.usuario_id = %s
+        """
+        
+        params_ventas = [usuario_id]
+        
+        # Aplicar filtros de fecha
+        if filtro == 'dia':
+            query_ventas += " AND DATE(v.fecha_venta) = CURDATE()"
+        elif filtro == 'semana':
+            query_ventas += " AND YEARWEEK(v.fecha_venta) = YEARWEEK(CURDATE())"
+        elif filtro == 'mes':
+            query_ventas += " AND MONTH(v.fecha_venta) = MONTH(CURDATE()) AND YEAR(v.fecha_venta) = YEAR(CURDATE())"
+        # 'todo' no necesita filtro adicional
+        
+        query_ventas += " ORDER BY v.fecha_venta DESC, v.fecha_creacion DESC"
+        
+        print(f"Query ventas: {query_ventas}")
+        print(f"Params ventas: {params_ventas}")
+        
+        cursor.execute(query_ventas, params_ventas)
+        ventas = cursor.fetchall()
+        
+        print(f"Ventas encontradas: {len(ventas)}")
+        
+        # ============================================
+        # CALCULAR TOTALES CON FILTROS
+        # ============================================
+        query_totales = """
+            SELECT 
+                COUNT(*) as total_ventas,
+                IFNULL(SUM(total_venta), 0) as suma_total,
+                IFNULL(SUM(efectivo), 0) as suma_efectivo
+            FROM ventas 
+            WHERE usuario_id = %s
+        """
+        
+        params_totales = [usuario_id]
+        
+        # Aplicar mismos filtros a totales
+        if filtro == 'dia':
+            query_totales += " AND DATE(fecha_venta) = CURDATE()"
+        elif filtro == 'semana':
+            query_totales += " AND YEARWEEK(fecha_venta) = YEARWEEK(CURDATE())"
+        elif filtro == 'mes':
+            query_totales += " AND MONTH(fecha_venta) = MONTH(CURDATE()) AND YEAR(fecha_venta) = YEAR(CURDATE())"
+        
+        cursor.execute(query_totales, params_totales)
+        totales = cursor.fetchone()
+        
+        print(f"Totales: {totales}")
+        
+        # ============================================
+        # OPCIONAL: OBTENER PRODUCTOS MÁS VENDIDOS
+        # ============================================
+        query_productos = """
+            SELECT 
+                p.nombre, 
+                IFNULL(SUM(dv.cantidad), 0) as total_vendido,
+                IFNULL(SUM(dv.subtotal), 0) as total_recaudado
+            FROM detalles_venta dv
+            INNER JOIN ventas v ON dv.venta_id = v.id
+            INNER JOIN productos p ON dv.referencia_id = p.id
+            WHERE v.usuario_id = %s
+            GROUP BY p.id, p.nombre
+            ORDER BY total_vendido DESC
+            LIMIT 5
+        """
+        
+        params_productos = [usuario_id]
+        
+        # Aplicar filtros de fecha a productos
+        if filtro == 'dia':
+            query_productos = query_productos.replace("WHERE v.usuario_id = %s", 
+                                                      "WHERE v.usuario_id = %s AND DATE(v.fecha_venta) = CURDATE()")
+        elif filtro == 'semana':
+            query_productos = query_productos.replace("WHERE v.usuario_id = %s", 
+                                                      "WHERE v.usuario_id = %s AND YEARWEEK(v.fecha_venta) = YEARWEEK(CURDATE())")
+        elif filtro == 'mes':
+            query_productos = query_productos.replace("WHERE v.usuario_id = %s", 
+                                                      "WHERE v.usuario_id = %s AND MONTH(v.fecha_venta) = MONTH(CURDATE()) AND YEAR(v.fecha_venta) = YEAR(CURDATE())")
+        
+        cursor.execute(query_productos, params_productos)
+        productos_vendidos = cursor.fetchall()
+        
+        cursor.close()
+        
+        # Renderizar template
+        return render_template('vendedor/mis_ventas.html', 
+                             ventas=ventas,
+                             totales=totales,
+                             productos_vendidos=productos_vendidos,
+                             usuario=usuario,
+                             filtro_actual=filtro)
+    
+    except Exception as e:
+        print(f"❌ ERROR: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        cursor.close()
+        flash(f'Error al cargar ventas: {str(e)}', 'danger')
+        return render_template('vendedor/mis_ventas.html', 
+                             ventas=[],
+                             totales={'total_ventas': 0, 'suma_total': 0, 'suma_efectivo': 0},
+                             productos_vendidos=[],
+                             usuario={'nombre': usuario_nombre, 'id': usuario_id, 'rol': usuario_rol} if 'usuario_id' in session else None,
+                             filtro_actual=filtro)
+
 # ========================
 # GESTIÓN DE VENTAS
 # ========================
@@ -1667,6 +1836,7 @@ def api_servicios_disponibles():
         return jsonify({'error': str(e)}), 500
     finally:
         cursor.close()
+
 
 # ========================
 # GESTIÓN DE SERVICIOS

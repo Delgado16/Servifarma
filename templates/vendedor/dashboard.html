@@ -300,10 +300,7 @@
     </div>
 </div>
 
-{% endblock %}
-
-{% block scripts %}
-{{ super() }}
+<!-- Scripts al final para mejor rendimiento -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -325,6 +322,7 @@
                         data: cantidades,
                         borderColor: 'rgb(13, 110, 253)',
                         backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                        borderWidth: 2,
                         tension: 0.1,
                         yAxisID: 'y'
                     }, {
@@ -332,6 +330,7 @@
                         data: montos,
                         borderColor: 'rgb(220, 53, 69)',
                         backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                        borderWidth: 2,
                         tension: 0.1,
                         yAxisID: 'y1'
                     }]
@@ -343,6 +342,27 @@
                         mode: 'index',
                         intersect: false,
                     },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.dataset.label.includes('Monto')) {
+                                        label += 'C$ ' + context.raw.toFixed(2);
+                                    } else {
+                                        label += context.raw;
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    },
                     scales: {
                         y: {
                             type: 'linear',
@@ -352,6 +372,9 @@
                             title: {
                                 display: true,
                                 text: 'Cantidad'
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)',
                             }
                         },
                         y1: {
@@ -359,12 +382,17 @@
                             display: true,
                             position: 'right',
                             grid: {
-                                drawOnChartArea: false
+                                drawOnChartArea: false,
                             },
                             beginAtZero: true,
                             title: {
                                 display: true,
                                 text: 'Monto (C$)'
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return 'C$ ' + value;
+                                }
                             }
                         }
                     }
@@ -374,9 +402,8 @@
     });
 </script>
 
-
 <style>
-/* Badges personalizados */
+/* Badges personalizados - consistentes con el sistema */
 .badge-warning {
     background-color: #fff3cd;
     color: #856404;
@@ -384,6 +411,7 @@
     border-radius: 10px;
     font-size: 12px;
     font-weight: 600;
+    display: inline-block;
 }
 
 .badge-danger {
@@ -393,6 +421,7 @@
     border-radius: 10px;
     font-size: 12px;
     font-weight: 600;
+    display: inline-block;
 }
 
 .badge-info {
@@ -402,6 +431,7 @@
     border-radius: 10px;
     font-size: 12px;
     font-weight: 600;
+    display: inline-block;
 }
 
 .badge-secondary {
@@ -411,6 +441,7 @@
     border-radius: 10px;
     font-size: 12px;
     font-weight: 600;
+    display: inline-block;
 }
 
 /* Alineación de texto */
@@ -420,6 +451,45 @@
 
 .text-center {
     text-align: center;
+}
+
+/* Mejoras para las tablas */
+.table td .badge {
+    margin: 0;
+}
+
+.table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* Estilos para las tarjetas de estadísticas */
+.stats-card {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stats-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+}
+
+/* Estilos para los contenedores de tablas */
+.table-container {
+    transition: box-shadow 0.2s;
+}
+
+.table-container:hover {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* Estilos para los encabezados de sección */
+.table-container > div:first-child {
+    border-radius: 8px 8px 0 0;
+}
+
+/* Mejoras para el gráfico */
+#ventasChart {
+    max-height: 250px;
+    width: 100%;
 }
 
 /* Responsive */
@@ -434,6 +504,14 @@
     
     [style*="grid-template-columns: 1fr 1fr"] {
         grid-template-columns: 1fr !important;
+    }
+    
+    .table-container {
+        overflow-x: auto;
+    }
+    
+    .table {
+        min-width: 600px;
     }
 }
 </style>
