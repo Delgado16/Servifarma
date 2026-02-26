@@ -1119,6 +1119,7 @@ def api_categorias():
     return jsonify(categorias)
 
 @app.route('/vendedor/mis-ventas', methods=['GET'])
+@login_required
 def mis_ventas():
     # IMPRIMIR TODO EL CONTENIDO DE LA SESIÓN PARA DEBUG
     print("="*50)
@@ -2756,11 +2757,239 @@ def api_calcular_costo():
 # ===========================
 # MOVIMIENTOS DE INVENTARIOS
 # ===========================
+# Ruta principal para listar inventario (ya la tienes)
+@app.route('/inventario')
+@admin_required
+def inventario():
+    cursor = mysql.connection.cursor(DictCursor)
+    
+    # Obtener movimientos de inventario
+    cursor.execute('''
+        SELECT mi.*, p.nombre as producto_nombre, p.codigo,
+               u.nombre as unidad_nombre, u.abreviatura,
+               us.nombre as usuario_nombre
+        FROM movimientos_inventario mi
+        JOIN productos p ON mi.producto_id = p.id
+        LEFT JOIN unidades_medida u ON mi.unidad_id = u.id
+        LEFT JOIN usuarios us ON mi.usuario_id = us.id
+        ORDER BY mi.fecha_movimiento DESC
+        LIMIT 100
+    ''')
+    
+    movimientos = cursor.fetchall()
+    
+    # Obtener stock actual de productos
+    cursor.execute('''
+        SELECT p.id, p.nombre, p.codigo, p.stock_actual,
+               u.abreviatura as unidad
+        FROM productos p
+        LEFT JOIN unidades_medida u ON p.unidad_medida_id = u.id
+        WHERE p.activo = 1
+        ORDER BY p.nombre
+    ''')
+    
+    productos_stock = cursor.fetchall()
+    cursor.close()
+    
+    return render_template('admin/inventario/inventario.html', 
+                         movimientos=movimientos,
+                         productos_stock=productos_stock)
 
+# Ruta para registrar entrada de inventario
+@app.route('/inventario/entrada', methods=['GET', 'POST'])
+@admin_required
+def entrada_inventario():
+    cursor = mysql.connection.cursor(DictCursor)
+    
+    if request.method == 'POST':
+        producto_id = request.form['producto_id']
+        cantidad = int(request.form['cantidad'])
+        observaciones = request.form.get('observaciones', '')
+        referencia_tipo = request.form.get('referencia_tipo', 'manual')
+        referencia_id = request.form.get('referencia_id')
+        
+        # Obtener cantidad actual del producto
+        cursor.execute('SELECT stock_actual FROM productos WHERE id = %s', (producto_id,))
+        producto = cursor.fetchone()
+        cantidad_anterior = producto['stock_actual']
+        cantidad_nueva = cantidad_anterior + cantidad
+        
+        # Insertar movimiento
+        cursor.execute('''
+            INSERT INTO movimientos_inventario 
+            (producto_id, tipo_movimiento, cantidad, cantidad_anterior, cantidad_nueva,
+             referencia_tipo, referencia_id, usuario_id, observaciones)
+            VALUES (%s, 'entrada', %s, %s, %s, %s, %s, %s, %s)
+        ''', (producto_id, cantidad, cantidad_anterior, cantidad_nueva,
+              referencia_tipo, referencia_id, session['usuario_id'], observaciones))
+        
+        # Actualizar stock del producto
+        cursor.execute('''
+            UPDATE productos 
+            SET stock_actual = stock_actual + %s 
+            WHERE id = %s
+        ''', (cantidad, producto_id))
+        
+        mysql.connection.commit()
+        cursor.close()
+        
+        flash('Entrada de inventario registrada exitosamente', 'success')
+        return redirect(url_for('inventario'))
+    
+    # GET - mostrar formulario
+    cursor.execute('''
+        SELECT p.*, u.abreviatura as unidad 
+        FROM productos p
+        LEFT JOIN unidades_medida u ON p.unidad_medida_id = u.id
+        WHERE p.activo = 1
+        ORDER BY p.nombre
+    ''')
+    productos = cursor.fetchall()
+    cursor.close()
+    
+    return render_template('admin/inventario/entrada_inventario.html', productos=productos)
 
+# Ruta para registrar salida de inventario
+@app.route('/inventario/salida', methods=['GET', 'POST'])
+@admin_required
+def salida_inventario():
+    cursor = mysql.connection.cursor(DictCursor)
+    
+    if request.method == 'POST':
+        producto_id = request.form['producto_id']
+        cantidad = int(request.form['cantidad'])
+        observaciones = request.form.get('observaciones', '')
+        referencia_tipo = request.form.get('referencia_tipo', 'manual')
+        referencia_id = request.form.get('referencia_id')
+        
+        # Verificar stock suficiente
+        cursor.execute('SELECT stock_actual FROM productos WHERE id = %s', (producto_id,))
+        producto = cursor.fetchone()
+        
+        if producto['stock_actual'] < cantidad:
+            flash('No hay suficiente stock para realizar la salida', 'error')
+            return redirect(url_for('salida_inventario'))
+        
+        cantidad_anterior = producto['stock_actual']
+        cantidad_nueva = cantidad_anterior - cantidad
+        
+        # Insertar movimiento
+        cursor.execute('''
+            INSERT INTO movimientos_inventario 
+            (producto_id, tipo_movimiento, cantidad, cantidad_anterior, cantidad_nueva,
+             referencia_tipo, referencia_id, usuario_id, observaciones)
+            VALUES (%s, 'salida', %s, %s, %s, %s, %s, %s, %s)
+        ''', (producto_id, cantidad, cantidad_anterior, cantidad_nueva,
+              referencia_tipo, referencia_id, session['usuario_id'], observaciones))
+        
+        # Actualizar stock del producto
+        cursor.execute('''
+            UPDATE productos 
+            SET stock_actual = stock_actual - %s 
+            WHERE id = %s
+        ''', (cantidad, producto_id))
+        
+        mysql.connection.commit()
+        cursor.close()
+        
+        flash('Salida de inventario registrada exitosamente', 'success')
+        return redirect(url_for('inventario'))
+    
+    # GET - mostrar formulario
+    cursor.execute('''
+        SELECT p.*, u.abreviatura as unidad 
+        FROM productos p
+        LEFT JOIN unidades_medida u ON p.unidad_medida_id = u.id
+        WHERE p.activo = 1 AND p.stock_actual > 0
+        ORDER BY p.nombre
+    ''')
+    productos = cursor.fetchall()
+    cursor.close()
+    
+    return render_template('admin/salida_inventario.html', productos=productos)
 
+# Ruta para ajuste de inventario
+@app.route('/inventario/ajuste', methods=['GET', 'POST'])
+@admin_required
+def ajuste_inventario():
+    cursor = mysql.connection.cursor(DictCursor)
+    
+    if request.method == 'POST':
+        producto_id = request.form['producto_id']
+        cantidad_nueva = int(request.form['cantidad_nueva'])
+        observaciones = request.form.get('observaciones', '')
+        
+        # Obtener cantidad actual
+        cursor.execute('SELECT stock_actual FROM productos WHERE id = %s', (producto_id,))
+        producto = cursor.fetchone()
+        cantidad_anterior = producto['stock_actual']
+        cantidad_ajuste = cantidad_nueva - cantidad_anterior
+        
+        # Insertar movimiento
+        cursor.execute('''
+            INSERT INTO movimientos_inventario 
+            (producto_id, tipo_movimiento, cantidad, cantidad_anterior, cantidad_nueva,
+             referencia_tipo, usuario_id, observaciones)
+            VALUES (%s, 'ajuste', %s, %s, %s, 'ajuste_manual', %s, %s)
+        ''', (producto_id, cantidad_ajuste, cantidad_anterior, cantidad_nueva,
+              session['usuario_id'], observaciones))
+        
+        # Actualizar stock del producto
+        cursor.execute('''
+            UPDATE productos 
+            SET stock_actual = %s 
+            WHERE id = %s
+        ''', (cantidad_nueva, producto_id))
+        
+        mysql.connection.commit()
+        cursor.close()
+        
+        flash('Ajuste de inventario realizado exitosamente', 'success')
+        return redirect(url_for('inventario'))
+    
+    # GET - mostrar formulario
+    cursor.execute('''
+        SELECT p.*, u.abreviatura as unidad 
+        FROM productos p
+        LEFT JOIN unidades_medida u ON p.unidad_medida_id = u.id
+        WHERE p.activo = 1
+        ORDER BY p.nombre
+    ''')
+    productos = cursor.fetchall()
+    cursor.close()
+    
+    return render_template('admin/ajuste_inventario.html', productos=productos)
 
-
+# Ruta para ver historial de un producto específico
+@app.route('/inventario/producto/<int:producto_id>')
+@admin_required
+def historial_producto(producto_id):
+    cursor = mysql.connection.cursor(DictCursor)
+    
+    # Información del producto
+    cursor.execute('''
+        SELECT p.*, u.abreviatura as unidad 
+        FROM productos p
+        LEFT JOIN unidades_medida u ON p.unidad_medida_id = u.id
+        WHERE p.id = %s
+    ''', (producto_id,))
+    producto = cursor.fetchone()
+    
+    # Historial de movimientos
+    cursor.execute('''
+        SELECT mi.*, us.nombre as usuario_nombre
+        FROM movimientos_inventario mi
+        LEFT JOIN usuarios us ON mi.usuario_id = us.id
+        WHERE mi.producto_id = %s
+        ORDER BY mi.fecha_movimiento DESC
+    ''', (producto_id,))
+    
+    movimientos = cursor.fetchall()
+    cursor.close()
+    
+    return render_template('admin/historial_producto.html', 
+                         producto=producto, 
+                         movimientos=movimientos)
 
 # ========================
 # REPORTES

@@ -1,0 +1,148 @@
+{% extends 'admin/base.html' %}
+
+{% block title %}Entrada de Inventario{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box">
+                <h4 class="page-title">Registrar Entrada de Inventario</h4>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('entrada_inventario') }}" id="formEntrada">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="producto_id" class="form-label">Producto <span class="text-danger">*</span></label>
+                                    <select class="form-select" id="producto_id" name="producto_id" required>
+                                        <option value="">Seleccione un producto</option>
+                                        {% for producto in productos %}
+                                        <option value="{{ producto.id }}" 
+                                                data-stock="{{ producto.stock_actual }}"
+                                                data-unidad="{{ producto.unidad }}">
+                                            {{ producto.codigo }} - {{ producto.nombre }} (Stock actual: {{ producto.stock_actual }} {{ producto.unidad }})
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="col-md-3">
+                                <div class="mb-3">
+                                    <label for="cantidad" class="form-label">Cantidad <span class="text-danger">*</span></label>
+                                    <input type="number" class="form-control" id="cantidad" name="cantidad" 
+                                           min="1" step="1" required>
+                                    <small class="text-muted" id="unidadInfo"></small>
+                                </div>
+                            </div>
+
+                            <div class="col-md-3">
+                                <div class="mb-3">
+                                    <label for="stock_actual" class="form-label">Stock Actual</label>
+                                    <input type="text" class="form-control" id="stock_actual" readonly>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="referencia_tipo" class="form-label">Tipo de Referencia</label>
+                                    <select class="form-select" id="referencia_tipo" name="referencia_tipo">
+                                        <option value="manual">Entrada Manual</option>
+                                        <option value="compra">Compra</option>
+                                        <option value="devolucion">Devolución</option>
+                                        <option value="transferencia">Transferencia</option>
+                                        <option value="ajuste">Ajuste</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="referencia_id" class="form-label">N° de Referencia</label>
+                                    <input type="text" class="form-control" id="referencia_id" name="referencia_id" 
+                                           placeholder="Ej: N° de factura, orden de compra...">
+                                </div>
+                            </div>
+
+                            <div class="col-12">
+                                <div class="mb-3">
+                                    <label for="observaciones" class="form-label">Observaciones</label>
+                                    <textarea class="form-control" id="observaciones" name="observaciones" 
+                                              rows="3" placeholder="Detalles adicionales de la entrada..."></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <div class="alert alert-info" id="previewInfo" style="display: none;">
+                                    <strong>Vista previa:</strong> Se agregarán <span id="previewCantidad">0</span> unidades al stock actual de <span id="previewStockActual">0</span>, 
+                                    resultando en un nuevo stock de <span id="previewStockNuevo">0</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mt-4">
+                            <div class="col-12">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save"></i> Registrar Entrada
+                                </button>
+                                <a href="{{ url_for('inventario') }}" class="btn btn-secondary">
+                                    <i class="fas fa-times"></i> Cancelar
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('producto_id').addEventListener('change', function() {
+    const selected = this.options[this.selectedIndex];
+    const stock = selected.dataset.stock || 0;
+    const unidad = selected.dataset.unidad || '';
+    
+    document.getElementById('stock_actual').value = stock + ' ' + unidad;
+    document.getElementById('unidadInfo').textContent = 'Unidad: ' + unidad;
+    actualizarPreview();
+});
+
+document.getElementById('cantidad').addEventListener('input', actualizarPreview);
+
+function actualizarPreview() {
+    const productoSelect = document.getElementById('producto_id');
+    const selected = productoSelect.options[productoSelect.selectedIndex];
+    const stockActual = parseInt(selected.dataset.stock) || 0;
+    const cantidad = parseInt(document.getElementById('cantidad').value) || 0;
+    const unidad = selected.dataset.unidad || '';
+    
+    if (productoSelect.value && cantidad > 0) {
+        document.getElementById('previewInfo').style.display = 'block';
+        document.getElementById('previewCantidad').textContent = cantidad;
+        document.getElementById('previewStockActual').textContent = stockActual + ' ' + unidad;
+        document.getElementById('previewStockNuevo').textContent = (stockActual + cantidad) + ' ' + unidad;
+    } else {
+        document.getElementById('previewInfo').style.display = 'none';
+    }
+}
+
+// Validación del formulario
+document.getElementById('formEntrada').addEventListener('submit', function(e) {
+    const cantidad = parseInt(document.getElementById('cantidad').value);
+    if (cantidad <= 0) {
+        e.preventDefault();
+        alert('La cantidad debe ser mayor a 0');
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,565 @@
+{% extends 'admin/base.html' %}
+
+{% block title %}Movimientos de Inventario{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box">
+                <h4 class="page-title">Movimientos de Inventario</h4>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tarjetas de Resumen -->
+    <div class="row">
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-white">Total Productos</h6>
+                            <h3 class="text-white">{{ productos_stock|length }}</h3>
+                        </div>
+                        <i class="fas fa-box fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-white">Stock Total</h6>
+                            <h3 class="text-white">
+                                {% set total = 0 %}
+                                {% for p in productos_stock %}
+                                    {% set total = total + p.stock_actual %}
+                                {% endfor %}
+                                {{ total }}
+                            </h3>
+                        </div>
+                        <i class="fas fa-cubes fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-white">Movimientos</h6>
+                            <h3 class="text-white">{{ movimientos|length }}</h3>
+                        </div>
+                        <i class="fas fa-exchange-alt fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-white">Stock Bajo</h6>
+                            <h3 class="text-white">
+                                {% set bajo_stock = 0 %}
+                                {% for p in productos_stock %}
+                                    {% if p.stock_actual <= 10 %}
+                                        {% set bajo_stock = bajo_stock + 1 %}
+                                    {% endif %}
+                                {% endfor %}
+                                {{ bajo_stock }}
+                            </h3>
+                        </div>
+                        <i class="fas fa-exclamation-triangle fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botones de Acción Rápida -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Acciones Rápidas</h5>
+                    <a href="{{ url_for('entrada_inventario') }}" class="btn btn-success">
+                        <i class="fas fa-plus-circle"></i> Nueva Entrada
+                    </a>
+                    <a href="{{ url_for('salida_inventario') }}" class="btn btn-danger">
+                        <i class="fas fa-minus-circle"></i> Nueva Salida
+                    </a>
+                    <a href="{{ url_for('ajuste_inventario') }}" class="btn btn-warning">
+                        <i class="fas fa-edit"></i> Realizar Ajuste
+                    </a>
+                    <a href="{{ url_for('reporte_inventario') }}" class="btn btn-info">
+                        <i class="fas fa-file-pdf"></i> Generar Reporte
+                    </a>
+                    <button class="btn btn-secondary" onclick="exportarExcel()">
+                        <i class="fas fa-file-excel"></i> Exportar a Excel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pestañas de Visualización -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <ul class="nav nav-tabs mb-3" id="inventarioTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="movimientos-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#movimientos" type="button" role="tab">
+                                <i class="fas fa-history"></i> Todos los Movimientos
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="stock-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#stock" type="button" role="tab">
+                                <i class="fas fa-boxes"></i> Stock Actual
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="alertas-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#alertas" type="button" role="tab">
+                                <i class="fas fa-bell"></i> Alertas de Stock
+                                {% if bajo_stock > 0 %}
+                                    <span class="badge bg-danger">{{ bajo_stock }}</span>
+                                {% endif %}
+                            </button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content" id="inventarioTabContent">
+                        <!-- Pestaña de Movimientos -->
+                        <div class="tab-pane fade show active" id="movimientos" role="tabpanel">
+                            <div class="table-responsive">
+                                <table class="table table-hover" id="tablaMovimientos">
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Producto</th>
+                                            <th>Código</th>
+                                            <th>Tipo</th>
+                                            <th>Cantidad</th>
+                                            <th>Stock Anterior</th>
+                                            <th>Stock Nuevo</th>
+                                            <th>Referencia</th>
+                                            <th>Usuario</th>
+                                            <th>Observaciones</th>
+                                            <th>Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for movimiento in movimientos %}
+                                        <tr>
+                                            <td>{{ movimiento.fecha_movimiento.strftime('%d/%m/%Y %H:%M') }}</td>
+                                            <td>
+                                                <a href="{{ url_for('historial_producto', producto_id=movimiento.producto_id) }}">
+                                                    {{ movimiento.producto_nombre }}
+                                                </a>
+                                            </td>
+                                            <td>{{ movimiento.codigo }}</td>
+                                            <td>
+                                                {% if movimiento.tipo_movimiento == 'entrada' %}
+                                                    <span class="badge bg-success">Entrada</span>
+                                                {% elif movimiento.tipo_movimiento == 'salida' %}
+                                                    <span class="badge bg-danger">Salida</span>
+                                                {% else %}
+                                                    <span class="badge bg-warning">Ajuste</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if movimiento.tipo_movimiento == 'entrada' %}
+                                                    <span class="text-success">+{{ movimiento.cantidad }}</span>
+                                                {% elif movimiento.tipo_movimiento == 'salida' %}
+                                                    <span class="text-danger">-{{ movimiento.cantidad }}</span>
+                                                {% else %}
+                                                    {% if movimiento.cantidad > 0 %}
+                                                        <span class="text-success">+{{ movimiento.cantidad }}</span>
+                                                    {% else %}
+                                                        <span class="text-danger">{{ movimiento.cantidad }}</span>
+                                                    {% endif %}
+                                                {% endif %}
+                                                {{ movimiento.abreviatura }}
+                                            </td>
+                                            <td>{{ movimiento.cantidad_anterior }} {{ movimiento.abreviatura }}</td>
+                                            <td>{{ movimiento.cantidad_nueva }} {{ movimiento.abreviatura }}</td>
+                                            <td>
+                                                {% if movimiento.referencia_tipo %}
+                                                    <small>
+                                                        <strong>{{ movimiento.referencia_tipo }}</strong>
+                                                        {% if movimiento.referencia_id %}
+                                                            <br>N°: {{ movimiento.referencia_id }}
+                                                        {% endif %}
+                                                    </small>
+                                                {% else %}
+                                                    <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ movimiento.usuario_nombre or 'Sistema' }}</td>
+                                            <td>
+                                                {% if movimiento.observaciones %}
+                                                    <span class="badge bg-info" data-bs-toggle="tooltip" 
+                                                          title="{{ movimiento.observaciones }}">
+                                                        <i class="fas fa-comment"></i>
+                                                    </span>
+                                                {% else %}
+                                                    <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <a href="{{ url_for('historial_producto', producto_id=movimiento.producto_id) }}" 
+                                                   class="btn btn-sm btn-info" title="Ver historial">
+                                                    <i class="fas fa-history"></i>
+                                                </a>
+                                            </td>
+                                        </tr>
+                                        {% else %}
+                                        <tr>
+                                            <td colspan="11" class="text-center">No hay movimientos registrados</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Pestaña de Stock Actual -->
+                        <div class="tab-pane fade" id="stock" role="tabpanel">
+                            <div class="table-responsive">
+                                <table class="table table-hover" id="tablaStock">
+                                    <thead>
+                                        <tr>
+                                            <th>Código</th>
+                                            <th>Producto</th>
+                                            <th>Stock Actual</th>
+                                            <th>Unidad</th>
+                                            <th>Estado</th>
+                                            <th>Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for producto in productos_stock %}
+                                        <tr>
+                                            <td>{{ producto.codigo }}</td>
+                                            <td>{{ producto.nombre }}</td>
+                                            <td class="{% if producto.stock_actual <= 5 %}text-danger fw-bold
+                                                      {% elif producto.stock_actual <= 10 %}text-warning fw-bold
+                                                      {% else %}text-success{% endif %}">
+                                                {{ producto.stock_actual }}
+                                            </td>
+                                            <td>{{ producto.unidad }}</td>
+                                            <td>
+                                                {% if producto.stock_actual <= 0 %}
+                                                    <span class="badge bg-danger">Agotado</span>
+                                                {% elif producto.stock_actual <= 5 %}
+                                                    <span class="badge bg-danger">Crítico</span>
+                                                {% elif producto.stock_actual <= 10 %}
+                                                    <span class="badge bg-warning">Bajo</span>
+                                                {% elif producto.stock_actual <= 20 %}
+                                                    <span class="badge bg-info">Normal</span>
+                                                {% else %}
+                                                    <span class="badge bg-success">Óptimo</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <a href="{{ url_for('historial_producto', producto_id=producto.id) }}" 
+                                                   class="btn btn-sm btn-info">
+                                                    <i class="fas fa-history"></i> Ver historial
+                                                </a>
+                                                <button class="btn btn-sm btn-success" 
+                                                        onclick="abrirEntradaRapida({{ producto.id }}, '{{ producto.nombre }}')">
+                                                    <i class="fas fa-plus"></i> Entrada
+                                                </button>
+                                                <button class="btn btn-sm btn-danger" 
+                                                        onclick="abrirSalidaRapida({{ producto.id }}, '{{ producto.nombre }}', {{ producto.stock_actual }})">
+                                                    <i class="fas fa-minus"></i> Salida
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Pestaña de Alertas -->
+                        <div class="tab-pane fade" id="alertas" role="tabpanel">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card border-danger">
+                                        <div class="card-header bg-danger text-white">
+                                            <h5 class="mb-0">Stock Crítico (≤ 5 unidades)</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="list-group">
+                                                {% for producto in productos_stock %}
+                                                    {% if producto.stock_actual <= 5 and producto.stock_actual > 0 %}
+                                                        <div class="list-group-item list-group-item-danger d-flex justify-content-between align-items-center">
+                                                            <div>
+                                                                <strong>{{ producto.nombre }}</strong><br>
+                                                                <small>Código: {{ producto.codigo }}</small>
+                                                            </div>
+                                                            <div>
+                                                                <span class="badge bg-danger rounded-pill p-2">
+                                                                    {{ producto.stock_actual }} {{ producto.unidad }}
+                                                                </span>
+                                                                <button class="btn btn-sm btn-success ms-2" 
+                                                                        onclick="abrirEntradaRapida({{ producto.id }}, '{{ producto.nombre }}')">
+                                                                    <i class="fas fa-plus"></i>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    {% endif %}
+                                                {% else %}
+                                                    <p class="text-muted">No hay productos con stock crítico</p>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="card border-warning">
+                                        <div class="card-header bg-warning">
+                                            <h5 class="mb-0">Stock Bajo (6 - 10 unidades)</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="list-group">
+                                                {% for producto in productos_stock %}
+                                                    {% if producto.stock_actual > 5 and producto.stock_actual <= 10 %}
+                                                        <div class="list-group-item list-group-item-warning d-flex justify-content-between align-items-center">
+                                                            <div>
+                                                                <strong>{{ producto.nombre }}</strong><br>
+                                                                <small>Código: {{ producto.codigo }}</small>
+                                                            </div>
+                                                            <div>
+                                                                <span class="badge bg-warning rounded-pill p-2">
+                                                                    {{ producto.stock_actual }} {{ producto.unidad }}
+                                                                </span>
+                                                                <button class="btn btn-sm btn-success ms-2" 
+                                                                        onclick="abrirEntradaRapida({{ producto.id }}, '{{ producto.nombre }}')">
+                                                                    <i class="fas fa-plus"></i>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    {% endif %}
+                                                {% else %}
+                                                    <p class="text-muted">No hay productos con stock bajo</p>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-12 mt-3">
+                                    <div class="card border-secondary">
+                                        <div class="card-header bg-secondary text-white">
+                                            <h5 class="mb-0">Productos Agotados (Stock 0)</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="list-group">
+                                                {% for producto in productos_stock %}
+                                                    {% if producto.stock_actual == 0 %}
+                                                        <div class="list-group-item list-group-item-secondary d-flex justify-content-between align-items-center">
+                                                            <div>
+                                                                <strong>{{ producto.nombre }}</strong><br>
+                                                                <small>Código: {{ producto.codigo }}</small>
+                                                            </div>
+                                                            <div>
+                                                                <span class="badge bg-secondary rounded-pill p-2">
+                                                                    Agotado
+                                                                </span>
+                                                                <button class="btn btn-sm btn-success ms-2" 
+                                                                        onclick="abrirEntradaRapida({{ producto.id }}, '{{ producto.nombre }}')">
+                                                                    <i class="fas fa-plus"></i> Reabastecer
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    {% endif %}
+                                                {% else %}
+                                                    <p class="text-muted">No hay productos agotados</p>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Entrada Rápida -->
+<div class="modal fade" id="modalEntradaRapida" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">Entrada Rápida de Inventario</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('entrada_inventario') }}" method="POST">
+                <div class="modal-body">
+                    <input type="hidden" name="producto_id" id="rapida_producto_id">
+                    <div class="mb-3">
+                        <label class="form-label">Producto</label>
+                        <input type="text" class="form-control" id="rapida_producto_nombre" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Cantidad</label>
+                        <input type="number" name="cantidad" class="form-control" min="1" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Observaciones</label>
+                        <textarea name="observaciones" class="form-control" rows="2" placeholder="Motivo de la entrada..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Registrar Entrada</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Salida Rápida -->
+<div class="modal fade" id="modalSalidaRapida" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">Salida Rápida de Inventario</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('salida_inventario') }}" method="POST">
+                <div class="modal-body">
+                    <input type="hidden" name="producto_id" id="rapida_salida_producto_id">
+                    <div class="mb-3">
+                        <label class="form-label">Producto</label>
+                        <input type="text" class="form-control" id="rapida_salida_producto_nombre" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Stock Disponible</label>
+                        <input type="text" class="form-control" id="rapida_salida_stock" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Cantidad a retirar</label>
+                        <input type="number" name="cantidad" class="form-control" id="rapida_salida_cantidad" min="1" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Observaciones</label>
+                        <textarea name="observaciones" class="form-control" rows="2" placeholder="Motivo de la salida..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger" id="btnSalidaRapida">Registrar Salida</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Inicializar tooltips
+var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+    return new bootstrap.Tooltip(tooltipTriggerEl)
+});
+
+// Inicializar DataTables
+$(document).ready(function() {
+    $('#tablaMovimientos').DataTable({
+        language: {
+            url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/es-ES.json'
+        },
+        order: [[0, 'desc']],
+        pageLength: 25
+    });
+    
+    $('#tablaStock').DataTable({
+        language: {
+            url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/es-ES.json'
+        },
+        pageLength: 25
+    });
+});
+
+// Funciones para entradas/salidas rápidas
+function abrirEntradaRapida(productoId, productoNombre) {
+    document.getElementById('rapida_producto_id').value = productoId;
+    document.getElementById('rapida_producto_nombre').value = productoNombre;
+    new bootstrap.Modal(document.getElementById('modalEntradaRapida')).show();
+}
+
+function abrirSalidaRapida(productoId, productoNombre, stockActual) {
+    document.getElementById('rapida_salida_producto_id').value = productoId;
+    document.getElementById('rapida_salida_producto_nombre').value = productoNombre;
+    document.getElementById('rapida_salida_stock').value = stockActual + ' unidades';
+    document.getElementById('rapida_salida_cantidad').max = stockActual;
+    
+    // Validación en tiempo real
+    document.getElementById('rapida_salida_cantidad').addEventListener('input', function() {
+        const cantidad = parseInt(this.value) || 0;
+        const btnSalida = document.getElementById('btnSalidaRapida');
+        if (cantidad > stockActual) {
+            this.classList.add('is-invalid');
+            btnSalida.disabled = true;
+        } else {
+            this.classList.remove('is-invalid');
+            btnSalida.disabled = false;
+        }
+    });
+    
+    new bootstrap.Modal(document.getElementById('modalSalidaRapida')).show();
+}
+
+// Función para exportar a Excel
+function exportarExcel() {
+    // Obtener datos de la tabla actual
+    let tabla = document.getElementById('tablaMovimientos');
+    let html = tabla.outerHTML;
+    
+    // Crear blob y descargar
+    let blob = new Blob([html], {type: 'application/vnd.ms-excel'});
+    let link = document.createElement('a');
+    link.href = window.URL.createObjectURL(blob);
+    link.download = 'inventario_' + new Date().toISOString().slice(0,10) + '.xls';
+    link.click();
+}
+
+// Actualización automática cada 30 segundos (opcional)
+setInterval(function() {
+    location.reload();
+}, 30000);
+</script>
+
+<style>
+.opacity-50 {
+    opacity: 0.5;
+}
+.list-group-item {
+    transition: all 0.3s;
+}
+.list-group-item:hover {
+    transform: translateX(5px);
+}
+.badge {
+    font-size: 0.9em;
+}
+</style>
+{% endblock %}
