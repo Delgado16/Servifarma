@@ -1,0 +1,816 @@
+<!-- templates/admin/inventario/ajuste_inventario.html -->
+{% extends "base.html" %}
+
+{% block title %}Ajuste de Inventario - ServiFarma{% endblock %}
+
+{% block content %}
+<!-- Modal personalizado -->
+<div id="modalConfirmacion" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3><i class="fas fa-question-circle"></i> Confirmar Ajuste</h3>
+            <button type="button" class="modal-close" onclick="cerrarModal('modalConfirmacion')">&times;</button>
+        </div>
+        <div class="modal-body" id="modalBodyConfirmacion">
+            ¿Está seguro de realizar este ajuste de inventario?
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="cerrarModal('modalConfirmacion')">
+                <i class="fas fa-times"></i> Cancelar
+            </button>
+            <button type="button" class="btn btn-info" id="btnConfirmarAjuste">
+                <i class="fas fa-check"></i> Confirmar
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="modalMensaje" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 400px;">
+        <div class="modal-header" id="modalMensajeHeader">
+            <h3 id="modalMensajeTitulo"><i class="fas fa-info-circle"></i> Mensaje</h3>
+            <button type="button" class="modal-close" onclick="cerrarModal('modalMensaje')">&times;</button>
+        </div>
+        <div class="modal-body" id="modalMensajeBody">
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-primary" onclick="cerrarModal('modalMensaje')">
+                <i class="fas fa-check"></i> Aceptar
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="modalConteo" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 400px;">
+        <div class="modal-header">
+            <h3><i class="fas fa-calculator"></i> Conteo Físico</h3>
+            <button type="button" class="modal-close" onclick="cerrarModal('modalConteo')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>Ingrese la cantidad contada físicamente:</p>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <input type="number" id="conteoInput" class="form-control" min="0" step="1" style="flex: 1;">
+                <span id="conteoUnidad" style="font-weight: bold;"></span>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="cerrarModal('modalConteo')">
+                <i class="fas fa-times"></i> Cancelar
+            </button>
+            <button type="button" class="btn btn-primary" id="btnConfirmarConteo">
+                <i class="fas fa-check"></i> Aceptar
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="modalCero" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 400px;">
+        <div class="modal-header" style="background-color: #dc3545;">
+            <h3 style="color: white;"><i class="fas fa-exclamation-triangle"></i> Confirmar</h3>
+            <button type="button" class="modal-close" onclick="cerrarModal('modalCero')" style="color: white;">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>¿Está seguro de establecer el stock a <strong>CERO</strong>?</p>
+            <p style="color: #dc3545; font-size: 0.9rem;">Esta acción no se puede deshacer fácilmente.</p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="cerrarModal('modalCero')">
+                <i class="fas fa-times"></i> Cancelar
+            </button>
+            <button type="button" class="btn btn-danger" id="btnConfirmarCero">
+                <i class="fas fa-check"></i> Sí, establecer a cero
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Notificaciones Toast -->
+<div id="toastContainer" style="position: fixed; top: 20px; right: 20px; z-index: 9999;"></div>
+
+<div class="page-header">
+    <h1>
+        <i class="fas fa-balance-scale"></i> 
+        Ajuste de Inventario
+    </h1>
+    <a href="{{ url_for('inventario') }}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left"></i> Volver
+    </a>
+</div>
+
+<div class="card" style="max-width: 800px; margin: 0 auto;">
+    <div class="card-body">
+        <h3 class="section-title" style="color: #17a2b8; margin-top: 0;">
+            <i class="fas fa-clipboard-check"></i> 
+            Formulario de Ajuste de Stock
+        </h3>
+        
+        <form method="POST" id="formAjuste">
+            <div class="form-group">
+                <label for="producto_id">
+                    Producto <span class="required">*</span>
+                </label>
+                <select class="form-control select2" id="producto_id" name="producto_id" required>
+                    <option value="">Seleccione un producto</option>
+                    {% for producto in productos %}
+                    <option value="{{ producto.id }}" 
+                            data-stock="{{ producto.stock_actual }}"
+                            data-unidad="{{ producto.abreviatura }}">
+                        {{ producto.codigo }} - {{ producto.nombre }} 
+                        (Stock actual: {{ producto.stock_actual }} {{ producto.abreviatura }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="stock_actual_display">Stock Actual</label>
+                    <input type="text" class="form-control" id="stock_actual_display" 
+                           readonly disabled style="background-color: #f8f9fa;">
+                </div>
+                
+                <div class="form-group">
+                    <label for="unidad_display">Unidad</label>
+                    <input type="text" class="form-control" id="unidad_display" 
+                           readonly disabled style="background-color: #f8f9fa;">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="cantidad_nueva">
+                    Nuevo Stock <span class="required">*</span>
+                </label>
+                <input type="number" class="form-control" id="cantidad_nueva" name="cantidad_nueva" 
+                       min="0" step="1" required placeholder="Ej: 50">
+                <small class="form-text">Ingrese la cantidad final deseada</small>
+            </div>
+
+            <div class="form-group">
+                <label for="observaciones">
+                    Motivo del Ajuste <span class="required">*</span>
+                </label>
+                <textarea class="form-control" id="observaciones" name="observaciones" 
+                          rows="4" required 
+                          placeholder="Ej: Conteo físico, corrección de inventario, producto dañado, etc."></textarea>
+            </div>
+
+            <!-- Vista previa del ajuste -->
+            <div class="card" style="margin-bottom: 20px; border: 1px solid #dee2e6;">
+                <div class="card-header" style="background-color: #f8f9fa; padding: 12px 15px;">
+                    <strong><i class="fas fa-eye"></i> Vista previa del ajuste</strong>
+                </div>
+                <div class="card-body" id="previewInfo" style="display: none; padding: 20px;">
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 10px;">
+                        <div>
+                            <small style="color: #666;">Stock actual:</small>
+                            <div style="font-weight: bold; font-size: 1.1rem;" id="previewActual">0</div>
+                        </div>
+                        <div>
+                            <small style="color: #666;">Nuevo stock:</small>
+                            <div style="font-weight: bold; font-size: 1.1rem; color: #17a2b8;" id="previewNuevo">0</div>
+                        </div>
+                        <div>
+                            <small style="color: #666;">Diferencia:</small>
+                            <div style="font-weight: bold; font-size: 1.1rem;" id="previewDiferencia">0</div>
+                        </div>
+                    </div>
+                    <div>
+                        <small style="color: #666;">Tipo de ajuste:</small>
+                        <div style="margin-top: 5px;" id="previewTipo"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Alerta de ajuste significativo -->
+            <div id="ajusteWarning" class="alert alert-warning" style="display: none;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 20px;"></i>
+                    <div>
+                        <strong>¡Atención!</strong> Este ajuste modificará el stock de manera significativa.
+                        Verifique los datos antes de continuar.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Botones de ayuda -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;">
+                <button type="button" class="btn btn-outline-primary" id="btnConteoFisico">
+                    <i class="fas fa-calculator"></i> Usar Conteo Físico
+                </button>
+                <button type="button" class="btn btn-outline-success" id="btnCero">
+                    <i class="fas fa-eraser"></i> Establecer a Cero
+                </button>
+            </div>
+
+            <div class="form-actions" style="justify-content: center;">
+                <button type="button" class="btn btn-info" id="btnSubmit" style="padding: 12px 40px;">
+                    <i class="fas fa-save"></i> 
+                    Realizar Ajuste
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Scripts para Select2 y funcionalidad -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet" />
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
+
+<script>
+// Sistema de modales personalizados
+function mostrarModal(modalId) {
+    document.getElementById(modalId).style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+}
+
+function cerrarModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+    document.body.style.overflow = 'auto';
+}
+
+// Sistema de notificaciones toast
+function mostrarToast(mensaje, tipo = 'info', duracion = 5000) {
+    const toastContainer = document.getElementById('toastContainer');
+    const toastId = 'toast_' + Date.now();
+    
+    const colores = {
+        success: { bg: '#d4edda', border: '#c3e6cb', color: '#155724', icon: 'fa-check-circle' },
+        error: { bg: '#f8d7da', border: '#f5c6cb', color: '#721c24', icon: 'fa-exclamation-circle' },
+        warning: { bg: '#fff3cd', border: '#ffeeba', color: '#856404', icon: 'fa-exclamation-triangle' },
+        info: { bg: '#d1ecf1', border: '#bee5eb', color: '#0c5460', icon: 'fa-info-circle' }
+    };
+    
+    const estilo = colores[tipo] || colores.info;
+    
+    const toastHTML = `
+        <div id="${toastId}" style="background-color: ${estilo.bg}; border-left: 4px solid ${estilo.border}; color: ${estilo.color}; padding: 15px 20px; margin-bottom: 10px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); display: flex; align-items: center; gap: 10px; min-width: 300px; animation: slideInRight 0.3s ease;">
+            <i class="fas ${estilo.icon}" style="font-size: 20px;"></i>
+            <div style="flex: 1;">${mensaje}</div>
+            <button onclick="cerrarToast('${toastId}')" style="background: none; border: none; color: ${estilo.color}; cursor: pointer; font-size: 18px;">&times;</button>
+        </div>
+    `;
+    
+    toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+    
+    if (duracion > 0) {
+        setTimeout(() => cerrarToast(toastId), duracion);
+    }
+}
+
+function cerrarToast(toastId) {
+    const toast = document.getElementById(toastId);
+    if (toast) {
+        toast.style.animation = 'slideOutRight 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar Select2
+    if (typeof $ !== 'undefined' && $.fn.select2) {
+        $('.select2').select2({
+            placeholder: 'Buscar producto por código o nombre',
+            allowClear: true,
+            width: '100%',
+            language: {
+                noResults: function() {
+                    return "No se encontraron productos";
+                }
+            }
+        });
+    }
+
+    // Elementos del DOM
+    const productSelect = document.getElementById('producto_id');
+    const stockActualDisplay = document.getElementById('stock_actual_display');
+    const unidadDisplay = document.getElementById('unidad_display');
+    const cantidadNueva = document.getElementById('cantidad_nueva');
+    const observaciones = document.getElementById('observaciones');
+    const previewDiv = document.getElementById('previewInfo');
+    const previewActual = document.getElementById('previewActual');
+    const previewNuevo = document.getElementById('previewNuevo');
+    const previewDiferencia = document.getElementById('previewDiferencia');
+    const previewTipo = document.getElementById('previewTipo');
+    const ajusteWarning = document.getElementById('ajusteWarning');
+    const btnSubmit = document.getElementById('btnSubmit');
+
+    // Función para actualizar información del producto
+    function actualizarInfoProducto() {
+        const selectedOption = productSelect.options[productSelect.selectedIndex];
+        if (selectedOption && selectedOption.value) {
+            const stockActual = selectedOption.dataset.stock || '0';
+            const unidad = selectedOption.dataset.unidad || '';
+            
+            stockActualDisplay.value = stockActual + ' ' + unidad;
+            unidadDisplay.value = unidad;
+            actualizarPreview();
+        } else {
+            stockActualDisplay.value = '';
+            unidadDisplay.value = '';
+            previewDiv.style.display = 'none';
+            ajusteWarning.style.display = 'none';
+        }
+    }
+
+    // Función para actualizar vista previa
+    function actualizarPreview() {
+        const selectedOption = productSelect.options[productSelect.selectedIndex];
+        if (selectedOption && selectedOption.value) {
+            const stockActual = parseInt(selectedOption.dataset.stock) || 0;
+            const unidad = selectedOption.dataset.unidad || '';
+            const nuevoStock = parseInt(cantidadNueva.value) || 0;
+            const diferencia = nuevoStock - stockActual;
+            
+            previewActual.innerHTML = `${stockActual} ${unidad}`;
+            previewNuevo.innerHTML = `${nuevoStock} ${unidad}`;
+            previewDiferencia.innerHTML = `${diferencia > 0 ? '+' : ''}${diferencia} ${unidad}`;
+            
+            // Determinar tipo de ajuste
+            let badgeClass = 'badge-secondary';
+            let badgeText = 'SIN CAMBIOS';
+            
+            if (diferencia > 0) {
+                badgeClass = 'badge-success';
+                badgeText = `ENTRADA (+${diferencia} ${unidad})`;
+            } else if (diferencia < 0) {
+                badgeClass = 'badge-danger';
+                badgeText = `SALIDA (${diferencia} ${unidad})`;
+            }
+            
+            previewTipo.innerHTML = `<span class="badge ${badgeClass}">${badgeText}</span>`;
+            previewDiv.style.display = 'block';
+            
+            // Validar ajuste significativo
+            const diferenciaAbs = Math.abs(diferencia);
+            if (diferenciaAbs > 100 || (stockActual > 0 && diferenciaAbs / stockActual > 0.5)) {
+                ajusteWarning.style.display = 'block';
+            } else {
+                ajusteWarning.style.display = 'none';
+            }
+        } else {
+            previewDiv.style.display = 'none';
+            ajusteWarning.style.display = 'none';
+        }
+    }
+
+    // Event listeners
+    productSelect.addEventListener('change', actualizarInfoProducto);
+    cantidadNueva.addEventListener('input', actualizarPreview);
+
+    // Botón para conteo físico
+    document.getElementById('btnConteoFisico').addEventListener('click', function() {
+        const selectedOption = productSelect.options[productSelect.selectedIndex];
+        if (!selectedOption || !selectedOption.value) {
+            mostrarToast('Por favor seleccione un producto primero', 'warning');
+            return;
+        }
+        
+        const unidad = selectedOption.dataset.unidad || '';
+        document.getElementById('conteoUnidad').textContent = unidad;
+        document.getElementById('conteoInput').value = '';
+        mostrarModal('modalConteo');
+    });
+
+    document.getElementById('btnConfirmarConteo').addEventListener('click', function() {
+        const cantidad = parseInt(document.getElementById('conteoInput').value);
+        
+        if (isNaN(cantidad) || cantidad < 0) {
+            mostrarToast('Por favor ingrese un número válido', 'error');
+            return;
+        }
+        
+        cantidadNueva.value = cantidad;
+        const obsActual = observaciones.value.trim();
+        observaciones.value = obsActual 
+            ? `Ajuste por conteo físico. ${obsActual}`
+            : 'Ajuste por conteo físico.';
+        actualizarPreview();
+        cerrarModal('modalConteo');
+        mostrarToast('Cantidad de conteo aplicada', 'success');
+    });
+
+    // Botón para establecer a cero
+    document.getElementById('btnCero').addEventListener('click', function() {
+        const selectedOption = productSelect.options[productSelect.selectedIndex];
+        if (!selectedOption || !selectedOption.value) {
+            mostrarToast('Por favor seleccione un producto primero', 'warning');
+            return;
+        }
+        
+        mostrarModal('modalCero');
+    });
+
+    document.getElementById('btnConfirmarCero').addEventListener('click', function() {
+        cantidadNueva.value = 0;
+        const obsActual = observaciones.value.trim();
+        observaciones.value = obsActual 
+            ? `Stock ajustado a cero. ${obsActual}`
+            : 'Stock ajustado a cero.';
+        actualizarPreview();
+        cerrarModal('modalCero');
+        mostrarToast('Stock establecido a cero', 'warning');
+    });
+
+    // Validación del formulario
+    btnSubmit.addEventListener('click', function(e) {
+        e.preventDefault();
+        
+        const selectedOption = productSelect.options[productSelect.selectedIndex];
+        const observacionesText = observaciones.value.trim();
+        const nuevoStock = parseInt(cantidadNueva.value) || 0;
+        
+        let errores = [];
+        
+        if (!selectedOption || !selectedOption.value) {
+            errores.push('Debe seleccionar un producto');
+            productSelect.classList.add('is-invalid');
+        } else {
+            productSelect.classList.remove('is-invalid');
+        }
+        
+        if (!observacionesText) {
+            errores.push('Debe ingresar un motivo para el ajuste');
+            observaciones.classList.add('is-invalid');
+        } else {
+            observaciones.classList.remove('is-invalid');
+        }
+        
+        if (errores.length > 0) {
+            mostrarToast(errores.join('<br>'), 'error');
+            return false;
+        }
+        
+        const stockActual = parseInt(selectedOption.dataset.stock) || 0;
+        
+        if (stockActual === nuevoStock) {
+            document.getElementById('modalBodyConfirmacion').innerHTML = 
+                'El stock no cambiará. ¿Desea continuar de todas formas?';
+        } else {
+            document.getElementById('modalBodyConfirmacion').innerHTML = 
+                '¿Está seguro de realizar este ajuste de inventario?';
+        }
+        
+        mostrarModal('modalConfirmacion');
+    });
+
+    document.getElementById('btnConfirmarAjuste').addEventListener('click', function() {
+        cerrarModal('modalConfirmacion');
+        document.getElementById('formAjuste').submit();
+    });
+
+    // Cerrar modales al hacer clic fuera
+    window.addEventListener('click', function(event) {
+        const modales = ['modalConfirmacion', 'modalMensaje', 'modalConteo', 'modalCero'];
+        modales.forEach(modalId => {
+            const modal = document.getElementById(modalId);
+            if (event.target === modal) {
+                cerrarModal(modalId);
+            }
+        });
+    });
+});
+</script>
+
+<style>
+/* Estilos para el formulario de ajuste */
+.card {
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.card-body {
+    padding: 30px;
+}
+
+.section-title {
+    margin-bottom: 25px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #17a2b8;
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #495057;
+}
+
+.form-group .required {
+    color: #dc3545;
+    margin-left: 3px;
+}
+
+.form-control {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #17a2b8;
+    box-shadow: 0 0 0 0.2rem rgba(23, 162, 184, 0.25);
+}
+
+.form-control.is-invalid {
+    border-color: #dc3545;
+}
+
+.form-control.is-invalid:focus {
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+}
+
+.form-control[readonly],
+.form-control[disabled] {
+    background-color: #f8f9fa;
+    cursor: not-allowed;
+}
+
+.form-text {
+    display: block;
+    margin-top: 5px;
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 0;
+}
+
+/* Estilos para modales */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 9998;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    justify-content: center;
+    align-items: center;
+    animation: fadeIn 0.3s ease;
+}
+
+.modal-content {
+    background-color: white;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    animation: slideIn 0.3s ease;
+}
+
+.modal-header {
+    padding: 15px 20px;
+    border-bottom: 1px solid #dee2e6;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #17a2b8;
+    color: white;
+    border-radius: 8px 8px 0 0;
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.modal-close:hover {
+    opacity: 0.8;
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+.modal-footer {
+    padding: 15px 20px;
+    border-top: 1px solid #dee2e6;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+/* Estilos para Select2 personalizados */
+.select2-container--bootstrap4 .select2-selection {
+    min-height: 40px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+}
+
+.select2-container--bootstrap4 .select2-selection--single .select2-selection__rendered {
+    line-height: 38px;
+    padding-left: 12px;
+}
+
+.select2-container--bootstrap4 .select2-selection--single .select2-selection__arrow {
+    height: 38px;
+}
+
+/* Badges */
+.badge-success {
+    background-color: #d1e7dd;
+    color: #0f5132;
+    padding: 4px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.badge-danger {
+    background-color: #f8d7da;
+    color: #842029;
+    padding: 4px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.badge-secondary {
+    background-color: #e9ecef;
+    color: #41464b;
+    padding: 4px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-block;
+}
+
+/* Alertas */
+.alert-warning {
+    background-color: #fff3cd;
+    border-left: 4px solid #ffc107;
+    color: #856404;
+    padding: 15px 20px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+}
+
+/* Botones */
+.btn-info {
+    background-color: #17a2b8;
+    border-color: #17a2b8;
+    color: white;
+    padding: 10px 20px;
+    font-size: 16px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.btn-info:hover {
+    background-color: #138496;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(23, 162, 184, 0.3);
+}
+
+.btn-outline-primary {
+    border: 1px solid #0d6efd;
+    color: #0d6efd;
+    padding: 8px 16px;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.btn-outline-primary:hover {
+    background-color: #0d6efd;
+    color: white;
+}
+
+.btn-outline-success {
+    border: 1px solid #28a745;
+    color: #28a745;
+    padding: 8px 16px;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.btn-outline-success:hover {
+    background-color: #28a745;
+    color: white;
+}
+
+.btn-danger {
+    background-color: #dc3545;
+    border-color: #dc3545;
+    color: white;
+    padding: 8px 16px;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.btn-danger:hover {
+    background-color: #c82333;
+}
+
+/* Animaciones */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateY(-50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOutRight {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .card-body {
+        padding: 20px;
+    }
+    
+    .form-row {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 15px;
+    }
+    
+    [style*="grid-template-columns: 1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .modal-content {
+        width: 95%;
+        margin: 10px;
+    }
+}
+
+/* Vista previa animada */
+#previewInfo {
+    animation: slideIn 0.3s ease;
+}
+
+#toastContainer {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+}
+</style>
+{% endblock %}

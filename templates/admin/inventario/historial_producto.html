@@ -1,0 +1,549 @@
+<!-- templates/admin/inventario/historial_producto.html -->
+{% extends "base.html" %}
+
+{% block title %}Historial de {{ producto.nombre }} - ServiFarma{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="fas fa-history"></i> 
+        Historial de Producto
+    </h1>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('entrada_inventario') }}?producto_id={{ producto.id }}" class="btn btn-success">
+            <i class="fas fa-plus-circle"></i> Entrada
+        </a>
+        <a href="{{ url_for('salida_inventario') }}?producto_id={{ producto.id }}" class="btn btn-warning">
+            <i class="fas fa-minus-circle"></i> Salida
+        </a>
+        <a href="{{ url_for('ajuste_inventario') }}?producto_id={{ producto.id }}" class="btn btn-info">
+            <i class="fas fa-balance-scale"></i> Ajuste
+        </a>
+        <a href="{{ url_for('inventario') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Volver
+        </a>
+    </div>
+</div>
+
+<!-- Información del Producto -->
+<div class="card" style="margin-bottom: 20px;">
+    <div style="padding: 15px 20px; border-bottom: 1px solid #eee; background-color: #f8f9fa;">
+        <h3 style="margin: 0; font-size: 1.1rem; color: #0d6efd;">
+            <i class="fas fa-box"></i> 
+            Información del Producto
+        </h3>
+    </div>
+    <div style="padding: 20px;">
+        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px;">
+            <div>
+                <small style="color: #666;">Código:</small>
+                <div style="font-weight: bold;">{{ producto.codigo }}</div>
+            </div>
+            <div>
+                <small style="color: #666;">Nombre:</small>
+                <div style="font-weight: bold;">{{ producto.nombre }}</div>
+            </div>
+            <div>
+                <small style="color: #666;">Stock Actual:</small>
+                <div style="font-weight: bold; {% if producto.stock_actual <= producto.stock_minimo %}color: #dc3545;{% endif %}">
+                    {{ producto.stock_actual }} {{ producto.abreviatura }}
+                </div>
+            </div>
+            <div>
+                <small style="color: #666;">Stock Mínimo:</small>
+                <div style="font-weight: bold;">{{ producto.stock_minimo }} {{ producto.abreviatura }}</div>
+            </div>
+            <div>
+                <small style="color: #666;">Estado:</small>
+                <div>
+                    {% if producto.activo %}
+                    <span class="badge badge-success">Activo</span>
+                    {% else %}
+                    <span class="badge badge-danger">Inactivo</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top: 15px;">
+            {% if producto.fecha_vencimiento %}
+            <div>
+                <small style="color: #666;">Fecha Vencimiento:</small>
+                <div>
+                    <span class="badge {% if producto.fecha_vencimiento < now %}badge-danger{% elif (producto.fecha_vencimiento - now).days <= 30 %}badge-warning{% else %}badge-info{% endif %}">
+                        {{ producto.fecha_vencimiento.strftime('%d/%m/%Y') }}
+                        {% set fecha_venc = producto.fecha_vencimiento %}
+                        {% if fecha_venc and now and fecha_venc < now %}
+                        (VENCIDO)
+                        {% elif fecha_venc and now %}
+                            {% set dias_restantes = (fecha_venc - now).days %}
+                            {% if dias_restantes <= 30 %}
+                            ({{ dias_restantes }} días)
+                            {% endif %}
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+            {% endif %}
+            
+            {% if producto.lote %}
+            <div>
+                <small style="color: #666;">Lote:</small>
+                <div><span class="badge badge-secondary">{{ producto.lote }}</span></div>
+            </div>
+            {% endif %}
+            
+            {% if producto.precio_venta %}
+            <div>
+                <small style="color: #666;">Precio de Venta:</small>
+                <div style="font-weight: bold; color: #28a745;">C$ {{ "{:,.2f}".format(producto.precio_venta) }}</div>
+            </div>
+            {% endif %}
+            
+            {% if producto.precio_costo %}
+            <div>
+                <small style="color: #666;">Precio Costo:</small>
+                <div style="color: #666;">C$ {{ "{:,.2f}".format(producto.precio_costo) }}</div>
+            </div>
+            {% endif %}
+            
+            {% if producto.categoria_nombre %}
+            <div>
+                <small style="color: #666;">Categoría:</small>
+                <div><span class="badge badge-primary">{{ producto.categoria_nombre }}</span></div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Gráfico de Movimientos -->
+<div class="card" style="margin-bottom: 20px;">
+    <div style="padding: 15px 20px; border-bottom: 1px solid #eee; background-color: #f8f9fa;">
+        <h3 style="margin: 0; font-size: 1.1rem; color: #0d6efd;">
+            <i class="fas fa-chart-line"></i> 
+            Evolución del Stock
+        </h3>
+    </div>
+    <div style="padding: 20px;">
+        <div style="height: 250px;">
+            <canvas id="stockChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla de Movimientos -->
+<div class="card">
+    <div style="padding: 15px 20px; border-bottom: 1px solid #eee; background-color: #f8f9fa;">
+        <h3 style="margin: 0; font-size: 1.1rem; color: #0d6efd;">
+            <i class="fas fa-list"></i> 
+            Historial de Movimientos
+        </h3>
+    </div>
+    <div style="padding: 20px;">
+        <div style="overflow-x: auto;">
+            <table class="table" id="tablaMovimientos">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th class="text-center">Tipo</th>
+                        <th class="text-right">Cantidad</th>
+                        <th class="text-right">Stock Anterior</th>
+                        <th class="text-right">Stock Nuevo</th>
+                        <th>Referencia</th>
+                        <th>Usuario</th>
+                        <th>Observaciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for mov in movimientos %}
+                    <tr>
+                        <td>
+                            <i class="fas fa-calendar-alt" style="color: #666; margin-right: 5px;"></i>
+                            {{ mov.fecha_movimiento.strftime('%d/%m/%Y') }}
+                            <br>
+                            <small style="color: #666;">
+                                <i class="fas fa-clock" style="margin-right: 3px;"></i>
+                                {{ mov.fecha_movimiento.strftime('%H:%M') }}
+                            </small>
+                        </td>
+                        <td class="text-center">
+                            {% if mov.tipo_movimiento == 'entrada' %}
+                            <span class="badge badge-success">ENTRADA</span>
+                            {% elif mov.tipo_movimiento == 'salida' %}
+                            <span class="badge badge-danger">SALIDA</span>
+                            {% else %}
+                            <span class="badge badge-info">AJUSTE</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-right {% if mov.cantidad > 0 %}text-success{% else %}text-danger{% endif %}" style="font-weight: bold;">
+                            {{ mov.cantidad }} {{ producto.abreviatura }}
+                        </td>
+                        <td class="text-right">{{ mov.cantidad_anterior }} {{ producto.abreviatura }}</td>
+                        <td class="text-right">{{ mov.cantidad_nueva }} {{ producto.abreviatura }}</td>
+                        <td>
+                            {% if mov.referencia_tipo and mov.referencia_tipo != 'manual' and mov.referencia_tipo != 'ajuste_manual' %}
+                            <span class="badge badge-primary">{{ mov.referencia_tipo|title }}</span>
+                            {% if mov.referencia_id %}
+                            <br><small>#{{ mov.referencia_id }}</small>
+                            {% endif %}
+                            {% else %}
+                            <span class="badge badge-light">Manual</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge badge-secondary">
+                                <i class="fas fa-user"></i>
+                                {{ mov.usuario_nombre or 'N/A' }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if mov.observaciones %}
+                            <span data-bs-toggle="tooltip" title="{{ mov.observaciones }}" style="cursor: help;">
+                                <i class="fas fa-comment"></i>
+                                {{ mov.observaciones|truncate(20) }}
+                            </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center" style="padding: 40px;">
+                            <i class="fas fa-exchange-alt" style="font-size: 48px; color: #ccc; margin-bottom: 10px; display: block;"></i>
+                            <p>No hay movimientos registrados</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap5.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar tooltips de Bootstrap
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function(tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
+    // Inicializar DataTable
+    if (typeof $.fn.DataTable !== 'undefined') {
+        $('#tablaMovimientos').DataTable({
+            language: {
+                url: '//cdn.datatables.net/plug-ins/1.10.24/i18n/Spanish.json'
+            },
+            order: [[0, 'desc']],
+            pageLength: 25,
+            responsive: true,
+            dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip',
+            language: {
+                "search": "Buscar:",
+                "lengthMenu": "Mostrar _MENU_ registros por página",
+                "zeroRecords": "No se encontraron resultados",
+                "info": "Mostrando página _PAGE_ de _PAGES_",
+                "infoEmpty": "No hay registros disponibles",
+                "infoFiltered": "(filtrado de _MAX_ registros totales)",
+                "paginate": {
+                    "first": "Primero",
+                    "last": "Último",
+                    "next": "Siguiente",
+                    "previous": "Anterior"
+                }
+            }
+        });
+    }
+
+    // Datos para el gráfico
+    var fechas = [
+        {% for mov in movimientos|reverse %}
+            "{{ mov.fecha_movimiento.strftime('%d/%m %H:%M') }}",
+        {% endfor %}
+    ];
+    
+    var stocks = [
+        {% for mov in movimientos|reverse %}
+            {{ mov.cantidad_nueva }},
+        {% endfor %}
+    ];
+
+    // Crear gráfico solo si hay datos
+    if (fechas.length > 0) {
+        var ctx = document.getElementById('stockChart').getContext('2d');
+        
+        // Determinar colores de puntos según tendencia
+        var pointColors = stocks.map(function(value, index, array) {
+            if (index === 0) return 'rgb(13, 110, 253)'; // Primer punto - azul
+            if (value < array[index-1]) return 'rgb(220, 53, 69)'; // Bajada - rojo
+            if (value > array[index-1]) return 'rgb(40, 167, 69)'; // Subida - verde
+            return 'rgb(255, 193, 7)'; // Sin cambio - amarillo
+        });
+        
+        var stockChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: fechas,
+                datasets: [{
+                    label: 'Stock ({{ producto.abreviatura }})',
+                    data: stocks,
+                    borderColor: 'rgb(13, 110, 253)',
+                    backgroundColor: 'rgba(13, 110, 253, 0.05)',
+                    borderWidth: 2,
+                    tension: 0.1,
+                    fill: true,
+                    pointBackgroundColor: pointColors,
+                    pointBorderColor: 'white',
+                    pointBorderWidth: 2,
+                    pointRadius: 5,
+                    pointHoverRadius: 7
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            usePointStyle: true,
+                            pointStyle: 'circle'
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return 'Stock: ' + context.raw + ' {{ producto.abreviatura }}';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Stock ({{ producto.abreviatura }})'
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)',
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Fecha y Hora'
+                        },
+                        grid: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        });
+    } else {
+        document.getElementById('stockChart').parentElement.innerHTML = 
+            '<div style="text-align: center; padding: 40px; color: #666;">' +
+            '<i class="fas fa-chart-line" style="font-size: 48px; color: #ccc; margin-bottom: 10px; display: block;"></i>' +
+            '<p>No hay datos suficientes para mostrar el gráfico</p>' +
+            '</div>';
+    }
+});
+</script>
+
+<style>
+/* Badges personalizados */
+.badge-success {
+    background-color: #d1e7dd;
+    color: #0f5132;
+    padding: 4px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.badge-danger {
+    background-color: #f8d7da;
+    color: #842029;
+    padding: 4px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.badge-warning {
+    background-color: #fff3cd;
+    color: #856404;
+    padding: 4px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.badge-info {
+    background-color: #cff4fc;
+    color: #055160;
+    padding: 4px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.badge-primary {
+    background-color: #cfe2ff;
+    color: #084298;
+    padding: 4px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.badge-secondary {
+    background-color: #e9ecef;
+    color: #41464b;
+    padding: 4px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.badge-light {
+    background-color: #f8f9fa;
+    color: #41464b;
+    padding: 4px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-block;
+    border: 1px solid #dee2e6;
+}
+
+/* Alineación de texto */
+.text-right {
+    text-align: right;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.text-success {
+    color: #28a745;
+}
+
+.text-danger {
+    color: #dc3545;
+}
+
+/* Información del producto */
+.card {
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.card > div:first-child {
+    border-radius: 8px 8px 0 0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 15px;
+    }
+    
+    .page-header div {
+        flex-wrap: wrap;
+    }
+    
+    [style*="grid-template-columns: repeat(5, 1fr)"] {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+    
+    [style*="grid-template-columns: repeat(4, 1fr)"] {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+    
+    .table-container {
+        overflow-x: auto;
+    }
+    
+    .table {
+        min-width: 1000px;
+    }
+}
+
+/* Estilos para DataTables */
+.dataTables_wrapper .dataTables_length,
+.dataTables_wrapper .dataTables_filter {
+    margin-bottom: 15px;
+}
+
+.dataTables_wrapper .dataTables_length select {
+    padding: 5px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+}
+
+.dataTables_wrapper .dataTables_filter input {
+    padding: 5px 10px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    margin-left: 5px;
+}
+
+.dataTables_wrapper .dataTables_filter input:focus {
+    outline: none;
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13,110,253,0.25);
+}
+
+.dataTables_wrapper .dataTables_info {
+    margin-top: 10px;
+    color: #666;
+}
+
+.dataTables_wrapper .dataTables_paginate {
+    margin-top: 10px;
+}
+
+.dataTables_wrapper .paginate_button {
+    padding: 5px 10px;
+    margin: 0 2px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.dataTables_wrapper .paginate_button.current {
+    background-color: #0d6efd;
+    color: white !important;
+    border-color: #0d6efd;
+}
+
+.dataTables_wrapper .paginate_button:hover:not(.current) {
+    background-color: #e9ecef;
+}
+
+/* Tooltip personalizado */
+[data-bs-toggle="tooltip"] {
+    cursor: help;
+}
+</style>
+{% endblock %}

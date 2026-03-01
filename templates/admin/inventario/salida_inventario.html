@@ -1,13 +1,13 @@
-<!-- templates/admin/inventario/entrada_inventario.html -->
+<!-- templates/admin/inventario/salida_inventario.html -->
 {% extends "base.html" %}
 
-{% block title %}Registrar Entrada de Inventario - ServiFarma{% endblock %}
+{% block title %}Registrar Salida de Inventario - ServiFarma{% endblock %}
 
 {% block content %}
 <div class="page-header">
     <h1>
-        <i class="fas fa-plus-circle"></i> 
-        Registrar Entrada de Inventario
+        <i class="fas fa-minus-circle"></i> 
+        Registrar Salida de Inventario
     </h1>
     <a href="{{ url_for('inventario') }}" class="btn btn-secondary">
         <i class="fas fa-arrow-left"></i> Volver
@@ -16,12 +16,12 @@
 
 <div class="card" style="max-width: 800px; margin: 0 auto;">
     <div class="card-body">
-        <h3 class="section-title" style="color: #28a745; margin-top: 0;">
-            <i class="fas fa-boxes"></i> 
-            Formulario de Entrada
+        <h3 class="section-title" style="color: #ffc107; margin-top: 0;">
+            <i class="fas fa-dolly"></i> 
+            Formulario de Salida
         </h3>
         
-        <form method="POST" id="formEntrada">
+        <form method="POST" id="formSalida">
             <div class="form-group">
                 <label for="producto_id">
                     Producto <span class="required">*</span>
@@ -33,7 +33,7 @@
                             data-stock="{{ producto.stock_actual }}"
                             data-unidad="{{ producto.abreviatura }}">
                         {{ producto.codigo }} - {{ producto.nombre }} 
-                        (Stock actual: {{ producto.stock_actual }} {{ producto.abreviatura }})
+                        (Stock disponible: {{ producto.stock_actual }} {{ producto.abreviatura }})
                     </option>
                     {% endfor %}
                 </select>
@@ -42,15 +42,15 @@
             <div class="form-row">
                 <div class="form-group">
                     <label for="cantidad">
-                        Cantidad <span class="required">*</span>
+                        Cantidad a retirar <span class="required">*</span>
                     </label>
                     <input type="number" class="form-control" id="cantidad" name="cantidad" 
-                           min="1" step="1" required placeholder="Ej: 10">
+                           min="1" step="1" required placeholder="Ej: 5">
                     <small class="form-text" id="unidadInfo"></small>
                 </div>
                 
                 <div class="form-group">
-                    <label for="stock_actual">Stock Actual</label>
+                    <label for="stock_actual">Stock Disponible</label>
                     <input type="text" class="form-control" id="stock_actual" 
                            readonly disabled style="background-color: #f8f9fa;">
                 </div>
@@ -61,8 +61,9 @@
                     <label for="referencia_tipo">Tipo de Referencia</label>
                     <select class="form-control" id="referencia_tipo" name="referencia_tipo">
                         <option value="manual">Manual</option>
-                        <option value="compra">Compra</option>
-                        <option value="devolucion">Devolución</option>
+                        <option value="venta">Venta</option>
+                        <option value="devolucion_proveedor">Devolución a Proveedor</option>
+                        <option value="merma">Merma/Pérdida</option>
                         <option value="transferencia">Transferencia</option>
                     </select>
                 </div>
@@ -70,33 +71,43 @@
                 <div class="form-group" id="referencia_field" style="display: none;">
                     <label for="referencia_id">Número de Referencia</label>
                     <input type="text" class="form-control" id="referencia_id" name="referencia_id"
-                           placeholder="Ej: FACT-001">
-                    <small class="form-text">Ej: Número de factura, orden de compra, etc.</small>
+                           placeholder="Ej: VENT-001">
+                    <small class="form-text">Ej: Número de venta, factura, etc.</small>
                 </div>
             </div>
 
             <div class="form-group">
                 <label for="observaciones">Observaciones</label>
                 <textarea class="form-control" id="observaciones" name="observaciones" 
-                          rows="3" placeholder="Observaciones adicionales..."></textarea>
+                          rows="3" placeholder="Motivo de la salida..."></textarea>
             </div>
 
-            <!-- Vista previa -->
+            <!-- Vista previa de stock -->
             <div id="previewInfo" class="alert alert-info" style="display: none;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <i class="fas fa-info-circle" style="font-size: 20px;"></i>
                     <div>
-                        <strong>Vista previa:</strong> Se agregarán <strong><span id="previewCantidad">0</span></strong> unidades al stock.
+                        <strong>Vista previa:</strong> Se retirarán <strong><span id="previewCantidad">0</span></strong> unidades del stock.
                         <br>
                         El nuevo stock será: <strong><span id="previewNuevoStock">0</span> <span id="previewUnidad"></span></strong>
                     </div>
                 </div>
             </div>
 
+            <!-- Alerta de error de stock -->
+            <div id="stockError" class="alert alert-danger" style="display: none;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 20px;"></i>
+                    <div>
+                        <strong>Error:</strong> La cantidad supera el stock disponible
+                    </div>
+                </div>
+            </div>
+
             <div class="form-actions" style="justify-content: center;">
-                <button type="submit" class="btn btn-success" style="padding: 12px 40px;">
+                <button type="submit" class="btn btn-warning" id="btnSubmit" style="padding: 12px 40px;">
                     <i class="fas fa-save"></i> 
-                    Registrar Entrada
+                    Registrar Salida
                 </button>
             </div>
         </form>
@@ -130,9 +141,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const stockActualInput = document.getElementById('stock_actual');
     const unidadInfo = document.getElementById('unidadInfo');
     const previewDiv = document.getElementById('previewInfo');
+    const stockErrorDiv = document.getElementById('stockError');
     const previewCantidad = document.getElementById('previewCantidad');
     const previewNuevoStock = document.getElementById('previewNuevoStock');
     const previewUnidad = document.getElementById('previewUnidad');
+    const btnSubmit = document.getElementById('btnSubmit');
     const referenciaTipo = document.getElementById('referencia_tipo');
     const referenciaField = document.getElementById('referencia_field');
 
@@ -146,11 +159,15 @@ document.addEventListener('DOMContentLoaded', function() {
             stockActualInput.value = stockActual + ' ' + unidad;
             unidadInfo.textContent = 'Unidad: ' + unidad;
             previewUnidad.textContent = unidad;
+            cantidadInput.max = stockActual;
             actualizarPreview();
+            validarStock();
         } else {
             stockActualInput.value = '';
             unidadInfo.textContent = '';
             previewDiv.style.display = 'none';
+            stockErrorDiv.style.display = 'none';
+            cantidadInput.max = '';
         }
     }
 
@@ -162,9 +179,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const cantidad = parseInt(cantidadInput.value) || 0;
             
             if (cantidad > 0) {
-                const nuevoStock = stockActual + cantidad;
+                const nuevoStock = stockActual - cantidad;
                 previewCantidad.textContent = cantidad;
-                previewNuevoStock.textContent = nuevoStock;
+                previewNuevoStock.textContent = nuevoStock >= 0 ? nuevoStock : 0;
                 previewDiv.style.display = 'block';
             } else {
                 previewDiv.style.display = 'none';
@@ -174,9 +191,34 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Función para validar stock
+    function validarStock() {
+        const selectedOption = productSelect.options[productSelect.selectedIndex];
+        if (selectedOption && selectedOption.value) {
+            const stockActual = parseInt(selectedOption.dataset.stock) || 0;
+            const cantidad = parseInt(cantidadInput.value) || 0;
+            
+            if (cantidad > stockActual) {
+                stockErrorDiv.style.display = 'block';
+                btnSubmit.disabled = true;
+                cantidadInput.classList.add('is-invalid');
+            } else {
+                stockErrorDiv.style.display = 'none';
+                btnSubmit.disabled = false;
+                cantidadInput.classList.remove('is-invalid');
+            }
+        } else {
+            stockErrorDiv.style.display = 'none';
+            btnSubmit.disabled = false;
+        }
+    }
+
     // Event listeners
     productSelect.addEventListener('change', actualizarInfoProducto);
-    cantidadInput.addEventListener('input', actualizarPreview);
+    cantidadInput.addEventListener('input', function() {
+        actualizarPreview();
+        validarStock();
+    });
 
     // Mostrar/ocultar campo de referencia
     referenciaTipo.addEventListener('change', function() {
@@ -189,7 +231,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Validación del formulario
-    document.getElementById('formEntrada').addEventListener('submit', function(e) {
+    document.getElementById('formSalida').addEventListener('submit', function(e) {
         const cantidad = parseInt(cantidadInput.value);
         const productoId = productSelect.value;
         
@@ -207,6 +249,10 @@ document.addEventListener('DOMContentLoaded', function() {
             cantidadInput.classList.add('is-invalid');
         } else {
             cantidadInput.classList.remove('is-invalid');
+        }
+        
+        if (btnSubmit.disabled) {
+            errores.push('No puede realizar esta salida por falta de stock');
         }
         
         if (errores.length > 0) {
@@ -243,7 +289,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <style>
-/* Estilos para el formulario de entrada */
+/* Estilos para el formulario de salida */
 .card {
     border: none;
     border-radius: 8px;
@@ -257,7 +303,7 @@ document.addEventListener('DOMContentLoaded', function() {
 .section-title {
     margin-bottom: 25px;
     padding-bottom: 10px;
-    border-bottom: 2px solid #28a745;
+    border-bottom: 2px solid #ffc107;
     font-size: 1.2rem;
     font-weight: 600;
 }
@@ -289,8 +335,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .form-control:focus {
     outline: none;
-    border-color: #28a745;
-    box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+    border-color: #ffc107;
+    box-shadow: 0 0 0 0.2rem rgba(255, 193, 7, 0.25);
 }
 
 .form-control.is-invalid {
@@ -347,20 +393,35 @@ document.addEventListener('DOMContentLoaded', function() {
     margin-top: 10px;
 }
 
+.alert-danger {
+    background-color: #f8d7da;
+    border-left: 4px solid #dc3545;
+    color: #721c24;
+    padding: 15px 20px;
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
 /* Botones */
-.btn-success {
-    background-color: #28a745;
-    border-color: #28a745;
+.btn-warning {
+    background-color: #ffc107;
+    border-color: #ffc107;
+    color: #212529;
     padding: 10px 20px;
     font-size: 16px;
     font-weight: 500;
     transition: all 0.2s;
 }
 
-.btn-success:hover {
-    background-color: #218838;
+.btn-warning:hover {
+    background-color: #ffca2c;
     transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
+    box-shadow: 0 4px 8px rgba(255, 193, 7, 0.3);
+}
+
+.btn-warning:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 /* Responsive */
@@ -386,8 +447,9 @@ document.addEventListener('DOMContentLoaded', function() {
     transition: all 0.3s ease;
 }
 
-/* Vista previa animada */
-#previewInfo {
+/* Vistas previa y error animadas */
+#previewInfo,
+#stockError {
     animation: slideIn 0.3s ease;
 }
 
@@ -400,6 +462,16 @@ document.addEventListener('DOMContentLoaded', function() {
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+/* Badge para stock disponible */
+.stock-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    background-color: #e9ecef;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #495057;
 }
 </style>
 {% endblock %}
