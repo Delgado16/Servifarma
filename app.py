@@ -192,32 +192,351 @@ def logout():
 @app.route('/admin/dashboard')
 @admin_required
 def dashboard_admin():
+    # Importar datetime y timedelta al inicio de la función
+    from datetime import datetime, timedelta
+    
     cursor = mysql.connection.cursor(DictCursor)
     
-    # Estadísticas generales
+    # ============================================
+    # ESTADÍSTICAS GENERALES DE PRODUCTOS
+    # ============================================
     cursor.execute('''
         SELECT 
             COUNT(*) as total_productos,
-            SUM(stock_actual) as stock_total,
-            SUM(stock_actual * precio_costo) as inversion_total
-        FROM productos WHERE activo = TRUE
+            IFNULL(SUM(stock_actual), 0) as stock_total,
+            IFNULL(SUM(stock_actual * precio_costo), 0) as inversion_total,
+            COUNT(CASE WHEN stock_actual <= stock_minimo THEN 1 END) as productos_bajo_stock,
+            IFNULL(SUM(precio_venta * stock_actual), 0) as valor_venta_total
+        FROM productos 
+        WHERE activo = TRUE
     ''')
     stats = cursor.fetchone()
     
+    # ============================================
+    # VENTAS DEL DÍA ACTUAL
+    # ============================================
     cursor.execute('''
         SELECT 
-            SUM(total_venta) as ganancia_total,
-            COUNT(*) as total_ventas
-        FROM ventas WHERE DATE(fecha_venta) >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+            COUNT(*) as ventas_hoy,
+            IFNULL(SUM(total_venta), 0) as total_hoy,
+            IFNULL(AVG(total_venta), 0) as ticket_promedio_hoy
+        FROM ventas 
+        WHERE DATE(fecha_venta) = CURDATE()
+    ''')
+    ventas_hoy = cursor.fetchone()
+    
+    # ============================================
+    # VENTAS ÚLTIMOS 30 DÍAS
+    # ============================================
+    cursor.execute('''
+        SELECT 
+            COUNT(*) as total_ventas,
+            IFNULL(SUM(total_venta), 0) as ganancia_total,
+            IFNULL(AVG(total_venta), 0) as ticket_promedio
+        FROM ventas 
+        WHERE DATE(fecha_venta) >= DATE_SUB(NOW(), INTERVAL 30 DAY)
     ''')
     ventas_stats = cursor.fetchone()
+    
+    # ============================================
+    # TOP 5 PRODUCTOS MÁS VENDIDOS - SIN GROUP BY
+    # ============================================
+    cursor.execute('''
+        SELECT DISTINCT
+            p.id,
+            p.nombre,
+            p.codigo,
+            p.stock_actual,
+            c.nombre as categoria,
+            (SELECT IFNULL(SUM(dv.cantidad), 0) 
+             FROM detalles_venta dv 
+             INNER JOIN ventas v ON dv.venta_id = v.id
+             WHERE dv.referencia_id = p.id 
+             AND dv.tipo_detalle = 'producto'
+             AND v.fecha_venta >= DATE_SUB(NOW(), INTERVAL 30 DAY)) as total_vendido,
+            (SELECT IFNULL(SUM(dv.subtotal), 0) 
+             FROM detalles_venta dv 
+             INNER JOIN ventas v ON dv.venta_id = v.id
+             WHERE dv.referencia_id = p.id 
+             AND dv.tipo_detalle = 'producto'
+             AND v.fecha_venta >= DATE_SUB(NOW(), INTERVAL 30 DAY)) as total_ingresos
+        FROM productos p
+        LEFT JOIN categorias c ON p.categoria_id = c.id
+        WHERE p.activo = TRUE
+        HAVING total_vendido > 0
+        ORDER BY total_vendido DESC
+        LIMIT 5
+    ''')
+    top_productos = cursor.fetchall()
+    
+    # ============================================
+    # VENTAS POR DÍA (ÚLTIMOS 7 DÍAS) - CONSULTA SIMPLE
+    # ============================================
+    ventas_diarias = []
+    for i in range(7):
+        fecha = datetime.now() - timedelta(days=i)
+        fecha_str = fecha.strftime('%Y-%m-%d')
+        
+        cursor.execute('''
+            SELECT 
+                COUNT(*) as num_ventas,
+                IFNULL(SUM(total_venta), 0) as total
+            FROM ventas 
+            WHERE DATE(fecha_venta) = %s
+        ''', (fecha_str,))
+        
+        resultado = cursor.fetchone()
+        ventas_diarias.append({
+            'fecha': fecha_str,
+            'fecha_corta': fecha.strftime('%d/%m'),
+            'num_ventas': resultado['num_ventas'],
+            'total': resultado['total']
+        })
+    
+    # Ordenar por fecha ascendente para el gráfico
+    ventas_diarias.reverse()
+    
+    # ============================================
+    # VENTAS POR CATEGORÍA
+    # ============================================
+    cursor.execute('''
+        SELECT 
+            c.nombre as categoria,
+            COUNT(DISTINCT v.id) as num_ventas,
+            IFNULL(SUM(dv.subtotal), 0) as total
+        FROM categorias c
+        LEFT JOIN productos p ON c.id = p.categoria_id AND p.activo = TRUE
+        LEFT JOIN detalles_venta dv ON p.id = dv.referencia_id AND dv.tipo_detalle = 'producto'
+        LEFT JOIN ventas v ON dv.venta_id = v.id AND v.fecha_venta >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+        WHERE c.activo = TRUE
+        GROUP BY c.id, c.nombre
+        HAVING total > 0
+        ORDER BY total DESC
+    ''')
+    ventas_categorias = cursor.fetchall()
+    
+    # ============================================
+    # PRODUCTOS CON BAJO STOCK
+    # ============================================
+    cursor.execute('''
+        SELECT 
+            p.nombre,
+            p.codigo,
+            p.stock_actual,
+            p.stock_minimo,
+            c.nombre as categoria,
+            p.fecha_vencimiento,
+            DATEDIFF(p.fecha_vencimiento, CURDATE()) as dias_para_vencer
+        FROM productos p
+        INNER JOIN categorias c ON p.categoria_id = c.id
+        WHERE p.activo = TRUE 
+        AND p.stock_actual <= p.stock_minimo
+        ORDER BY (p.stock_actual / p.stock_minimo) ASC, p.stock_actual ASC
+        LIMIT 10
+    ''')
+    bajo_stock = cursor.fetchall()
+    
+    # ============================================
+    # ÚLTIMOS MOVIMIENTOS DE INVENTARIO
+    # ============================================
+    cursor.execute('''
+        SELECT 
+            mi.tipo_movimiento,
+            mi.cantidad,
+            p.nombre as producto,
+            p.codigo as codigo_producto,
+            u.nombre as usuario,
+            mi.fecha_movimiento,
+            mi.observaciones
+        FROM movimientos_inventario mi
+        INNER JOIN productos p ON mi.producto_id = p.id
+        INNER JOIN usuarios u ON mi.usuario_id = u.id
+        ORDER BY mi.fecha_movimiento DESC
+        LIMIT 10
+    ''')
+    ultimos_movimientos_raw = cursor.fetchall()
+    
+    # Procesar fechas en Python
+    ultimos_movimientos = []
+    for mov in ultimos_movimientos_raw:
+        ultimos_movimientos.append({
+            'tipo_movimiento': mov['tipo_movimiento'],
+            'cantidad': mov['cantidad'],
+            'producto': mov['producto'],
+            'codigo_producto': mov['codigo_producto'],
+            'usuario': mov['usuario'],
+            'fecha': mov['fecha_movimiento'].strftime('%d/%m/%Y %H:%M') if mov['fecha_movimiento'] else '',
+            'observaciones': mov['observaciones']
+        })
+    
+    # ============================================
+    # ESTADÍSTICAS DE USUARIOS
+    # ============================================
+    cursor.execute('''
+        SELECT 
+            COUNT(*) as total_usuarios,
+            SUM(CASE WHEN rol = 'admin' THEN 1 ELSE 0 END) as admins,
+            SUM(CASE WHEN rol = 'vendedor' THEN 1 ELSE 0 END) as vendedores,
+            SUM(CASE WHEN DATE(fecha_creacion) = CURDATE() THEN 1 ELSE 0 END) as usuarios_nuevos_hoy
+        FROM usuarios 
+        WHERE activo = TRUE
+    ''')
+    usuarios_stats = cursor.fetchone()
+    
+    # ============================================
+    # PRODUCTOS PRÓXIMOS A VENCERSE
+    # ============================================
+    cursor.execute('''
+        SELECT 
+            p.nombre,
+            p.codigo,
+            p.lote,
+            p.fecha_vencimiento,
+            p.stock_actual,
+            c.nombre as categoria,
+            DATEDIFF(p.fecha_vencimiento, CURDATE()) as dias_para_vencer
+        FROM productos p
+        INNER JOIN categorias c ON p.categoria_id = c.id
+        WHERE p.activo = TRUE 
+        AND p.fecha_vencimiento IS NOT NULL
+        AND p.fecha_vencimiento BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 60 DAY)
+        AND p.stock_actual > 0
+        ORDER BY p.fecha_vencimiento ASC
+    ''')
+    proximos_vencer_raw = cursor.fetchall()
+    
+    # Procesar nivel de urgencia en Python
+    proximos_vencer = []
+    for prod in proximos_vencer_raw:
+        dias = prod['dias_para_vencer']
+        if dias <= 15:
+            nivel = 'critico'
+        elif dias <= 30:
+            nivel = 'alerta'
+        else:
+            nivel = 'normal'
+        
+        proximos_vencer.append({
+            'nombre': prod['nombre'],
+            'codigo': prod['codigo'],
+            'lote': prod['lote'],
+            'fecha_vencimiento': prod['fecha_vencimiento'],
+            'stock_actual': prod['stock_actual'],
+            'categoria': prod['categoria'],
+            'dias_para_vencer': dias,
+            'nivel_urgencia': nivel
+        })
+    
+    # ============================================
+    # PRODUCTOS VENCIDOS
+    # ============================================
+    cursor.execute('''
+        SELECT 
+            p.nombre,
+            p.codigo,
+            p.lote,
+            p.fecha_vencimiento,
+            p.stock_actual,
+            c.nombre as categoria,
+            DATEDIFF(CURDATE(), p.fecha_vencimiento) as dias_vencido
+        FROM productos p
+        INNER JOIN categorias c ON p.categoria_id = c.id
+        WHERE p.activo = TRUE 
+        AND p.fecha_vencimiento < CURDATE()
+        AND p.stock_actual > 0
+        ORDER BY p.fecha_vencimiento ASC
+    ''')
+    productos_vencidos = cursor.fetchall()
+    
+    # ============================================
+    # ÚLTIMAS 5 VENTAS
+    # ============================================
+    cursor.execute('''
+        SELECT 
+            v.id,
+            v.fecha_venta,
+            v.total_venta,
+            u.nombre as vendedor
+        FROM ventas v
+        INNER JOIN usuarios u ON v.usuario_id = u.id
+        ORDER BY v.fecha_venta DESC
+        LIMIT 5
+    ''')
+    ultimas_ventas_raw = cursor.fetchall()
+    
+    # Procesar fechas y contar items en Python
+    ultimas_ventas = []
+    for venta in ultimas_ventas_raw:
+        # Contar items de la venta
+        cursor.execute('''
+            SELECT COUNT(*) as total 
+            FROM detalles_venta 
+            WHERE venta_id = %s
+        ''', (venta['id'],))
+        items_count = cursor.fetchone()['total']
+        
+        ultimas_ventas.append({
+            'id': venta['id'],
+            'fecha_venta': venta['fecha_venta'],
+            'total_venta': venta['total_venta'],
+            'vendedor': venta['vendedor'],
+            'fecha_formateada': venta['fecha_venta'].strftime('%d/%m/%Y %H:%M') if venta['fecha_venta'] else '',
+            'items_vendidos': items_count
+        })
+    
+    # ============================================
+    # RESUMEN DE HOY
+    # ============================================
+    cursor.execute('''
+        SELECT 
+            COUNT(DISTINCT v.id) as total_ventas_hoy,
+            IFNULL(SUM(v.total_venta), 0) as total_ingresos_hoy,
+            COUNT(DISTINCT v.usuario_id) as vendedores_activos_hoy
+        FROM ventas v
+        WHERE DATE(v.fecha_venta) = CURDATE()
+    ''')
+    resumen_hoy = cursor.fetchone()
+    
+    # Contar productos vendidos hoy por separado
+    cursor.execute('''
+        SELECT COUNT(DISTINCT dv.referencia_id) as total
+        FROM detalles_venta dv
+        INNER JOIN ventas v ON dv.venta_id = v.id
+        WHERE DATE(v.fecha_venta) = CURDATE()
+        AND dv.tipo_detalle = 'producto'
+    ''')
+    productos_hoy = cursor.fetchone()
+    resumen_hoy['productos_vendidos_hoy'] = productos_hoy['total'] if productos_hoy else 0
     
     cursor.close()
     
     return render_template('admin/dashboard.html', 
-                         stats=stats, 
-                         ventas_stats=ventas_stats)
-
+                         # Estadísticas generales
+                         stats=stats,
+                         ventas_hoy=ventas_hoy,
+                         ventas_stats=ventas_stats,
+                         resumen_hoy=resumen_hoy,
+                         
+                         # Productos y ventas
+                         top_productos=top_productos,
+                         ventas_diarias=ventas_diarias,
+                         ventas_categorias=ventas_categorias,
+                         
+                         # Alertas y seguimiento
+                         bajo_stock=bajo_stock,
+                         proximos_vencer=proximos_vencer,
+                         productos_vencidos=productos_vencidos,
+                         
+                         # Actividad reciente
+                         ultimos_movimientos=ultimos_movimientos,
+                         ultimas_ventas=ultimas_ventas,
+                         
+                         # Usuarios
+                         usuarios_stats=usuarios_stats,
+                         
+                         # Fecha actual para el template
+                         fecha_actual=datetime.now().strftime('%d/%m/%Y %H:%M'))
+    
 # ========================
 # GESTIÓN DE PRODUCTOS
 # ========================
@@ -232,15 +551,15 @@ def productos():
     cursor.execute('SELECT id, nombre FROM categorias WHERE activo = TRUE ORDER BY nombre')
     categorias = cursor.fetchall()
     
-    cursor.execute('SELECT id, nombre FROM unidades_medida WHERE activo = TRUE ORDER BY nombre')
+    cursor.execute('SELECT id, nombre, abreviatura FROM unidades_medida WHERE activo = TRUE ORDER BY nombre')
     unidades = cursor.fetchall()
     
     if request.method == 'POST':
-        # Este POST maneja la creación desde el modal
         data = request.form
+        tipo_producto = data.get('tipo_producto', 'simple')
         
         try:
-            # Validaciones
+            # Validaciones básicas
             if not data.get('codigo') or not data.get('nombre'):
                 flash('Código y nombre son requeridos', 'error')
                 return redirect(url_for('productos'))
@@ -251,34 +570,97 @@ def productos():
                 flash('El código ya está registrado', 'error')
                 return redirect(url_for('productos'))
             
-            # Convertir valores
             fecha_vencimiento = None
             if data.get('fecha_vencimiento'):
                 fecha_vencimiento = datetime.strptime(data['fecha_vencimiento'], '%Y-%m-%d').date()
             
-            # Insertar producto
-            cursor.execute('''
-                INSERT INTO productos (
-                    codigo, nombre, descripcion, categoria_id, 
-                    principio_activo, presentacion, unidad_base_id,
-                    precio_costo, precio_venta, stock_actual, stock_minimo,
-                    lote, fecha_vencimiento, activo
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)
-            ''', (
-                data['codigo'].strip(),
-                data['nombre'].strip(),
-                data.get('descripcion', '').strip(),
-                data.get('categoria_id'),
-                data.get('principio_activo', '').strip(),
-                data.get('presentacion', '').strip(),
-                data.get('unidad_base_id'),
-                float(data.get('precio_costo', 0)),
-                float(data.get('precio_venta', 0)),
-                int(data.get('stock_actual', 0)),
-                int(data.get('stock_minimo', 5)),
-                data.get('lote', '').strip(),
-                fecha_vencimiento
-            ))
+            # ===== PRODUCTO SIMPLE (como antes) =====
+            if tipo_producto == 'simple':
+                cursor.execute('''
+                    INSERT INTO productos (
+                        codigo, nombre, descripcion, categoria_id, 
+                        principio_activo, presentacion, tipo_producto, unidad_base_id,
+                        precio_costo, porcentaje_ganancia, precio_venta, 
+                        stock_actual, stock_minimo, lote, fecha_vencimiento, activo
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+                ''', (
+                    data['codigo'].strip(),
+                    data['nombre'].strip(),
+                    data.get('descripcion', '').strip(),
+                    data.get('categoria_id'),
+                    data.get('principio_activo', '').strip(),
+                    data.get('presentacion', '').strip(),
+                    'simple',
+                    data.get('unidad_base_id'),
+                    float(data.get('precio_costo', 0)),
+                    float(data.get('porcentaje_ganancia', 30)),
+                    float(data.get('precio_venta', 0)),
+                    int(data.get('stock_actual', 0)),
+                    int(data.get('stock_minimo', 5)),
+                    data.get('lote', '').strip(),
+                    fecha_vencimiento
+                ))
+                
+                producto_id = cursor.lastrowid
+                
+                # Si tiene precio de venta para unidad base, crear variación simple
+                if data.get('precio_venta'):
+                    cursor.execute('''
+                        INSERT INTO variaciones_producto 
+                        (producto_id, unidad_id, cantidad_equivalente, precio_venta, descripcion)
+                        VALUES (%s, %s, 1, %s, 'Venta por unidad base')
+                    ''', (producto_id, data.get('unidad_base_id'), float(data.get('precio_venta', 0))))
+            
+            # ===== PRODUCTO JERÁRQUICO (caja → sobre → blister → pastilla) =====
+            else:  # tipo_producto == 'jerarquico'
+                # Validar que tenga todos los datos necesarios
+                required = ['costo_caja', 'sobres_por_caja', 'blister_por_sobre', 
+                           'pastillas_por_blister', 'porcentaje_ganancia']
+                for field in required:
+                    if not data.get(field):
+                        flash(f'El campo {field} es requerido para productos jerárquicos', 'error')
+                        return redirect(url_for('productos'))
+                
+                # Primero insertar producto base (unidad base = PASTILLA que es la más pequeña)
+                cursor.execute('SELECT id FROM unidades_medida WHERE abreviatura = %s', ('PST',))
+                pastilla_unidad = cursor.fetchone()
+                
+                cursor.execute('''
+                    INSERT INTO productos (
+                        codigo, nombre, descripcion, categoria_id, 
+                        principio_activo, presentacion, tipo_producto, unidad_base_id,
+                        precio_costo, porcentaje_ganancia, precio_venta, 
+                        stock_actual, stock_minimo, lote, fecha_vencimiento, activo
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+                ''', (
+                    data['codigo'].strip(),
+                    data['nombre'].strip(),
+                    data.get('descripcion', '').strip(),
+                    data.get('categoria_id'),
+                    data.get('principio_activo', '').strip(),
+                    data.get('presentacion', '').strip(),
+                    'jerarquico',
+                    pastilla_unidad['id'],  # Unidad base = Pastilla
+                    float(data.get('costo_caja', 0)),  # Guardamos el costo de la caja
+                    float(data.get('porcentaje_ganancia', 30)),
+                    0,  # Precio venta se calculará después
+                    int(data.get('stock_actual', 0)),  # Stock en CAJAS
+                    int(data.get('stock_minimo', 5)),
+                    data.get('lote', '').strip(),
+                    fecha_vencimiento
+                ))
+                
+                producto_id = cursor.lastrowid
+                
+                # Llamar al procedimiento almacenado para calcular todos los precios
+                cursor.callproc('calcular_precios_jerarquicos', [
+                    producto_id,
+                    float(data.get('costo_caja', 0)),
+                    int(data.get('sobres_por_caja', 0)),
+                    int(data.get('blister_por_sobre', 0)),
+                    int(data.get('pastillas_por_blister', 0)),
+                    float(data.get('porcentaje_ganancia', 30))
+                ])
             
             mysql.connection.commit()
             flash('Producto creado exitosamente', 'success')
@@ -286,23 +668,26 @@ def productos():
         except Exception as e:
             mysql.connection.rollback()
             flash(f'Error al crear producto: {str(e)}', 'error')
+            print(f"Error: {str(e)}")  # Para debugging
         finally:
             cursor.close()
         
         return redirect(url_for('productos'))
     
-    # Método GET - Mostrar lista
+    # Método GET - Mostrar lista (modificada para incluir tipo_producto)
     buscar = request.args.get('buscar', '')
     categoria = request.args.get('categoria', '')
+    tipo = request.args.get('tipo', '')
     mostrar_inactivos = request.args.get('mostrar_inactivos', '0') == '1'
     
     query = '''
-        SELECT p.*, c.nombre as categoria_nombre, u.nombre as unidad_nombre,
+        SELECT p.*, c.nombre as categoria_nombre, u.nombre as unidad_nombre, u.abreviatura,
                CASE 
                    WHEN p.stock_actual <= p.stock_minimo THEN 'bajo'
                    WHEN p.fecha_vencimiento IS NOT NULL AND p.fecha_vencimiento <= DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN 'vencimiento'
                    ELSE 'normal'
-               END as estado_stock
+               END as estado_stock,
+               (SELECT COUNT(*) FROM variaciones_producto WHERE producto_id = p.id) as total_variaciones
         FROM productos p
         LEFT JOIN categorias c ON p.categoria_id = c.id
         LEFT JOIN unidades_medida u ON p.unidad_base_id = u.id
@@ -321,6 +706,10 @@ def productos():
         query += ' AND p.categoria_id = %s'
         params.append(categoria)
     
+    if tipo:
+        query += ' AND p.tipo_producto = %s'
+        params.append(tipo)
+    
     query += ' ORDER BY p.nombre'
     
     cursor.execute(query, params)
@@ -333,6 +722,7 @@ def productos():
                          unidades=unidades,
                          buscar=buscar,
                          categoria_seleccionada=categoria,
+                         tipo_seleccionado=tipo,
                          mostrar_inactivos=mostrar_inactivos)
 
 @app.route('/productos/<int:producto_id>/editar', methods=['POST'])
@@ -352,46 +742,123 @@ def editar_producto(producto_id):
             flash('Producto no encontrado', 'error')
             return redirect(url_for('productos'))
         
-        # Convertir fecha de vencimiento
         fecha_vencimiento = None
         if data.get('fecha_vencimiento'):
             fecha_vencimiento = datetime.strptime(data['fecha_vencimiento'], '%Y-%m-%d').date()
         
-        # Actualizar producto
-        cursor.execute('''
-            UPDATE productos SET
-                codigo = %s,
-                nombre = %s,
-                descripcion = %s,
-                categoria_id = %s,
-                principio_activo = %s,
-                presentacion = %s,
-                unidad_base_id = %s,
-                precio_costo = %s,
-                precio_venta = %s,
-                stock_actual = %s,
-                stock_minimo = %s,
-                lote = %s,
-                fecha_vencimiento = %s,
-                activo = %s
-            WHERE id = %s
-        ''', (
-            data['codigo'].strip(),
-            data['nombre'].strip(),
-            data.get('descripcion', '').strip(),
-            data.get('categoria_id'),
-            data.get('principio_activo', '').strip(),
-            data.get('presentacion', '').strip(),
-            data.get('unidad_base_id'),
-            float(data.get('precio_costo', 0)),
-            float(data.get('precio_venta', 0)),
-            int(data.get('stock_actual', 0)),
-            int(data.get('stock_minimo', 5)),
-            data.get('lote', '').strip(),
-            fecha_vencimiento,
-            data.get('activo') == 'on',
-            producto_id
-        ))
+        # Si es producto jerárquico y se actualiza el costo
+        if producto['tipo_producto'] == 'jerarquico' and data.get('costo_caja'):
+            # Actualizar solo datos básicos primero
+            cursor.execute('''
+                UPDATE productos SET
+                    codigo = %s,
+                    nombre = %s,
+                    descripcion = %s,
+                    categoria_id = %s,
+                    principio_activo = %s,
+                    presentacion = %s,
+                    precio_costo = %s,
+                    porcentaje_ganancia = %s,
+                    stock_actual = %s,
+                    stock_minimo = %s,
+                    lote = %s,
+                    fecha_vencimiento = %s,
+                    activo = %s
+                WHERE id = %s
+            ''', (
+                data['codigo'].strip(),
+                data['nombre'].strip(),
+                data.get('descripcion', '').strip(),
+                data.get('categoria_id'),
+                data.get('principio_activo', '').strip(),
+                data.get('presentacion', '').strip(),
+                float(data.get('costo_caja', producto['precio_costo'])),
+                float(data.get('porcentaje_ganancia', producto['porcentaje_ganancia'])),
+                int(data.get('stock_actual', producto['stock_actual'])),
+                int(data.get('stock_minimo', 5)),
+                data.get('lote', '').strip(),
+                fecha_vencimiento,
+                data.get('activo') == 'on',
+                producto_id
+            ))
+            
+            # Recalcular todos los precios con los nuevos valores
+            cursor.execute('''
+                SELECT * FROM variaciones_producto 
+                WHERE producto_id = %s AND nivel = 1
+            ''', (producto_id,))
+            caja = cursor.fetchone()
+            
+            if caja:
+                # Obtener la estructura
+                cursor.execute('''
+                    SELECT cantidad_por_padre as sobres_por_caja 
+                    FROM variaciones_producto 
+                    WHERE producto_id = %s AND nivel = 2
+                ''', (producto_id,))
+                sobre = cursor.fetchone()
+                
+                cursor.execute('''
+                    SELECT cantidad_por_padre as blister_por_sobre 
+                    FROM variaciones_producto 
+                    WHERE producto_id = %s AND nivel = 3
+                ''', (producto_id,))
+                blister = cursor.fetchone()
+                
+                cursor.execute('''
+                    SELECT cantidad_por_padre as pastillas_por_blister 
+                    FROM variaciones_producto 
+                    WHERE producto_id = %s AND nivel = 4
+                ''', (producto_id,))
+                pastilla = cursor.fetchone()
+                
+                # Recalcular
+                cursor.callproc('calcular_precios_jerarquicos', [
+                    producto_id,
+                    float(data.get('costo_caja', producto['precio_costo'])),
+                    sobre['sobres_por_caja'] if sobre else 0,
+                    blister['blister_por_sobre'] if blister else 0,
+                    pastilla['pastillas_por_blister'] if pastilla else 0,
+                    float(data.get('porcentaje_ganancia', producto['porcentaje_ganancia']))
+                ])
+        else:
+            # Producto simple - actualización normal
+            cursor.execute('''
+                UPDATE productos SET
+                    codigo = %s,
+                    nombre = %s,
+                    descripcion = %s,
+                    categoria_id = %s,
+                    principio_activo = %s,
+                    presentacion = %s,
+                    unidad_base_id = %s,
+                    precio_costo = %s,
+                    porcentaje_ganancia = %s,
+                    precio_venta = %s,
+                    stock_actual = %s,
+                    stock_minimo = %s,
+                    lote = %s,
+                    fecha_vencimiento = %s,
+                    activo = %s
+                WHERE id = %s
+            ''', (
+                data['codigo'].strip(),
+                data['nombre'].strip(),
+                data.get('descripcion', '').strip(),
+                data.get('categoria_id'),
+                data.get('principio_activo', '').strip(),
+                data.get('presentacion', '').strip(),
+                data.get('unidad_base_id'),
+                float(data.get('precio_costo', 0)),
+                float(data.get('porcentaje_ganancia', 30)),
+                float(data.get('precio_venta', 0)),
+                int(data.get('stock_actual', 0)),
+                int(data.get('stock_minimo', 5)),
+                data.get('lote', '').strip(),
+                fecha_vencimiento,
+                data.get('activo') == 'on',
+                producto_id
+            ))
         
         mysql.connection.commit()
         flash('Producto actualizado exitosamente', 'success')
@@ -399,64 +866,79 @@ def editar_producto(producto_id):
     except Exception as e:
         mysql.connection.rollback()
         flash(f'Error al actualizar producto: {str(e)}', 'error')
+        print(f"Error: {str(e)}")  # Para debugging
     finally:
         cursor.close()
     
     return redirect(url_for('productos'))
 
-@app.route('/productos/<int:producto_id>/eliminar', methods=['POST'])
-@admin_required
-def eliminar_producto(producto_id):
-    cursor = mysql.connection.cursor(DictCursor)
-    
-    try:
-        # Verificar si el producto existe
-        cursor.execute('SELECT * FROM productos WHERE id = %s', (producto_id,))
-        producto = cursor.fetchone()
-        
-        if not producto:
-            flash('Producto no encontrado', 'error')
-            return redirect(url_for('productos'))
-        
-        # Marcar como inactivo en lugar de eliminar
-        cursor.execute('UPDATE productos SET activo = FALSE WHERE id = %s', (producto_id,))
-        
-        mysql.connection.commit()
-        flash('Producto marcado como inactivo', 'success')
-        
-    except Exception as e:
-        mysql.connection.rollback()
-        flash(f'Error al eliminar producto: {str(e)}', 'error')
-    finally:
-        cursor.close()
-    
-    return redirect(url_for('productos'))
+# ===== NUEVAS RUTAS PARA CONSULTAR VARIACIONES =====
 
-@app.route('/productos/exportar', methods=['GET'])
+@app.route('/productos/<int:producto_id>/variaciones', methods=['GET'])
 @admin_required
-def exportar_productos():
-    """Exportar productos a Excel"""
+def obtener_variaciones_producto(producto_id):
+    """Obtiene todas las variaciones de un producto para usarlas en ventas"""
     cursor = mysql.connection.cursor(DictCursor)
     
     cursor.execute('''
-        SELECT p.codigo, p.nombre, c.nombre as categoria,
-               p.principio_activo, p.presentacion,
-               u.nombre as unidad, p.stock_actual,
-               p.precio_costo, p.precio_venta,
-               p.lote, p.fecha_vencimiento
-        FROM productos p
-        LEFT JOIN categorias c ON p.categoria_id = c.id
-        LEFT JOIN unidades_medida u ON p.unidad_base_id = u.id
-        WHERE p.activo = TRUE
-        ORDER BY p.nombre
-    ''')
+        SELECT 
+            v.id,
+            v.producto_id,
+            v.unidad_id,
+            u.nombre as unidad_nombre,
+            u.abreviatura,
+            v.cantidad_equivalente,
+            v.precio_venta,
+            v.descripcion,
+            v.nivel,
+            p.nombre as producto_nombre,
+            p.tipo_producto
+        FROM variaciones_producto v
+        JOIN unidades_medida u ON v.unidad_id = u.id
+        JOIN productos p ON v.producto_id = p.id
+        WHERE v.producto_id = %s AND v.activo = TRUE
+        ORDER BY v.nivel, v.precio_venta
+    ''', (producto_id,))
     
-    productos = cursor.fetchall()
+    variaciones = cursor.fetchall()
     cursor.close()
     
-    # Aquí puedes implementar la generación de Excel
-    # Por ahora solo devuelve JSON
-    return jsonify(productos)
+    return jsonify(variaciones)
+
+@app.route('/productos/<int:producto_id>/precios-detalle', methods=['GET'])
+@admin_required
+def detalle_precios_producto(producto_id):
+    """Muestra el detalle de precios de todas las presentaciones"""
+    cursor = mysql.connection.cursor(DictCursor)
+    
+    cursor.execute('''
+        SELECT 
+            p.nombre as producto,
+            p.tipo_producto,
+            p.precio_costo as costo_base,
+            p.porcentaje_ganancia,
+            v.id as variacion_id,
+            u.nombre as unidad,
+            u.abreviatura,
+            v.cantidad_equivalente,
+            v.precio_costo_equivalente as costo_unitario,
+            v.precio_venta,
+            v.precio_venta - v.precio_costo_equivalente as ganancia,
+            ROUND(((v.precio_venta - v.precio_costo_equivalente) / v.precio_costo_equivalente * 100), 2) as margen,
+            v.descripcion,
+            v.nivel
+        FROM productos p
+        LEFT JOIN variaciones_producto v ON p.id = v.producto_id
+        LEFT JOIN unidades_medida u ON v.unidad_id = u.id
+        WHERE p.id = %s
+        ORDER BY v.nivel
+    ''', (producto_id,))
+    
+    precios = cursor.fetchall()
+    cursor.close()
+    
+    return render_template('admin/detalle_precios.html', precios=precios, producto_id=producto_id)
+
 
 # ========================
 # GESTIÓN DE COMPRAS

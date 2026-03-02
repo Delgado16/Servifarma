@@ -23,6 +23,11 @@
                 </option>
             {% endfor %}
         </select>
+        <select name="tipo" class="input-select">
+            <option value="">Todos los tipos</option>
+            <option value="simple" {% if tipo_seleccionado == 'simple' %}selected{% endif %}>Producto Simple</option>
+            <option value="jerarquico" {% if tipo_seleccionado == 'jerarquico' %}selected{% endif %}>Producto Jerárquico</option>
+        </select>
         <button type="submit" class="btn btn-primary">Filtrar</button>
         <a href="{{ url_for('productos') }}" class="btn btn-secondary">Limpiar</a>
     </form>
@@ -35,6 +40,7 @@
             <tr>
                 <th>Código</th>
                 <th>Nombre</th>
+                <th>Tipo</th>
                 <th>Categoría</th>
                 <th>Stock</th>
                 <th>Costo</th>
@@ -47,9 +53,21 @@
             <tr>
                 <td>{{ p.codigo }}</td>
                 <td>{{ p.nombre }}</td>
+                <td>
+                    {% if p.tipo_producto == 'jerarquico' %}
+                        <span class="badge badge-info">📦 Jerárquico</span>
+                        {% if p.total_variaciones > 0 %}
+                            <button class="btn btn-small btn-info" onclick="verVariaciones({{ p.id }})">
+                                {{ p.total_variaciones }} presentaciones
+                            </button>
+                        {% endif %}
+                    {% else %}
+                        <span class="badge badge-secondary">📦 Simple</span>
+                    {% endif %}
+                </td>
                 <td>{{ p.categoria_nombre }}</td>
                 <td class="stock-cell {% if p.stock_actual <= p.stock_minimo %}bajo-stock{% endif %}">
-                    {{ p.stock_actual }} {{ p.unidad_nombre }}
+                    {{ p.stock_actual }} {{ p.abreviatura or p.unidad_nombre }}
                 </td>
                 <td>C$ {{ "%.2f"|format(p.precio_costo) }}</td>
                 <td>C$ {{ "%.2f"|format(p.precio_venta) }}</td>
@@ -71,12 +89,20 @@
                             data-stock-minimo="{{ p.stock_minimo }}"
                             data-lote="{{ p.lote or '' }}"
                             data-fecha-vencimiento="{{ p.fecha_vencimiento or '' }}"
-                            data-activo="{{ p.activo }}">
+                            data-activo="{{ p.activo }}"
+                            data-tipo-producto="{{ p.tipo_producto or 'simple' }}">
                         Editar
                     </button>
                     
+                    <!-- Botón para ver precios detalle -->
+                    <a href="{{ url_for('detalle_precios_producto', producto_id=p.id) }}" 
+                       class="btn btn-small btn-info" 
+                       {% if p.tipo_producto != 'jerarquico' %}style="display: none;"{% endif %}>
+                        Precios
+                    </a>
+                    
                     <!-- Formulario para eliminar -->
-                    <form method="POST" action="{{ url_for('eliminar_producto', producto_id=p.id) }}" 
+                    <form method="POST" action="#" 
                           style="display: inline;" 
                           onsubmit="return confirm('¿Está seguro de eliminar este producto?');">
                         <button type="submit" class="btn btn-small btn-danger">Eliminar</button>
@@ -85,7 +111,7 @@
             </tr>
             {% else %}
             <tr>
-                <td colspan="7" class="text-center">No hay productos registrados</td>
+                <td colspan="8" class="text-center">No hay productos registrados</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -99,7 +125,17 @@
             <h2>Nuevo Producto</h2>
             <button class="btn-close" onclick="cerrarModal('modalProducto')">&times;</button>
         </div>
-        <form method="POST" action="{{ url_for('productos') }}" class="form">
+        <form method="POST" action="{{ url_for('productos') }}" class="form" id="formNuevoProducto">
+            <!-- Tipo de Producto -->
+            <div class="form-group">
+                <label>Tipo de Producto</label>
+                <select name="tipo_producto" id="tipo_producto" onchange="toggleTipoProducto()" required>
+                    <option value="simple">Producto Simple (Unidad única)</option>
+                    <option value="jerarquico">Producto Jerárquico (Cajon → Sobre → Blíster → Pastilla)</option>
+                </select>
+            </div>
+
+            <!-- Datos Básicos -->
             <div class="form-row">
                 <div class="form-group">
                     <label>Código *</label>
@@ -132,12 +168,12 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="form-group">
+                <div class="form-group" id="campo_unidad_base">
                     <label>Unidad Base *</label>
-                    <select name="unidad_base_id" required>
+                    <select name="unidad_base_id" id="unidad_base_id" required>
                         <option value="">Seleccionar unidad</option>
                         {% for unidad in unidades %}
-                            <option value="{{ unidad.id }}">{{ unidad.nombre }}</option>
+                            <option value="{{ unidad.id }}">{{ unidad.nombre }} ({{ unidad.abreviatura }})</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -162,7 +198,7 @@
             <div class="form-row">
                 <div class="form-group">
                     <label>Stock Actual</label>
-                    <input type="number" name="stock_actual" value="0" min="0">
+                    <input type="number" name="stock_actual" id="stock_actual" value="0" min="0">
                 </div>
                 <div class="form-group">
                     <label>Stock Mínimo</label>
@@ -170,14 +206,102 @@
                 </div>
             </div>
 
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Precio Costo (C$) *</label>
-                    <input type="number" name="precio_costo" step="0.01" min="0" required>
+            <!-- SECCIÓN PARA PRODUCTO SIMPLE -->
+            <div id="seccion_simple" style="display: block;">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Precio Costo (C$) *</label>
+                        <input type="number" name="precio_costo" id="precio_costo_simple" step="0.01" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Porcentaje Ganancia %</label>
+                        <input type="number" name="porcentaje_ganancia" id="porcentaje_simple" step="0.01" min="0" value="30" onchange="calcularPrecioVentaSimple()">
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>Precio Venta (C$) *</label>
-                    <input type="number" name="precio_venta" step="0.01" min="0" required>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Precio Venta (C$) *</label>
+                        <input type="number" name="precio_venta" id="precio_venta_simple" step="0.01" min="0">
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECCIÓN PARA PRODUCTO JERÁRQUICO -->
+            <div id="seccion_jerarquico" style="display: none;">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5>Configuración de Presentaciones Jerárquicas</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info">
+                            <strong>Ejemplo:</strong> Caja de Vitaminas C con 25 sobres, cada sobre tiene 3 blíster, cada blíster 9 pastillas
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>🏢 Costo de la Caja (C$) *</label>
+                                <input type="number" name="costo_caja" id="costo_caja" step="0.01" min="0" onchange="calcularJerarquico()">
+                            </div>
+                            <div class="form-group">
+                                <label>📨 Sobres por Caja *</label>
+                                <input type="number" name="sobres_por_caja" id="sobres_por_caja" min="1" value="1" onchange="calcularJerarquico()">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>💊 Blíster por Sobre *</label>
+                                <input type="number" name="blister_por_sobre" id="blister_por_sobre" min="1" value="1" onchange="calcularJerarquico()">
+                            </div>
+                            <div class="form-group">
+                                <label>💊 Pastillas por Blíster *</label>
+                                <input type="number" name="pastillas_por_blister" id="pastillas_por_blister" min="1" value="1" onchange="calcularJerarquico()">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Porcentaje de Ganancia %</label>
+                                <input type="number" name="porcentaje_ganancia_jer" id="porcentaje_jerarquico" step="0.01" value="30" onchange="calcularJerarquico()">
+                            </div>
+                        </div>
+
+                        <!-- Vista Previa de Cálculos -->
+                        <div class="mt-3 p-3 bg-light rounded" id="vista_previa_jerarquico">
+                            <h6>📊 Vista Previa de Precios:</h6>
+                            <table class="table table-sm table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Presentación</th>
+                                        <th>Costo Unitario</th>
+                                        <th>Precio Venta</th>
+                                        <th>Ganancia</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>📨 Sobre</td>
+                                        <td id="costo_sobre_display">C$0.00</td>
+                                        <td id="precio_sobre_display">C$0.00</td>
+                                        <td id="ganancia_sobre_display">C$0.00</td>
+                                    </tr>
+                                    <tr>
+                                        <td>💊 Blíster</td>
+                                        <td id="costo_blister_display">C$0.00</td>
+                                        <td id="precio_blister_display">C$0.00</td>
+                                        <td id="ganancia_blister_display">C$0.00</td>
+                                    </tr>
+                                    <tr>
+                                        <td>💊 Pastilla</td>
+                                        <td id="costo_pastilla_display">C$0.00</td>
+                                        <td id="precio_pastilla_display">C$0.00</td>
+                                        <td id="ganancia_pastilla_display">C$0.00</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <small class="text-muted">Los precios se redondean automáticamente</small>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -199,6 +323,16 @@
         <form method="POST" id="formEditarProducto" class="form">
             <input type="hidden" name="id" id="edit_id">
             
+            <!-- Tipo de Producto -->
+            <div class="form-group">
+                <label>Tipo de Producto</label>
+                <select name="tipo_producto" id="edit_tipo_producto" onchange="toggleTipoProductoEdit()">
+                    <option value="simple">Producto Simple (Unidad única)</option>
+                    <option value="jerarquico">Producto Jerárquico (Caja → Sobre → Blíster → Pastilla)</option>
+                </select>
+            </div>
+
+            <!-- Datos Básicos -->
             <div class="form-row">
                 <div class="form-group">
                     <label>Código *</label>
@@ -231,7 +365,7 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="form-group">
+                <div class="form-group" id="edit_campo_unidad_base">
                     <label>Unidad Base *</label>
                     <select name="unidad_base_id" id="edit_unidad_base_id" required>
                         <option value="">Seleccionar unidad</option>
@@ -269,14 +403,45 @@
                 </div>
             </div>
 
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Precio Costo (C$) *</label>
-                    <input type="number" name="precio_costo" id="edit_precio_costo" step="0.01" min="0" required>
+            <!-- Sección Simple en Edición -->
+            <div id="edit_seccion_simple">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Precio Costo (C$) *</label>
+                        <input type="number" name="precio_costo" id="edit_precio_costo" step="0.01" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Porcentaje Ganancia %</label>
+                        <input type="number" name="porcentaje_ganancia" id="edit_porcentaje" step="0.01" min="0" value="30" onchange="calcularPrecioVentaEdit()">
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>Precio Venta (C$) *</label>
-                    <input type="number" name="precio_venta" id="edit_precio_venta" step="0.01" min="0" required>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Precio Venta (C$) *</label>
+                        <input type="number" name="precio_venta" id="edit_precio_venta" step="0.01" min="0">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección Jerárquico en Edición -->
+            <div id="edit_seccion_jerarquico" style="display: none;">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5>Configuración de Presentaciones</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Costo de Caja (C$)</label>
+                                <input type="number" name="costo_caja" id="edit_costo_caja" step="0.01" min="0" onchange="calcularJerarquicoEdit()">
+                            </div>
+                            <div class="form-group">
+                                <label>Porcentaje Ganancia %</label>
+                                <input type="number" name="porcentaje_ganancia_jer" id="edit_porcentaje_jer" step="0.01" value="30" onchange="calcularJerarquicoEdit()">
+                            </div>
+                        </div>
+                        <p class="text-muted">Los cambios en costos recalcularán todos los precios</p>
+                    </div>
                 </div>
             </div>
 
@@ -295,8 +460,159 @@
     </div>
 </div>
 
+<!-- Modal para Ver Variaciones -->
+<div id="modalVariaciones" class="modal">
+    <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header">
+            <h2>Presentaciones del Producto</h2>
+            <button class="btn-close" onclick="cerrarModal('modalVariaciones')">&times;</button>
+        </div>
+        <div id="contenido_variaciones" class="p-3">
+            <!-- Se llena con JavaScript -->
+        </div>
+    </div>
+</div>
+
 <script>
-// JavaScript para manejar modales
+// Función para calcular precio de venta (simple)
+function calcularPrecioVenta(precio_costo_id, porcentaje_id, precio_venta_id) {
+    const costo = parseFloat(document.getElementById(precio_costo_id)?.value) || 0;
+    const porcentaje = parseFloat(document.getElementById(porcentaje_id)?.value) || 30;
+    const precioVenta = costo + (costo * porcentaje / 100);
+    if (document.getElementById(precio_venta_id)) {
+        document.getElementById(precio_venta_id).value = precioVenta.toFixed(2);
+    }
+}
+
+function calcularPrecioVentaSimple() {
+    calcularPrecioVenta('precio_costo_simple', 'porcentaje_simple', 'precio_venta_simple');
+}
+
+function calcularPrecioVentaEdit() {
+    calcularPrecioVenta('edit_precio_costo', 'edit_porcentaje', 'edit_precio_venta');
+}
+
+// Función para alternar entre tipos de producto
+function toggleTipoProducto() {
+    const tipo = document.getElementById('tipo_producto').value;
+    const seccionSimple = document.getElementById('seccion_simple');
+    const seccionJerarquico = document.getElementById('seccion_jerarquico');
+    const campoUnidadBase = document.getElementById('campo_unidad_base');
+    
+    if (tipo === 'jerarquico') {
+        seccionSimple.style.display = 'none';
+        seccionJerarquico.style.display = 'block';
+        campoUnidadBase.style.display = 'none';
+        
+        // Para productos jerárquicos, la unidad base es pastilla (PST)
+        document.getElementById('unidad_base_id').value = '';
+        
+        // Quitar required de campos simples
+        document.getElementById('precio_costo_simple').required = false;
+        document.querySelector('[name="precio_venta"]').required = false;
+        
+        // Agregar required a campos jerárquicos
+        document.getElementById('costo_caja').required = true;
+        document.getElementById('sobres_por_caja').required = true;
+        document.getElementById('blister_por_sobre').required = true;
+        document.getElementById('pastillas_por_blister').required = true;
+    } else {
+        seccionSimple.style.display = 'block';
+        seccionJerarquico.style.display = 'none';
+        campoUnidadBase.style.display = 'block';
+        
+        // Quitar required de campos jerárquicos
+        document.getElementById('costo_caja').required = false;
+        document.getElementById('sobres_por_caja').required = false;
+        document.getElementById('blister_por_sobre').required = false;
+        document.getElementById('pastillas_por_blister').required = false;
+        
+        // Agregar required a campos simples
+        document.getElementById('precio_costo_simple').required = true;
+        document.querySelector('[name="precio_venta"]').required = true;
+    }
+}
+
+function toggleTipoProductoEdit() {
+    const tipo = document.getElementById('edit_tipo_producto').value;
+    const seccionSimple = document.getElementById('edit_seccion_simple');
+    const seccionJerarquico = document.getElementById('edit_seccion_jerarquico');
+    const campoUnidadBase = document.getElementById('edit_campo_unidad_base');
+    
+    if (tipo === 'jerarquico') {
+        seccionSimple.style.display = 'none';
+        seccionJerarquico.style.display = 'block';
+        campoUnidadBase.style.display = 'none';
+    } else {
+        seccionSimple.style.display = 'block';
+        seccionJerarquico.style.display = 'none';
+        campoUnidadBase.style.display = 'block';
+    }
+}
+
+// Función para calcular precios jerárquicos
+function calcularJerarquico() {
+    const costo_caja = parseFloat(document.getElementById('costo_caja').value) || 0;
+    const sobres = parseInt(document.getElementById('sobres_por_caja').value) || 1;
+    const blister = parseInt(document.getElementById('blister_por_sobre').value) || 1;
+    const pastillas = parseInt(document.getElementById('pastillas_por_blister').value) || 1;
+    const porcentaje = parseFloat(document.getElementById('porcentaje_jerarquico').value) || 30;
+    
+    if (costo_caja > 0 && sobres > 0 && blister > 0 && pastillas > 0) {
+        // Calcular costos unitarios
+        const costo_sobre = costo_caja / sobres;
+        const costo_blister = costo_sobre / blister;
+        const costo_pastilla = costo_blister / pastillas;
+        
+        // Calcular precios de venta con redondeo
+        const precio_caja = Math.round(costo_caja + (costo_caja * porcentaje / 100));
+        const precio_sobre = Math.round(costo_sobre + (costo_sobre * porcentaje / 100));
+        const precio_blister = Math.round(costo_blister + (costo_blister * porcentaje / 100));
+        const precio_pastilla = Math.round(costo_pastilla + (costo_pastilla * porcentaje / 100));
+        
+        // Actualizar vista previa
+        document.getElementById('costo_caja_display').innerHTML = `C$${costo_caja.toFixed(2)}`;
+        document.getElementById('precio_caja_display').innerHTML = `C$${precio_caja}`;
+        document.getElementById('ganancia_caja_display').innerHTML = `C$${(precio_caja - costo_caja).toFixed(2)}`;
+        
+        document.getElementById('costo_sobre_display').innerHTML = `C$${costo_sobre.toFixed(2)}`;
+        document.getElementById('precio_sobre_display').innerHTML = `C$${precio_sobre}`;
+        document.getElementById('ganancia_sobre_display').innerHTML = `C$${(precio_sobre - costo_sobre).toFixed(2)}`;
+        
+        document.getElementById('costo_blister_display').innerHTML = `C$${costo_blister.toFixed(2)}`;
+        document.getElementById('precio_blister_display').innerHTML = `C$${precio_blister}`;
+        document.getElementById('ganancia_blister_display').innerHTML = `C$${(precio_blister - costo_blister).toFixed(2)}`;
+        
+        document.getElementById('costo_pastilla_display').innerHTML = `C$${costo_pastilla.toFixed(2)}`;
+        document.getElementById('precio_pastilla_display').innerHTML = `C$${precio_pastilla}`;
+        document.getElementById('ganancia_pastilla_display').innerHTML = `C$${(precio_pastilla - costo_pastilla).toFixed(2)}`;
+    }
+}
+
+function calcularJerarquicoEdit() {
+    // Similar a calcularJerarquico pero para edición
+    const costo_caja = parseFloat(document.getElementById('edit_costo_caja').value) || 0;
+    const porcentaje = parseFloat(document.getElementById('edit_porcentaje_jer').value) || 30;
+    
+    // Aquí podrías mostrar una vista previa similar
+}
+
+// Función para ver variaciones
+function verVariaciones(productoId) {
+    fetch(`/productos/${productoId}/variaciones`)
+        .then(response => response.json())
+        .then(variaciones => {
+            let html = '<table class="table"><thead><tr><th>Presentación</th><th>Precio</th></tr></thead><tbody>';
+            variaciones.forEach(v => {
+                html += `<tr><td>${v.descripcion || v.unidad_nombre}</td><td>C$ ${v.precio_venta}</td></tr>`;
+            });
+            html += '</tbody></table>';
+            document.getElementById('contenido_variaciones').innerHTML = html;
+            document.getElementById('modalVariaciones').style.display = 'block';
+        });
+}
+
+// Funciones de modales
 function cerrarModal(modalId) {
     document.getElementById(modalId).style.display = 'none';
 }
@@ -305,17 +621,17 @@ function cerrarModal(modalId) {
 document.addEventListener('DOMContentLoaded', function() {
     const modalEditar = document.getElementById('modalEditarProducto');
     
-    // Usar evento click ya que no tenemos Bootstrap JS
+    // Botones de editar
     document.querySelectorAll('.btn-edit').forEach(button => {
         button.addEventListener('click', function() {
             const productoId = this.getAttribute('data-id');
-            const actionUrl = `/productos/${productoId}/editar`;;
+            const actionUrl = `/productos/${productoId}/editar`;
             
             // Configurar formulario
             const form = document.getElementById('formEditarProducto');
             form.action = actionUrl;
             
-            // Llenar campos
+            // Llenar campos básicos
             document.getElementById('edit_id').value = productoId;
             document.getElementById('edit_codigo').value = this.getAttribute('data-codigo');
             document.getElementById('edit_nombre').value = this.getAttribute('data-nombre');
@@ -331,7 +647,12 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('edit_lote').value = this.getAttribute('data-lote') || '';
             document.getElementById('edit_fecha_vencimiento').value = this.getAttribute('data-fecha-vencimiento') || '';
             
-            // CORRECCIÓN IMPORTANTE: Manejar valor booleano correctamente
+            // Tipo de producto
+            const tipoProducto = this.getAttribute('data-tipo-producto') || 'simple';
+            document.getElementById('edit_tipo_producto').value = tipoProducto;
+            toggleTipoProductoEdit();
+            
+            // Activo checkbox
             const activoValue = this.getAttribute('data-activo');
             document.getElementById('edit_activo').checked = (activoValue === 'True' || activoValue === 'true' || activoValue === '1');
             
@@ -340,42 +661,70 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Botón para abrir modal de nuevo producto
+    // Botón para nuevo producto
     document.querySelector('[data-target="#modalProducto"]')?.addEventListener('click', function() {
         document.getElementById('modalProducto').style.display = 'block';
+        // Resetear formulario
+        document.getElementById('formNuevoProducto').reset();
+        toggleTipoProducto();
     });
     
-    // Mostrar/ocultar modales
-    const modals = document.querySelectorAll('.modal');
-    modals.forEach(modal => {
-        // Cerrar con botón X
+    // Cerrar modales
+    document.querySelectorAll('.modal').forEach(modal => {
         modal.querySelector('.btn-close').addEventListener('click', function() {
             modal.style.display = 'none';
         });
         
-        // Cerrar haciendo clic fuera del contenido
         modal.addEventListener('click', function(e) {
             if (e.target === this) {
                 this.style.display = 'none';
             }
         });
     });
-    
-    // Mostrar modal de nuevo producto si hay parámetro
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('nuevo') === '1') {
-        document.getElementById('modalProducto').style.display = 'block';
-    }
 });
-
-// Función auxiliar para abrir modal de nuevo producto
-function abrirModalProducto() {
-    document.getElementById('modalProducto').style.display = 'block';
-}
 </script>
 
 <style>
-/* Estilos para los modales */
+/* Estilos adicionales */
+.badge {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.badge-info {
+    background-color: #17a2b8;
+    color: white;
+}
+
+.badge-secondary {
+    background-color: #6c757d;
+    color: white;
+}
+
+.card {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-top: 15px;
+}
+
+.card-header {
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #ddd;
+    font-weight: bold;
+}
+
+.card-header.bg-info {
+    background-color: #17a2b8;
+    color: white;
+}
+
+.card-body {
+    padding: 15px;
+}
+
+/* Estilos para modales */
 .modal {
     display: none;
     position: fixed;
@@ -423,10 +772,30 @@ function abrirModalProducto() {
     color: #333;
 }
 
-/* Estilos para la tabla */
 .stock-cell.bajo-stock {
     color: #dc3545;
     font-weight: bold;
+}
+
+/* Botones pequeños */
+.btn-small {
+    padding: 3px 8px;
+    font-size: 12px;
+    margin: 0 2px;
+}
+
+.btn-info {
+    background-color: #17a2b8;
+    color: white;
+}
+
+/* Vista previa */
+#vista_previa_jerarquico table {
+    background: white;
+}
+
+#vista_previa_jerarquico table td {
+    padding: 5px;
 }
 </style>
 {% endblock %}
