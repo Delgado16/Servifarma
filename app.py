@@ -1099,6 +1099,69 @@ def registrar_compra():
         flash(f'❌ Error al registrar la compra: {str(e)}', 'danger')
         return redirect(url_for('compras'))
 
+@app.route('/compras/<int:compra_id>/detalle')
+@app.route('/compras/<int:compra_id>/detalle')
+@admin_required
+def detalle_compra(compra_id):
+    cursor = mysql.connection.cursor(DictCursor)
+    
+    try:
+        # Obtener datos de la compra
+        cursor.execute('''
+            SELECT 
+                c.*,
+                p.nombre as proveedor_nombre,
+                p.telefono as proveedor_telefono,
+                p.email as proveedor_email,
+                p.direccion as proveedor_direccion,
+                u.nombre as usuario_nombre,
+                u.email as usuario_email
+            FROM compras c
+            LEFT JOIN proveedores p ON c.proveedor_id = p.id
+            LEFT JOIN usuarios u ON c.usuario_id = u.id
+            WHERE c.id = %s
+        ''', (compra_id,))
+        
+        compra = cursor.fetchone()
+        
+        if not compra:
+            flash('Compra no encontrada', 'danger')
+            return redirect(url_for('compras'))
+        
+        # Obtener detalles de la compra con unidades_medida
+        cursor.execute('''
+            SELECT 
+                dc.*,
+                pr.codigo as producto_codigo,
+                pr.nombre as producto_nombre,
+                pr.descripcion as producto_descripcion,
+                um.nombre as unidad_nombre,
+                um.abreviatura as unidad_abreviatura
+            FROM detalles_compra dc
+            JOIN productos pr ON dc.producto_id = pr.id
+            LEFT JOIN unidades_medida um ON dc.unidad_id = um.id
+            WHERE dc.compra_id = %s
+            ORDER BY dc.id ASC
+        ''', (compra_id,))
+        
+        detalles = cursor.fetchall()
+        
+        # Calcular subtotal (suma de todos los subtotales)
+        subtotal = sum(detalle['subtotal'] for detalle in detalles)
+        
+        cursor.close()
+        
+        return render_template('admin/detalle_compra.html',
+                             compra=compra,
+                             detalles=detalles,
+                             subtotal=subtotal,
+                             now=datetime.now())
+                             
+    except Exception as e:
+        cursor.close()
+        flash(f'Error al cargar el detalle: {str(e)}', 'danger')
+        return redirect(url_for('compras'))
+
 # ========================
 # GESTIÓN DE PROVEEDORES
 # ========================

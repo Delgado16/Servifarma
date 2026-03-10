@@ -1,0 +1,419 @@
+{% extends "base.html" %}
+
+{% block title %}Detalle de Compra - ServiFarma{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="fas fa-file-invoice"></i>
+        Detalle de Compra
+    </h1>
+    <div class="header-actions">
+        <a href="{{ url_for('compras') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i>
+            Volver a Compras
+        </a>
+    </div>
+</div>
+
+<!-- Información de la Compra -->
+<div class="detail-card">
+    <div class="detail-header">
+        <h3>
+            <i class="fas fa-shopping-cart"></i>
+            Información de la Compra
+        </h3>
+        <span class="badge {% if compra.estado == 'completada' %}badge-success{% else %}badge-warning{% endif %}">
+            {{ compra.estado|upper }}
+        </span>
+    </div>
+    
+    <div class="detail-body">
+        <div class="info-grid">
+            <div class="info-item">
+                <label>Documento:</label>
+                <span class="info-value">{{ compra.numero_documento }}</span>
+            </div>
+            <div class="info-item">
+                <label>Factura Proveedor:</label>
+                <span class="info-value">{{ compra.numero_factura or 'N/A' }}</span>
+            </div>
+            <div class="info-item">
+                <label>Fecha Compra:</label>
+                <span class="info-value">{{ compra.fecha_compra.strftime('%d/%m/%Y') }}</span>
+            </div>
+            <div class="info-item">
+                <label>Fecha Registro:</label>
+                <span class="info-value">{{ compra.fecha_creacion.strftime('%d/%m/%Y %H:%M') }}</span>
+            </div>
+            <div class="info-item">
+                <label>Registrado por:</label>
+                <span class="info-value">{{ compra.usuario_nombre }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Información del Proveedor -->
+<div class="detail-card">
+    <div class="detail-header">
+        <h3>
+            <i class="fas fa-truck"></i>
+            Proveedor
+        </h3>
+    </div>
+    
+    <div class="detail-body">
+        <div class="info-grid">
+            <div class="info-item">
+                <label>Proveedor:</label>
+                <span class="info-value">{{ compra.proveedor_nombre }}</span>
+            </div>
+            <div class="info-item">
+                <label>Teléfono:</label>
+                <span class="info-value">{{ compra.proveedor_telefono or 'N/A' }}</span>
+            </div>
+            <div class="info-item">
+                <label>Email:</label>
+                <span class="info-value">{{ compra.proveedor_email or 'N/A' }}</span>
+            </div>
+            <div class="info-item">
+                <label>Dirección:</label>
+                <span class="info-value">{{ compra.proveedor_direccion or 'N/A' }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Detalle de Productos -->
+<div class="detail-card">
+    <div class="detail-header">
+        <h3>
+            <i class="fas fa-boxes"></i>
+            Productos Comprados
+        </h3>
+    </div>
+    
+    <div class="table-container">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Producto</th>
+                    <th class="text-center">Cantidad</th>
+                    <th class="text-right">Precio Unit.</th>
+                    <th class="text-right">Subtotal</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for detalle in detalles %}
+                <tr>
+                    <td>{{ detalle.producto_codigo }}</td>
+                    <td>
+                        <strong>{{ detalle.producto_nombre }}</strong>
+                        {% if detalle.producto_descripcion %}
+                        <br><small>{{ detalle.producto_descripcion[:50] }}{% if detalle.producto_descripcion|length > 50 %}...{% endif %}</small>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        {{ detalle.cantidad }} {{ detalle.unidad_abreviatura or 'und' }}
+                    </td>
+                    <td class="text-right">C$ {{ "%.2f"|format(detalle.precio_unitario) }}</td>
+                    <td class="text-right"><strong>C$ {{ "%.2f"|format(detalle.subtotal) }}</strong></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr class="total-row">
+                    <td colspan="4" class="text-right"><strong>TOTAL COMPRA:</strong></td>
+                    <td class="text-right"><strong class="total-amount">C$ {{ "%.2f"|format(subtotal) }}</strong></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+
+<!-- Información adicional -->
+<div class="detail-footer">
+    <div class="footer-note">
+        <i class="fas fa-clock"></i>
+        Documento generado el {{ now.strftime('%d/%m/%Y %H:%M') }}
+    </div>
+    <div class="footer-actions">
+        <a href="{{ url_for('compras') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i>
+            Volver
+        </a>
+    </div>
+</div>
+
+<style>
+/* Estilos para la página de detalle */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding: 1rem 0;
+}
+
+.page-header h1 {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 1.8rem;
+    color: #1e293b;
+    margin: 0;
+}
+
+.header-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* Cards */
+.detail-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.detail-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 2px solid #f1f5f9;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.detail-header h3 {
+    font-size: 1.2rem;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #1e293b;
+}
+
+.detail-header h3 i {
+    color: #2563eb;
+}
+
+.detail-body {
+    padding: 1.5rem;
+}
+
+/* Grid de información */
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.info-item label {
+    font-size: 0.85rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+}
+
+.info-item .info-value {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: #1e293b;
+}
+
+/* Tabla de productos */
+.table-container {
+    padding: 1.5rem;
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table th {
+    text-align: left;
+    padding: 0.75rem;
+    background: #f8fafc;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #475569;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.table td {
+    padding: 0.75rem;
+    border-bottom: 1px solid #e2e8f0;
+    color: #334155;
+}
+
+.table tfoot {
+    background: #f8fafc;
+}
+
+.table tfoot td {
+    padding: 0.75rem;
+    font-weight: 500;
+}
+
+.table .total-row {
+    border-top: 2px solid #2563eb;
+}
+
+.table .total-row td {
+    font-size: 1.1rem;
+}
+
+.total-amount {
+    color: #2563eb;
+    font-size: 1.2rem;
+}
+
+/* Badges */
+.badge {
+    padding: 0.35rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.badge-success {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.badge-warning {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+/* Footer */
+.detail-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 2px solid #e2e8f0;
+}
+
+.footer-note {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #64748b;
+    font-size: 0.9rem;
+}
+
+.footer-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* Botones */
+.btn {
+    padding: 0.6rem 1.2rem;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    text-decoration: none;
+}
+
+.btn-primary {
+    background: #2563eb;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #1d4ed8;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+.btn-secondary {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+}
+
+.btn-secondary:hover {
+    background: #e2e8f0;
+}
+
+/* Print styles */
+@media print {
+    .header-actions,
+    .footer-actions,
+    .btn-close {
+        display: none !important;
+    }
+    
+    .detail-card {
+        border: none;
+        box-shadow: none;
+        break-inside: avoid;
+    }
+    
+    .page-header {
+        margin-bottom: 1rem;
+    }
+    
+    .badge {
+        border: 1px solid #000;
+    }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .page-header {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+    }
+    
+    .header-actions {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .info-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .detail-footer {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+    }
+    
+    .footer-actions {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .table {
+        min-width: 600px;
+    }
+}
+</style>
+{% endblock %}
