@@ -16,7 +16,6 @@
     </div>
 </div>
 
-
 <!-- Tabla de Compras -->
 <div class="table-container">
     <div class="table-header">
@@ -81,7 +80,7 @@
         
         <form method="POST" action="{{ url_for('registrar_compra') }}" id="formCompra">
             <div class="modal-body">
-                <!-- Datos básicos -->
+                <!-- Datos básicos de la compra -->
                 <div class="form-section">
                     <h3 class="section-title">
                         <i class="fas fa-file-invoice"></i>
@@ -93,38 +92,43 @@
                             <input type="text" 
                                    class="form-control" 
                                    name="numero_documento" 
+                                   id="numero_documento"
                                    required 
                                    value="COMP-{{ '%03d' % (compras|length + 1) }}">
-                            <small>Identificador único</small>
+                            <small>Identificador único interno</small>
                         </div>
                         
                         <div class="form-group">
-                            <label>Factura</label>
+                            <label>N° Factura <span class="required">*</span></label>
                             <input type="text" 
                                    class="form-control" 
                                    name="numero_factura" 
-                                   placeholder="Número de factura">
+                                   id="numero_factura"
+                                   required
+                                   placeholder="Ej: F001-00000123">
+                            <small>Número de factura del proveedor</small>
                         </div>
                         
                         <div class="form-group">
-                            <label>Fecha <span class="required">*</span></label>
+                            <label>Fecha de Compra <span class="required">*</span></label>
                             <input type="date" 
                                    class="form-control" 
                                    name="fecha_compra" 
+                                   id="fecha_compra"
                                    required 
                                    value="{{ today }}">
                         </div>
                     </div>
                 </div>
 
-                <!-- Proveedor -->
+                <!-- Selección de Proveedor -->
                 <div class="form-section">
                     <h3 class="section-title">
                         <i class="fas fa-truck"></i>
                         Proveedor
                     </h3>
                     <div class="form-group">
-                        <select class="form-control" name="proveedor_id" required>
+                        <select class="form-control" name="proveedor_id" id="proveedor_id" required>
                             <option value="">-- Seleccionar proveedor --</option>
                             {% for proveedor in proveedores %}
                                 <option value="{{ proveedor.id }}">{{ proveedor.nombre }}</option>
@@ -133,24 +137,28 @@
                     </div>
                 </div>
 
-                <!-- Productos -->
+                <!-- Sección de Productos con Unidades -->
                 <div class="form-section">
                     <h3 class="section-title">
                         <i class="fas fa-boxes"></i>
-                        Productos
+                        Productos Comprados
                     </h3>
                     
                     <div class="productos-container">
+                        <!-- Cabecera de la tabla de productos -->
                         <div class="productos-header">
                             <span>Producto</span>
                             <span>Cantidad</span>
-                            <span>Precio Unit.</span>
+                            <span>Unidad de Compra</span>
+                            <span>Precio Unitario</span>
                             <span>Subtotal</span>
                             <span></span>
                         </div>
                         
+                        <!-- Contenedor dinámico de productos -->
                         <div id="productosContainer" class="productos-list"></div>
                         
+                        <!-- Botón para agregar más productos -->
                         <div class="productos-actions">
                             <button type="button" class="btn btn-secondary" onclick="agregarProductoCompra()">
                                 <i class="fas fa-plus"></i>
@@ -158,14 +166,21 @@
                             </button>
                         </div>
                         
+                        <!-- Alerta de validación -->
                         <div id="productosAlert" class="alert-warning" style="display: none;">
                             <i class="fas fa-exclamation-triangle"></i>
-                            Agregue al menos un producto
+                            Debe agregar al menos un producto válido
+                        </div>
+
+                        <!-- Información de ayuda -->
+                        <div class="info-box">
+                            <i class="fas fa-info-circle"></i>
+                            <small>Seleccione el producto y luego elija la unidad en que lo compró (Caja, Blister, Pastilla, etc.)</small>
                         </div>
                     </div>
                 </div>
 
-                <!-- Total -->
+                <!-- Total de la compra -->
                 <div class="total-section">
                     <div class="total-box">
                         <div class="total-label">
@@ -175,11 +190,18 @@
                         <div class="total-amount" id="totalAmount">C$ 0.00</div>
                     </div>
                 </div>
+
+                <!-- Campo oculto para el total -->
+                <input type="hidden" name="total_costo" id="totalCostoHidden" value="0">
             </div>
 
+            <!-- Footer del modal -->
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="cerrarModalCompra()">Cancelar</button>
-                <button type="submit" class="btn btn-primary" id="btnRegistrar">
+                <button type="button" class="btn btn-secondary" onclick="cerrarModalCompra()">
+                    <i class="fas fa-times"></i>
+                    Cancelar
+                </button>
+                <button type="submit" class="btn btn-primary" id="btnRegistrar" disabled>
                     <i class="fas fa-save"></i>
                     Registrar Compra
                 </button>
@@ -188,8 +210,9 @@
     </div>
 </div>
 
+<!-- Estilos CSS -->
 <style>
-/* ========== MODAL MEJORADO ========== */
+/* ========== MODAL PRINCIPAL ========== */
 .modal {
     display: none;
     position: fixed;
@@ -207,13 +230,9 @@
     margin: 2rem auto;
     border-radius: 12px;
     width: 90%;
-    max-width: 900px;
+    max-width: 1100px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     animation: modalSlideIn 0.3s ease;
-}
-
-.modal-content.modal-lg {
-    max-width: 1000px;
 }
 
 @keyframes modalSlideIn {
@@ -278,7 +297,7 @@
     overflow-y: auto;
 }
 
-/* Secciones del formulario */
+/* ========== SECCIONES DEL FORMULARIO ========== */
 .form-section {
     margin-bottom: 2rem;
     padding-bottom: 1.5rem;
@@ -306,7 +325,6 @@
     font-size: 1.1rem;
 }
 
-/* Grid mejorado */
 .form-row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -358,7 +376,7 @@
     color: #64748b;
 }
 
-/* Sección de productos */
+/* ========== SECCIÓN DE PRODUCTOS ========== */
 .productos-container {
     background-color: #f8fafc;
     border-radius: 12px;
@@ -368,7 +386,7 @@
 
 .productos-header {
     display: grid;
-    grid-template-columns: 3fr 120px 140px 120px 50px;
+    grid-template-columns: 3fr 100px 200px 140px 100px 50px;
     gap: 1rem;
     padding: 0.75rem 0.5rem;
     font-size: 0.85rem;
@@ -389,7 +407,7 @@
 
 .producto-item {
     display: grid;
-    grid-template-columns: 3fr 120px 140px 120px 50px;
+    grid-template-columns: 3fr 100px 200px 140px 100px 50px;
     gap: 1rem;
     align-items: center;
     background: white;
@@ -404,6 +422,25 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
+/* Estilo para el selector de unidades */
+.unidad-select {
+    background-color: #f0f9ff;
+    border-color: #bae6fd;
+    font-weight: 500;
+}
+
+.unidad-select:focus {
+    border-color: #0284c7;
+    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1);
+}
+
+.unidad-select:disabled {
+    background-color: #f1f5f9;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+/* Wrapper para el precio */
 .precio-wrapper {
     display: flex;
     align-items: center;
@@ -417,13 +454,15 @@
     color: #64748b;
     font-weight: 500;
     font-size: 0.9rem;
+    min-width: 25px;
 }
 
 .precio-wrapper .form-control {
-    width: 100px;
+    width: 100%;
     padding: 0.5rem;
 }
 
+/* Subtotal del producto */
 .producto-subtotal {
     font-weight: 700;
     color: #2563eb;
@@ -432,6 +471,7 @@
     padding-right: 0.5rem;
 }
 
+/* Botón de eliminar */
 .btn-icon {
     background: none;
     border: none;
@@ -445,6 +485,8 @@
     justify-content: center;
     text-decoration: none;
     font-size: 1rem;
+    width: 40px;
+    height: 40px;
 }
 
 .btn-icon:hover {
@@ -462,11 +504,7 @@
     cursor: not-allowed;
 }
 
-.btn-icon:disabled:hover {
-    background: none;
-    color: #94a3b8;
-}
-
+/* Acciones de productos */
 .productos-actions {
     margin-top: 1rem;
     padding-top: 1rem;
@@ -493,7 +531,26 @@
     border-color: #94a3b8;
 }
 
-/* Total section */
+/* Caja de información */
+.info-box {
+    background-color: #e0f2fe;
+    border: 2px solid #7dd3fc;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin-top: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: #0369a1;
+    font-size: 0.9rem;
+}
+
+.info-box i {
+    font-size: 1.1rem;
+    color: #0284c7;
+}
+
+/* ========== TOTAL SECTION ========== */
 .total-section {
     margin-top: 2rem;
     padding-top: 1.5rem;
@@ -530,7 +587,7 @@
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-/* Modal footer */
+/* ========== MODAL FOOTER ========== */
 .modal-footer {
     padding: 1.5rem 2rem;
     border-top: 2px solid #f0f0f0;
@@ -547,18 +604,19 @@
     border-radius: 10px;
     font-weight: 600;
     transition: all 0.2s;
-}
-
-.modal-footer .btn-primary {
-    background-color: #2563eb;
-    color: white;
+    cursor: pointer;
     border: none;
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
 }
 
-.modal-footer .btn-primary:hover {
+.modal-footer .btn-primary {
+    background-color: #2563eb;
+    color: white;
+}
+
+.modal-footer .btn-primary:hover:not(:disabled) {
     background-color: #1d4ed8;
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
@@ -567,8 +625,6 @@
 .modal-footer .btn-primary:disabled {
     opacity: 0.5;
     cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
 }
 
 .modal-footer .btn-secondary {
@@ -582,7 +638,7 @@
     border-color: #94a3b8;
 }
 
-/* Alertas */
+/* ========== ALERTAS ========== */
 .alert-warning {
     background-color: #fef3c7;
     color: #92400e;
@@ -600,26 +656,8 @@
     font-size: 1.1rem;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-    .modal-content {
-        margin: 1rem;
-        width: calc(100% - 2rem);
-    }
-    
-    .modal-header {
-        padding: 1.25rem;
-    }
-    
-    .modal-body {
-        padding: 1.25rem;
-    }
-    
-    .form-row {
-        grid-template-columns: 1fr;
-        gap: 1rem;
-    }
-    
+/* ========== RESPONSIVE ========== */
+@media (max-width: 992px) {
     .productos-header {
         display: none;
     }
@@ -628,7 +666,7 @@
         grid-template-columns: 1fr;
         gap: 0.75rem;
         position: relative;
-        padding: 1rem;
+        padding: 1.5rem 1rem;
     }
     
     .producto-item .btn-icon {
@@ -645,19 +683,39 @@
         width: 100%;
     }
     
+    .unidad-select {
+        width: 100%;
+    }
+    
     .producto-subtotal {
         text-align: left;
-        padding-left: 0.5rem;
-        background-color: #f8fafc;
+        background-color: #f1f5f9;
         padding: 0.75rem;
         border-radius: 8px;
+        margin-top: 0.25rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .modal-content {
+        margin: 0.5rem;
+        width: calc(100% - 1rem);
+    }
+    
+    .modal-header,
+    .modal-body,
+    .modal-footer {
+        padding: 1rem;
+    }
+    
+    .form-row {
+        grid-template-columns: 1fr;
     }
     
     .total-box {
         flex-direction: column;
-        gap: 1rem;
         text-align: center;
-        padding: 1.25rem;
+        padding: 1rem;
     }
     
     .modal-footer {
@@ -671,30 +729,45 @@
 }
 </style>
 
-<!-- JavaScript específico para compras (con nombres únicos para evitar conflictos) -->
+<!-- JavaScript para el manejo de compras -->
 <script>
 (function() {
     'use strict';
     
-    // ========== VARIABLES GLOBALES ==========
+    // ========== DATOS DESDE EL BACKEND ==========
     let productos = [];
+    let unidades = [];
+    
     try {
-        const productosData = {{ productos|tojson|safe }};
-        if (Array.isArray(productosData)) {
-            productos = productosData.filter(p => p && p.id);
-        }
+        productos = {{ productos|tojson|safe }} || [];
+        unidades = {{ unidades|tojson|safe }} || [];
+        console.log('✅ Productos cargados:', productos.length);
+        console.log('✅ Unidades cargadas:', unidades.length);
     } catch (e) {
-        console.error('Error al procesar productos:', e);
+        console.error('❌ Error al cargar datos:', e);
         productos = [];
+        unidades = [];
     }
 
-    // ========== FUNCIONES MODAL ==========
+    // Cache para las presentaciones por producto
+    const presentacionesCache = {};
+    let contadorProductos = 0;
+
+    // ========== FUNCIONES DEL MODAL ==========
     window.abrirModalCompra = function() {
         const modal = document.getElementById('modalCompra');
         if (modal) {
             modal.style.display = 'block';
             document.body.style.overflow = 'hidden';
             
+            // Establecer fecha actual si no está
+            const fechaInput = document.getElementById('fecha_compra');
+            if (fechaInput && !fechaInput.value) {
+                const hoy = new Date().toISOString().split('T')[0];
+                fechaInput.value = hoy;
+            }
+            
+            // Agregar un producto por defecto
             const container = document.getElementById('productosContainer');
             if (container && container.children.length === 0) {
                 agregarProductoCompra();
@@ -708,6 +781,7 @@
             modal.style.display = 'none';
             document.body.style.overflow = 'auto';
             
+            // Limpiar el formulario
             const form = document.getElementById('formCompra');
             if (form) form.reset();
             
@@ -722,37 +796,146 @@
             
             const btnRegistrar = document.getElementById('btnRegistrar');
             if (btnRegistrar) btnRegistrar.disabled = true;
+            
+            const totalHidden = document.getElementById('totalCostoHidden');
+            if (totalHidden) totalHidden.value = '0';
         }
     };
 
-    // ========== FUNCIONES PRODUCTOS ==========
+    // ========== FUNCIÓN PARA CARGAR UNIDADES DEL PRODUCTO ==========
+    window.cargarUnidadesProducto = async function(productoId, selectElement) {
+        if (!productoId || !selectElement) return;
+        
+        // Mostrar estado de carga
+        selectElement.innerHTML = '<option value="">Cargando unidades...</option>';
+        selectElement.disabled = true;
+        
+        try {
+            // Verificar caché
+            if (!presentacionesCache[productoId]) {
+                const response = await fetch(`/productos/${productoId}/presentaciones`);
+                if (!response.ok) throw new Error('Error en la respuesta del servidor');
+                const data = await response.json();
+                presentacionesCache[productoId] = Array.isArray(data) ? data : [];
+            }
+            
+            const presentaciones = presentacionesCache[productoId];
+            
+            // Limpiar y llenar el select
+            selectElement.innerHTML = '';
+            
+            // Agregar opción por defecto
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = '-- Seleccionar unidad de compra --';
+            selectElement.appendChild(defaultOption);
+            
+            if (presentaciones.length === 0) {
+                // Si no hay presentaciones configuradas, mostrar las unidades disponibles
+                if (unidades && unidades.length > 0) {
+                    unidades.forEach(u => {
+                        const option = document.createElement('option');
+                        option.value = u.id;
+                        option.textContent = `${u.nombre} (${u.abreviatura})`;
+                        if (u.descripcion) {
+                            option.textContent += ` - ${u.descripcion}`;
+                        }
+                        selectElement.appendChild(option);
+                    });
+                } else {
+                    const noDataOption = document.createElement('option');
+                    noDataOption.value = '';
+                    noDataOption.disabled = true;
+                    noDataOption.textContent = 'No hay unidades disponibles';
+                    selectElement.appendChild(noDataOption);
+                }
+            } else {
+                // Agregar todas las presentaciones configuradas
+                presentaciones.forEach(p => {
+                    const option = document.createElement('option');
+                    option.value = p.unidad_id;
+                    option.textContent = `${p.unidad_nombre} (${p.abreviatura})`;
+                    if (p.descripcion) {
+                        option.textContent += ` - ${p.descripcion}`;
+                    }
+                    selectElement.appendChild(option);
+                });
+            }
+            
+            selectElement.disabled = false;
+            
+        } catch (error) {
+            console.error('❌ Error cargando unidades:', error);
+            selectElement.innerHTML = '<option value="">Error al cargar unidades</option>';
+            selectElement.disabled = false;
+        }
+    };
+
+    // ========== FUNCIÓN PARA AGREGAR PRODUCTO ==========
     window.agregarProductoCompra = function() {
         const container = document.getElementById('productosContainer');
         if (!container) return;
         
-        let options = '<option value="">-- Seleccionar producto --</option>';
+        contadorProductos++;
+        
+        // Opciones de productos
+        let productosOptions = '<option value="">-- Seleccionar producto --</option>';
         
         if (productos && productos.length > 0) {
             productos.forEach(p => {
-                const precio = p.precio_costo || 0;
                 const nombre = p.nombre || 'Producto sin nombre';
-                options += `<option value="${p.id}" data-precio="${precio}">${nombre}</option>`;
+                const codigo = p.codigo || '';
+                const precio = p.precio_costo || 0;
+                productosOptions += `<option value="${p.id}" data-precio="${precio}">${codigo} - ${nombre}</option>`;
             });
         }
         
+        // Crear el elemento del producto
         const item = document.createElement('div');
         item.className = 'producto-item';
         item.innerHTML = `
-            <select class="form-control" name="producto_id[]" required onchange="cargarPrecioCompra(this)">
-                ${options}
+            <select class="form-control producto-select" 
+                    name="producto_id[]" 
+                    required 
+                    onchange="productoSeleccionado(this)">
+                ${productosOptions}
             </select>
-            <input type="number" class="form-control" name="cantidad[]" placeholder="Cantidad" min="1" value="1" required oninput="calcularTotalCompra()">
+            
+            <input type="number" 
+                   class="form-control" 
+                   name="cantidad[]" 
+                   placeholder="Cantidad" 
+                   min="1" 
+                   value="1" 
+                   required 
+                   oninput="calcularTotalCompra()">
+            
+            <select class="form-control unidad-select" 
+                    name="unidad_id[]" 
+                    required 
+                    disabled
+                    onchange="calcularTotalCompra()">
+                <option value="">Primero seleccione producto</option>
+            </select>
+            
             <div class="precio-wrapper">
                 <span>C$</span>
-                <input type="number" class="form-control" name="precio_unitario[]" placeholder="0.00" step="0.01" min="0" required oninput="calcularTotalCompra()">
+                <input type="number" 
+                       class="form-control" 
+                       name="precio_unitario[]" 
+                       placeholder="0.00" 
+                       step="0.01" 
+                       min="0" 
+                       required 
+                       oninput="calcularTotalCompra()">
             </div>
+            
             <span class="producto-subtotal">C$ 0.00</span>
-            <button type="button" class="btn-icon btn-danger" onclick="eliminarProductoCompra(this)" ${container.children.length === 0 ? 'disabled' : ''}>
+            
+            <button type="button" 
+                    class="btn-icon btn-danger" 
+                    onclick="eliminarProductoCompra(this)" 
+                    ${container.children.length === 0 ? 'disabled' : ''}>
                 <i class="fas fa-trash"></i>
             </button>
         `;
@@ -761,6 +944,29 @@
         calcularTotalCompra();
     };
 
+    // ========== FUNCIÓN CUANDO SE SELECCIONA UN PRODUCTO ==========
+    window.productoSeleccionado = function(select) {
+        const productoId = select.value;
+        const item = select.closest('.producto-item');
+        
+        if (!item || !productoId) return;
+        
+        const unidadSelect = item.querySelector('.unidad-select');
+        const precioInput = item.querySelector('input[name="precio_unitario[]"]');
+        
+        // Cargar unidades del producto
+        cargarUnidadesProducto(productoId, unidadSelect);
+        
+        // Precargar precio sugerido
+        const selectedOption = select.options[select.selectedIndex];
+        if (selectedOption && selectedOption.dataset.precio) {
+            precioInput.value = parseFloat(selectedOption.dataset.precio).toFixed(2);
+        }
+        
+        calcularTotalCompra();
+    };
+
+    // ========== ELIMINAR PRODUCTO ==========
     window.eliminarProductoCompra = function(btn) {
         const items = document.querySelectorAll('.producto-item');
         if (items.length > 1) {
@@ -772,90 +978,146 @@
         }
     };
 
-    window.cargarPrecioCompra = function(select) {
-        if (!select || !select.value) return;
-        
-        try {
-            const selectedOption = select.options[select.selectedIndex];
-            if (selectedOption && selectedOption.dataset.precio) {
-                const precio = parseFloat(selectedOption.dataset.precio) || 0;
-                const precioInput = select.closest('.producto-item')?.querySelector('input[name="precio_unitario[]"]');
-                if (precioInput) {
-                    precioInput.value = precio.toFixed(2);
-                }
-            }
-            calcularTotalCompra();
-        } catch (e) {
-            console.error('Error al cargar precio:', e);
-        }
-    };
-
+    // ========== CALCULAR TOTAL DE LA COMPRA ==========
     window.calcularTotalCompra = function() {
         try {
             let total = 0;
             let productosValidos = 0;
             
-            document.querySelectorAll('.producto-item').forEach((item) => {
+            document.querySelectorAll('.producto-item').forEach(item => {
                 const select = item.querySelector('select[name="producto_id[]"]');
                 const cantidadInput = item.querySelector('input[name="cantidad[]"]');
+                const unidadSelect = item.querySelector('select[name="unidad_id[]"]');
                 const precioInput = item.querySelector('input[name="precio_unitario[]"]');
+                const subtotalSpan = item.querySelector('.producto-subtotal');
                 
-                if (!select || !cantidadInput || !precioInput) return;
+                if (!select || !cantidadInput || !unidadSelect || !precioInput || !subtotalSpan) return;
                 
                 const cantidad = parseFloat(cantidadInput.value) || 0;
                 const precio = parseFloat(precioInput.value) || 0;
+                const productoValido = select.value && cantidad > 0 && precio > 0 && unidadSelect.value;
+                
                 const subtotal = cantidad * precio;
+                subtotalSpan.textContent = `C$ ${subtotal.toFixed(2)}`;
                 
-                const subtotalSpan = item.querySelector('.producto-subtotal');
-                if (subtotalSpan) {
-                    subtotalSpan.textContent = `C$ ${subtotal.toFixed(2)}`;
-                }
-                
-                if (select.value && cantidad > 0 && precio > 0) {
+                if (productoValido) {
                     total += subtotal;
                     productosValidos++;
                 }
             });
             
+            // Actualizar total en pantalla
             const totalElement = document.getElementById('totalAmount');
             if (totalElement) {
                 totalElement.textContent = `C$ ${total.toFixed(2)}`;
             }
             
+            // Actualizar campo oculto
+            const totalHidden = document.getElementById('totalCostoHidden');
+            if (totalHidden) {
+                totalHidden.value = total.toFixed(2);
+            }
+            
+            // Mostrar/ocultar alerta
             const alertElement = document.getElementById('productosAlert');
             if (alertElement) {
                 alertElement.style.display = productosValidos === 0 ? 'flex' : 'none';
             }
             
+            // Habilitar/deshabilitar botón de registro
             const btnRegistrar = document.getElementById('btnRegistrar');
             if (btnRegistrar) {
                 btnRegistrar.disabled = productosValidos === 0;
             }
+            
         } catch (e) {
-            console.error('Error al calcular total:', e);
+            console.error('❌ Error al calcular total:', e);
         }
     };
+
+    // ========== VALIDACIÓN DEL FORMULARIO ==========
+    function validarFormulario() {
+        // Validar campos básicos
+        const documento = document.getElementById('numero_documento');
+        const factura = document.getElementById('numero_factura');
+        const fecha = document.getElementById('fecha_compra');
+        const proveedor = document.getElementById('proveedor_id');
+        
+        if (!documento.value || !factura.value || !fecha.value || !proveedor.value) {
+            alert('❌ Complete todos los campos de información de compra');
+            return false;
+        }
+        
+        // Validar productos
+        const items = document.querySelectorAll('.producto-item');
+        let productosValidos = 0;
+        let errores = [];
+        
+        items.forEach(item => {
+            const productoSelect = item.querySelector('select[name="producto_id[]"]');
+            const cantidadInput = item.querySelector('input[name="cantidad[]"]');
+            const unidadSelect = item.querySelector('select[name="unidad_id[]"]');
+            const precioInput = item.querySelector('input[name="precio_unitario[]"]');
+            
+            if (!productoSelect.value) {
+                errores.push('Falta seleccionar un producto');
+                return;
+            }
+            
+            const cantidad = parseFloat(cantidadInput.value) || 0;
+            if (cantidad <= 0) {
+                errores.push('La cantidad debe ser mayor a 0');
+                return;
+            }
+            
+            if (!unidadSelect.value) {
+                errores.push('Falta seleccionar la unidad de compra');
+                return;
+            }
+            
+            const precio = parseFloat(precioInput.value) || 0;
+            if (precio <= 0) {
+                errores.push('El precio debe ser mayor a 0');
+                return;
+            }
+            
+            productosValidos++;
+        });
+        
+        if (productosValidos === 0) {
+            if (errores.length > 0) {
+                alert('❌ ' + errores[0]);
+            } else {
+                alert('❌ Debe agregar al menos un producto válido');
+            }
+            return false;
+        }
+        
+        return true;
+    }
 
     // ========== INICIALIZACIÓN ==========
     document.addEventListener('DOMContentLoaded', function() {
         const form = document.getElementById('formCompra');
         if (form) {
             form.addEventListener('submit', function(e) {
-                const productosValidos = document.querySelectorAll('.producto-item select:invalid').length === 0;
-                
-                if (!productosValidos) {
+                if (!validarFormulario()) {
                     e.preventDefault();
-                    alert('Debe seleccionar un producto para cada línea');
                 }
             });
         }
         
+        // Cerrar con tecla Escape
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
-                cerrarModalCompra();
+                const modal = document.getElementById('modalCompra');
+                if (modal && modal.style.display === 'block') {
+                    cerrarModalCompra();
+                }
             }
         });
         
+        // Cerrar al hacer clic fuera del modal
         const modal = document.getElementById('modalCompra');
         if (modal) {
             modal.addEventListener('click', function(e) {
@@ -867,19 +1129,4 @@
     });
 })();
 </script>
-
-<!-- Agregar la ruta para ver detalle de compra si no existe -->
-{% if not request.endpoint == 'ver_detalle_compra' %}
-<script>
-// Redirigir temporalmente si la ruta no existe
-document.querySelectorAll('a[href*="/compra/"]').forEach(link => {
-    link.addEventListener('click', function(e) {
-        e.preventDefault();
-        const compraId = this.href.split('/').pop();
-        window.location.href = `/compras?detalle=${compraId}`;
-    });
-});
-</script>
-{% endif %}
-
 {% endblock %}

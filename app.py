@@ -7,7 +7,7 @@ except ImportError:
 
 from decimal import Decimal
 import MySQLdb
-from flask import Flask, flash, json, render_template, request, jsonify, session, redirect, url_for
+from flask import Flask, flash, json, render_template, request, jsonify, send_from_directory, session, redirect, url_for
 from flask_mysqldb import MySQL
 from datetime import datetime, timedelta
 # CORREGIR EL IMPORT:
@@ -551,7 +551,16 @@ def productos():
     cursor.execute('SELECT id, nombre FROM categorias WHERE activo = TRUE ORDER BY nombre')
     categorias = cursor.fetchall()
     
-    cursor.execute('SELECT id, nombre, abreviatura FROM unidades_medida WHERE activo = TRUE ORDER BY nombre')
+    cursor.execute('''
+        SELECT id, nombre, abreviatura, 
+               CASE 
+                   WHEN abreviatura IN ('PST', 'TAB', 'CAP', 'ML', 'G', 'UND', 'UN') THEN 'base'
+                   ELSE 'derivada'
+               END as tipo
+        FROM unidades_medida 
+        WHERE activo = TRUE 
+        ORDER BY tipo, nombre
+    ''')
     unidades = cursor.fetchall()
     
     if request.method == 'POST':
@@ -574,120 +583,331 @@ def productos():
             if data.get('fecha_vencimiento'):
                 fecha_vencimiento = datetime.strptime(data['fecha_vencimiento'], '%Y-%m-%d').date()
             
-            # ===== PRODUCTO SIMPLE (como antes) =====
+            # ===== PRODUCTO SIMPLE =====
             if tipo_producto == 'simple':
+                # Validar campos requeridos con manejo correcto de valores vacíos
+                required_fields = ['unidad_base_id', 'precio_costo', 'precio_venta']
+                missing_fields = []
+                
+                for field in required_fields:
+                    value = data.get(field, '').strip()
+                    if not value:
+                        missing_fields.append(field)
+                
+                if missing_fields:
+                    flash(f'Campos requeridos faltantes: {", ".join(missing_fields)}', 'error')
+                    return redirect(url_for('productos'))
+                
+                # Validar que sean números positivos
+                try:
+                    precio_costo = float(data.get('precio_costo', 0))
+                    precio_venta = float(data.get('precio_venta', 0))
+                    
+                    if precio_costo <= 0:
+                        flash('El precio de costo debe ser mayor a 0', 'error')
+                        return redirect(url_for('productos'))
+                    
+                    if precio_venta <= 0:
+                        flash('El precio de venta debe ser mayor a 0', 'error')
+                        return redirect(url_for('productos'))
+                        
+                except ValueError:
+                    flash('Los precios deben ser números válidos', 'error')
+                    return redirect(url_for('productos'))
+                
+                # Verificar que la unidad base exista (sin restricción de abreviaturas)
+                cursor.execute('SELECT id FROM unidades_medida WHERE id = %s', (data.get('unidad_base_id'),))
+                if not cursor.fetchone():
+                    flash('La unidad base seleccionada no es válida', 'error')
+                    return redirect(url_for('productos'))
+                
+                # Insertar producto
                 cursor.execute('''
                     INSERT INTO productos (
                         codigo, nombre, descripcion, categoria_id, 
                         principio_activo, presentacion, tipo_producto, unidad_base_id,
                         precio_costo, porcentaje_ganancia, precio_venta, 
-                        stock_actual, stock_minimo, lote, fecha_vencimiento, activo
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+                        stock_actual, stock_minimo, lote, fecha_vencimiento, activo,
+                        fecha_creacion
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW())
                 ''', (
                     data['codigo'].strip(),
                     data['nombre'].strip(),
-                    data.get('descripcion', '').strip(),
-                    data.get('categoria_id'),
-                    data.get('principio_activo', '').strip(),
-                    data.get('presentacion', '').strip(),
+                    data.get('descripcion', '').strip() or None,
+                    data.get('categoria_id') or None,
+                    data.get('principio_activo', '').strip() or None,
+                    data.get('presentacion', '').strip() or None,
                     'simple',
                     data.get('unidad_base_id'),
                     float(data.get('precio_costo', 0)),
-                    float(data.get('porcentaje_ganancia', 30)),
+                    float(data.get('porcentaje_ganancia', 30)) if data.get('porcentaje_ganancia') else 30.00,
                     float(data.get('precio_venta', 0)),
-                    int(data.get('stock_actual', 0)),
-                    int(data.get('stock_minimo', 5)),
-                    data.get('lote', '').strip(),
+                    int(data.get('stock_actual', 0)) if data.get('stock_actual') else 0,
+                    int(data.get('stock_minimo', 5)) if data.get('stock_minimo') else 5,
+                    data.get('lote', '').strip() or None,
                     fecha_vencimiento
                 ))
                 
                 producto_id = cursor.lastrowid
                 
-                # Si tiene precio de venta para unidad base, crear variación simple
-                if data.get('precio_venta'):
-                    cursor.execute('''
-                        INSERT INTO variaciones_producto 
-                        (producto_id, unidad_id, cantidad_equivalente, precio_venta, descripcion)
-                        VALUES (%s, %s, 1, %s, 'Venta por unidad base')
-                    ''', (producto_id, data.get('unidad_base_id'), float(data.get('precio_venta', 0))))
+                # Crear variación para la unidad base
+                cursor.execute('''
+                    INSERT INTO variaciones_producto 
+                    (producto_id, unidad_id, cantidad_equivalente, precio_venta, 
+                     precio_costo_equivalente, porcentaje_ganancia, descripcion, 
+                     nivel, activo)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+                ''', (
+                    producto_id, 
+                    data.get('unidad_base_id'), 
+                    1,  # cantidad_equivalente
+                    float(data.get('precio_venta', 0)),
+                    float(data.get('precio_costo', 0)),
+                    float(data.get('porcentaje_ganancia', 30)) if data.get('porcentaje_ganancia') else 30.00,
+                    'Venta por unidad base',
+                    4  # nivel 4 para unidad base
+                ))
+                
+                # Si también se configuraron presentaciones adicionales
+                presentaciones_unidad = request.form.getlist('presentacion_unidad[]')
+                presentaciones_cantidad = request.form.getlist('presentacion_cantidad[]')
+                presentaciones_precio = request.form.getlist('presentacion_precio[]')
+                presentaciones_desc = request.form.getlist('presentacion_desc[]')
+                
+                for i in range(len(presentaciones_unidad)):
+                    if (presentaciones_unidad[i] and presentaciones_cantidad[i] and 
+                        presentaciones_precio[i]):
+                        
+                        try:
+                            cantidad = int(presentaciones_cantidad[i])
+                            if cantidad <= 0:
+                                continue
+                                
+                            precio = float(presentaciones_precio[i])
+                            unidad_id = int(presentaciones_unidad[i])
+                            
+                            # Verificar que la unidad exista
+                            cursor.execute('SELECT id FROM unidades_medida WHERE id = %s', (unidad_id,))
+                            if not cursor.fetchone():
+                                continue
+                            
+                            # Calcular costo equivalente
+                            costo_unitario_base = float(data.get('precio_costo', 0))
+                            costo_equivalente = costo_unitario_base * cantidad
+                            
+                            cursor.execute('''
+                                INSERT INTO variaciones_producto 
+                                (producto_id, unidad_id, cantidad_equivalente, precio_venta,
+                                 precio_costo_equivalente, porcentaje_ganancia, descripcion, 
+                                 nivel, activo)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+                            ''', (
+                                producto_id, unidad_id, cantidad, precio,
+                                costo_equivalente, 
+                                float(data.get('porcentaje_ganancia', 30)) if data.get('porcentaje_ganancia') else 30.00,
+                                presentaciones_desc[i] if presentaciones_desc and presentaciones_desc[i] else f'Presentación de {cantidad} unidades',
+                                3  # nivel inferior a la unidad base
+                            ))
+                        except (ValueError, TypeError) as e:
+                            print(f"Error en presentación {i}: {e}")
+                            continue
             
-            # ===== PRODUCTO JERÁRQUICO (caja → sobre → blister → pastilla) =====
+            # ===== PRODUCTO JERÁRQUICO =====
             else:  # tipo_producto == 'jerarquico'
-                # Validar que tenga todos los datos necesarios
-                required = ['costo_caja', 'sobres_por_caja', 'blister_por_sobre', 
-                           'pastillas_por_blister', 'porcentaje_ganancia']
-                for field in required:
-                    if not data.get(field):
-                        flash(f'El campo {field} es requerido para productos jerárquicos', 'error')
+                # Validar campos requeridos
+                required_fields = {
+                    'costo_caja': 'Costo de la caja',
+                    'sobres_por_caja': 'Cantidad de sobres por caja',
+                    'blister_por_sobre': 'Cantidad de blisteres por sobre',
+                    'pastillas_por_blister': 'Cantidad de pastillas por blister',
+                    'porcentaje_ganancia': 'Porcentaje de ganancia',
+                    'stock_inicial_cajas': 'Stock inicial en cajas'
+                }
+                
+                for field, label in required_fields.items():
+                    if not data.get(field) or float(data.get(field, 0)) <= 0:
+                        flash(f'El campo {label} debe ser mayor a 0', 'error')
                         return redirect(url_for('productos'))
                 
-                # Primero insertar producto base (unidad base = PASTILLA que es la más pequeña)
-                cursor.execute('SELECT id FROM unidades_medida WHERE abreviatura = %s', ('PST',))
-                pastilla_unidad = cursor.fetchone()
+                # Obtener IDs de unidades por abreviatura
+                cursor.execute('''
+                    SELECT 
+                        (SELECT id FROM unidades_medida WHERE abreviatura = 'PST') as pastilla_id,
+                        (SELECT id FROM unidades_medida WHERE abreviatura = 'BLI') as blister_id,
+                        (SELECT id FROM unidades_medida WHERE abreviatura = 'SBR') as sobre_id,
+                        (SELECT id FROM unidades_medida WHERE abreviatura = 'CJA') as caja_id
+                ''')
+                unidades_ids = cursor.fetchone()
                 
+                if not all(unidades_ids.values()):
+                    flash('Error: No están configuradas todas las unidades de medida necesarias', 'error')
+                    return redirect(url_for('productos'))
+                
+                # Calcular total de pastillas por caja
+                sobres_por_caja = int(data.get('sobres_por_caja', 0))
+                blister_por_sobre = int(data.get('blister_por_sobre', 0))
+                pastillas_por_blister = int(data.get('pastillas_por_blister', 0))
+                total_pastillas_por_caja = sobres_por_caja * blister_por_sobre * pastillas_por_blister
+                
+                # Convertir stock de cajas a pastillas (unidad base)
+                stock_en_cajas = int(data.get('stock_inicial_cajas', 0))
+                stock_en_pastillas = stock_en_cajas * total_pastillas_por_caja
+                
+                # Calcular costos unitarios
+                costo_caja = float(data.get('costo_caja', 0))
+                costo_por_pastilla = costo_caja / total_pastillas_por_caja
+                costo_por_blister = costo_por_pastilla * pastillas_por_blister
+                costo_por_sobre = costo_por_blister * blister_por_sobre
+                
+                porcentaje = float(data.get('porcentaje_ganancia', 30))
+                
+                # Calcular precios de venta
+                precio_pastilla = costo_por_pastilla * (1 + porcentaje/100)
+                precio_blister = costo_por_blister * (1 + porcentaje/100)
+                precio_sobre = costo_por_sobre * (1 + porcentaje/100)
+                precio_caja = costo_caja * (1 + porcentaje/100)
+                
+                # Insertar producto (unidad base = PASTILLA)
                 cursor.execute('''
                     INSERT INTO productos (
                         codigo, nombre, descripcion, categoria_id, 
                         principio_activo, presentacion, tipo_producto, unidad_base_id,
                         precio_costo, porcentaje_ganancia, precio_venta, 
-                        stock_actual, stock_minimo, lote, fecha_vencimiento, activo
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+                        stock_actual, stock_minimo, lote, fecha_vencimiento, activo,
+                        fecha_creacion
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW())
                 ''', (
                     data['codigo'].strip(),
                     data['nombre'].strip(),
-                    data.get('descripcion', '').strip(),
-                    data.get('categoria_id'),
-                    data.get('principio_activo', '').strip(),
-                    data.get('presentacion', '').strip(),
+                    data.get('descripcion', '').strip() or None,
+                    data.get('categoria_id') or None,
+                    data.get('principio_activo', '').strip() or None,
+                    data.get('presentacion', '').strip() or None,
                     'jerarquico',
-                    pastilla_unidad['id'],  # Unidad base = Pastilla
-                    float(data.get('costo_caja', 0)),  # Guardamos el costo de la caja
-                    float(data.get('porcentaje_ganancia', 30)),
-                    0,  # Precio venta se calculará después
-                    int(data.get('stock_actual', 0)),  # Stock en CAJAS
-                    int(data.get('stock_minimo', 5)),
-                    data.get('lote', '').strip(),
+                    unidades_ids['pastilla_id'],
+                    costo_por_pastilla,
+                    porcentaje,
+                    precio_pastilla,
+                    stock_en_pastillas,
+                    int(data.get('stock_minimo', 5)) * total_pastillas_por_caja,
+                    data.get('lote', '').strip() or None,
                     fecha_vencimiento
                 ))
                 
                 producto_id = cursor.lastrowid
                 
-                # Llamar al procedimiento almacenado para calcular todos los precios
-                cursor.callproc('calcular_precios_jerarquicos', [
-                    producto_id,
-                    float(data.get('costo_caja', 0)),
-                    int(data.get('sobres_por_caja', 0)),
-                    int(data.get('blister_por_sobre', 0)),
-                    int(data.get('pastillas_por_blister', 0)),
-                    float(data.get('porcentaje_ganancia', 30))
-                ])
+                # Insertar todas las variaciones (presentaciones)
+                # Nivel 4: Pastilla (unidad base)
+                cursor.execute('''
+                    INSERT INTO variaciones_producto 
+                    (producto_id, unidad_id, nivel, cantidad_equivalente, 
+                     precio_costo_equivalente, porcentaje_ganancia, precio_venta, 
+                     descripcion, activo)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+                ''', (
+                    producto_id, unidades_ids['pastilla_id'], 4, 1,
+                    costo_por_pastilla, porcentaje, precio_pastilla,
+                    'Unidad base - Pastilla'
+                ))
+                
+                # Nivel 3: Blister
+                cursor.execute('''
+                    INSERT INTO variaciones_producto 
+                    (producto_id, unidad_id, nivel, cantidad_equivalente,
+                     precio_costo_equivalente, porcentaje_ganancia, precio_venta,
+                     descripcion, activo)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+                ''', (
+                    producto_id, unidades_ids['blister_id'], 3,
+                    pastillas_por_blister, costo_por_blister, porcentaje, precio_blister,
+                    f'Blister de {pastillas_por_blister} pastillas'
+                ))
+                
+                # Nivel 2: Sobre
+                cursor.execute('''
+                    INSERT INTO variaciones_producto 
+                    (producto_id, unidad_id, nivel, cantidad_equivalente,
+                     precio_costo_equivalente, porcentaje_ganancia, precio_venta,
+                     descripcion, activo)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+                ''', (
+                    producto_id, unidades_ids['sobre_id'], 2,
+                    pastillas_por_blister * blister_por_sobre, 
+                    costo_por_sobre, porcentaje, precio_sobre,
+                    f'Sobre de {blister_por_sobre} blisteres'
+                ))
+                
+                # Nivel 1: Caja
+                cursor.execute('''
+                    INSERT INTO variaciones_producto 
+                    (producto_id, unidad_id, nivel, cantidad_equivalente,
+                     precio_costo_equivalente, porcentaje_ganancia, precio_venta,
+                     descripcion, activo)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+                ''', (
+                    producto_id, unidades_ids['caja_id'], 1,
+                    total_pastillas_por_caja, costo_caja, porcentaje, precio_caja,
+                    f'Caja de {sobres_por_caja} sobres'
+                ))
             
             mysql.connection.commit()
-            flash('Producto creado exitosamente', 'success')
+            flash('✅ Producto creado exitosamente', 'success')
             
         except Exception as e:
             mysql.connection.rollback()
-            flash(f'Error al crear producto: {str(e)}', 'error')
-            print(f"Error: {str(e)}")  # Para debugging
+            flash(f'❌ Error al crear producto: {str(e)}', 'error')
+            print(f"Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
         finally:
             cursor.close()
         
         return redirect(url_for('productos'))
     
-    # Método GET - Mostrar lista (modificada para incluir tipo_producto)
+    # Método GET - Mostrar lista
     buscar = request.args.get('buscar', '')
     categoria = request.args.get('categoria', '')
     tipo = request.args.get('tipo', '')
     mostrar_inactivos = request.args.get('mostrar_inactivos', '0') == '1'
     
     query = '''
-        SELECT p.*, c.nombre as categoria_nombre, u.nombre as unidad_nombre, u.abreviatura,
-               CASE 
-                   WHEN p.stock_actual <= p.stock_minimo THEN 'bajo'
-                   WHEN p.fecha_vencimiento IS NOT NULL AND p.fecha_vencimiento <= DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN 'vencimiento'
-                   ELSE 'normal'
-               END as estado_stock,
-               (SELECT COUNT(*) FROM variaciones_producto WHERE producto_id = p.id) as total_variaciones
+        SELECT 
+            p.*, 
+            c.nombre as categoria_nombre, 
+            u.nombre as unidad_nombre, 
+            u.abreviatura,
+            -- Estado del stock
+            CASE 
+                WHEN p.stock_actual <= p.stock_minimo THEN 'bajo'
+                WHEN p.fecha_vencimiento IS NOT NULL AND p.fecha_vencimiento <= DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN 'vencimiento'
+                ELSE 'normal'
+            END as estado_stock,
+            -- Total de variaciones
+            (SELECT COUNT(*) FROM variaciones_producto WHERE producto_id = p.id) as total_variaciones,
+            -- Stock formateado según el tipo de producto
+            CASE 
+                WHEN p.tipo_producto = 'jerarquico' THEN
+                    CONCAT(
+                        FLOOR(p.stock_actual / NULLIF((
+                            SELECT cantidad_equivalente 
+                            FROM variaciones_producto 
+                            WHERE producto_id = p.id AND nivel = 1
+                            LIMIT 1
+                        ), 0)), ' cajas (', p.stock_actual, ' pastillas)'
+                    )
+                ELSE
+                    CONCAT(p.stock_actual, ' ', u.abreviatura)
+            END as stock_formateado,
+            -- Precios por presentación (para mostrar en tooltip)
+            (
+                SELECT GROUP_CONCAT(
+                    CONCAT(u2.abreviatura, ': C$', v.precio_venta)
+                    SEPARATOR ' | '
+                )
+                FROM variaciones_producto v
+                JOIN unidades_medida u2 ON v.unidad_id = u2.id
+                WHERE v.producto_id = p.id AND v.activo = TRUE
+            ) as precios_presentaciones
         FROM productos p
         LEFT JOIN categorias c ON p.categoria_id = c.id
         LEFT JOIN unidades_medida u ON p.unidad_base_id = u.id
@@ -714,6 +934,7 @@ def productos():
     
     cursor.execute(query, params)
     productos_lista = cursor.fetchall()
+    now = datetime.now().date()
     cursor.close()
     
     return render_template('admin/productos.html',
@@ -723,12 +944,13 @@ def productos():
                          buscar=buscar,
                          categoria_seleccionada=categoria,
                          tipo_seleccionado=tipo,
-                         mostrar_inactivos=mostrar_inactivos)
+                         mostrar_inactivos=mostrar_inactivos,
+                         now=now)
 
 @app.route('/productos/<int:producto_id>/editar', methods=['POST'])
 @admin_required
 def editar_producto(producto_id):
-    """Maneja la edición de productos desde modal"""
+    """Maneja la edición de productos desde modal (MEJORADO)"""
     cursor = mysql.connection.cursor(DictCursor)
     
     try:
@@ -746,83 +968,110 @@ def editar_producto(producto_id):
         if data.get('fecha_vencimiento'):
             fecha_vencimiento = datetime.strptime(data['fecha_vencimiento'], '%Y-%m-%d').date()
         
-        # Si es producto jerárquico y se actualiza el costo
-        if producto['tipo_producto'] == 'jerarquico' and data.get('costo_caja'):
-            # Actualizar solo datos básicos primero
+        # ===== PRODUCTO JERÁRQUICO =====
+        if producto['tipo_producto'] == 'jerarquico':
+            # Obtener la estructura actual
             cursor.execute('''
-                UPDATE productos SET
-                    codigo = %s,
-                    nombre = %s,
-                    descripcion = %s,
-                    categoria_id = %s,
-                    principio_activo = %s,
-                    presentacion = %s,
-                    precio_costo = %s,
-                    porcentaje_ganancia = %s,
-                    stock_actual = %s,
-                    stock_minimo = %s,
-                    lote = %s,
-                    fecha_vencimiento = %s,
-                    activo = %s
-                WHERE id = %s
-            ''', (
-                data['codigo'].strip(),
-                data['nombre'].strip(),
-                data.get('descripcion', '').strip(),
-                data.get('categoria_id'),
-                data.get('principio_activo', '').strip(),
-                data.get('presentacion', '').strip(),
-                float(data.get('costo_caja', producto['precio_costo'])),
-                float(data.get('porcentaje_ganancia', producto['porcentaje_ganancia'])),
-                int(data.get('stock_actual', producto['stock_actual'])),
-                int(data.get('stock_minimo', 5)),
-                data.get('lote', '').strip(),
-                fecha_vencimiento,
-                data.get('activo') == 'on',
-                producto_id
-            ))
-            
-            # Recalcular todos los precios con los nuevos valores
-            cursor.execute('''
-                SELECT * FROM variaciones_producto 
-                WHERE producto_id = %s AND nivel = 1
+                SELECT 
+                    MAX(CASE WHEN nivel = 1 THEN cantidad_equivalente END) as pastillas_por_caja,
+                    MAX(CASE WHEN nivel = 2 THEN cantidad_por_padre END) as sobres_por_caja,
+                    MAX(CASE WHEN nivel = 3 THEN cantidad_por_padre END) as blister_por_sobre,
+                    MAX(CASE WHEN nivel = 4 THEN cantidad_por_padre END) as pastillas_por_blister
+                FROM variaciones_producto
+                WHERE producto_id = %s
             ''', (producto_id,))
-            caja = cursor.fetchone()
+            estructura = cursor.fetchone()
             
-            if caja:
-                # Obtener la estructura
-                cursor.execute('''
-                    SELECT cantidad_por_padre as sobres_por_caja 
-                    FROM variaciones_producto 
-                    WHERE producto_id = %s AND nivel = 2
-                ''', (producto_id,))
-                sobre = cursor.fetchone()
+            # Si se actualiza el costo de la caja
+            if data.get('costo_caja'):
+                nuevo_costo_caja = float(data.get('costo_caja'))
+                porcentaje = float(data.get('porcentaje_ganancia', producto['porcentaje_ganancia']))
                 
-                cursor.execute('''
-                    SELECT cantidad_por_padre as blister_por_sobre 
-                    FROM variaciones_producto 
-                    WHERE producto_id = %s AND nivel = 3
-                ''', (producto_id,))
-                blister = cursor.fetchone()
+                # Recalcular todo
+                total_pastillas = estructura['pastillas_por_caja']
+                costo_por_pastilla = nuevo_costo_caja / total_pastillas
                 
+                # Actualizar producto
                 cursor.execute('''
-                    SELECT cantidad_por_padre as pastillas_por_blister 
-                    FROM variaciones_producto 
-                    WHERE producto_id = %s AND nivel = 4
-                ''', (producto_id,))
-                pastilla = cursor.fetchone()
+                    UPDATE productos SET
+                        codigo = %s,
+                        nombre = %s,
+                        descripcion = %s,
+                        categoria_id = %s,
+                        principio_activo = %s,
+                        presentacion = %s,
+                        precio_costo = %s,
+                        porcentaje_ganancia = %s,
+                        precio_venta = %s,
+                        stock_actual = %s,
+                        stock_minimo = %s,
+                        lote = %s,
+                        fecha_vencimiento = %s,
+                        activo = %s
+                    WHERE id = %s
+                ''', (
+                    data['codigo'].strip(),
+                    data['nombre'].strip(),
+                    data.get('descripcion', '').strip(),
+                    data.get('categoria_id'),
+                    data.get('principio_activo', '').strip(),
+                    data.get('presentacion', '').strip(),
+                    costo_por_pastilla,
+                    porcentaje,
+                    costo_por_pastilla * (1 + porcentaje/100),
+                    int(data.get('stock_actual', producto['stock_actual'])),
+                    int(data.get('stock_minimo', 5)),
+                    data.get('lote', '').strip(),
+                    fecha_vencimiento,
+                    data.get('activo') == 'on',
+                    producto_id
+                ))
                 
-                # Recalcular
-                cursor.callproc('calcular_precios_jerarquicos', [
-                    producto_id,
-                    float(data.get('costo_caja', producto['precio_costo'])),
-                    sobre['sobres_por_caja'] if sobre else 0,
-                    blister['blister_por_sobre'] if blister else 0,
-                    pastilla['pastillas_por_blister'] if pastilla else 0,
-                    float(data.get('porcentaje_ganancia', producto['porcentaje_ganancia']))
-                ])
+                # Actualizar todas las variaciones
+                cursor.execute('''
+                    UPDATE variaciones_producto 
+                    SET precio_costo_equivalente = %s * cantidad_equivalente,
+                        precio_venta = %s * cantidad_equivalente * (1 + %s/100),
+                        porcentaje_ganancia = %s
+                    WHERE producto_id = %s
+                ''', (
+                    costo_por_pastilla, costo_por_pastilla, porcentaje,
+                    porcentaje, producto_id
+                ))
+            else:
+                # Actualizar solo datos básicos
+                cursor.execute('''
+                    UPDATE productos SET
+                        codigo = %s,
+                        nombre = %s,
+                        descripcion = %s,
+                        categoria_id = %s,
+                        principio_activo = %s,
+                        presentacion = %s,
+                        stock_actual = %s,
+                        stock_minimo = %s,
+                        lote = %s,
+                        fecha_vencimiento = %s,
+                        activo = %s
+                    WHERE id = %s
+                ''', (
+                    data['codigo'].strip(),
+                    data['nombre'].strip(),
+                    data.get('descripcion', '').strip(),
+                    data.get('categoria_id'),
+                    data.get('principio_activo', '').strip(),
+                    data.get('presentacion', '').strip(),
+                    int(data.get('stock_actual', producto['stock_actual'])),
+                    int(data.get('stock_minimo', 5)),
+                    data.get('lote', '').strip(),
+                    fecha_vencimiento,
+                    data.get('activo') == 'on',
+                    producto_id
+                ))
+        
+        # ===== PRODUCTO SIMPLE =====
         else:
-            # Producto simple - actualización normal
+            # Actualizar producto
             cursor.execute('''
                 UPDATE productos SET
                     codigo = %s,
@@ -859,20 +1108,35 @@ def editar_producto(producto_id):
                 data.get('activo') == 'on',
                 producto_id
             ))
+            
+            # Actualizar variación base si existe
+            cursor.execute('''
+                UPDATE variaciones_producto 
+                SET precio_venta = %s,
+                    precio_costo_equivalente = %s,
+                    porcentaje_ganancia = %s
+                WHERE producto_id = %s AND cantidad_equivalente = 1
+            ''', (
+                float(data.get('precio_venta', 0)),
+                float(data.get('precio_costo', 0)),
+                float(data.get('porcentaje_ganancia', 30)),
+                producto_id
+            ))
         
         mysql.connection.commit()
-        flash('Producto actualizado exitosamente', 'success')
+        flash('✅ Producto actualizado exitosamente', 'success')
         
     except Exception as e:
         mysql.connection.rollback()
-        flash(f'Error al actualizar producto: {str(e)}', 'error')
-        print(f"Error: {str(e)}")  # Para debugging
+        flash(f'❌ Error al actualizar producto: {str(e)}', 'error')
+        print(f"Error: {str(e)}")
     finally:
         cursor.close()
     
     return redirect(url_for('productos'))
 
-# ===== NUEVAS RUTAS PARA CONSULTAR VARIACIONES =====
+
+# ===== RUTAS PARA CONSULTAR VARIACIONES (MEJORADAS) =====
 
 @app.route('/productos/<int:producto_id>/variaciones', methods=['GET'])
 @admin_required
@@ -889,21 +1153,26 @@ def obtener_variaciones_producto(producto_id):
             u.abreviatura,
             v.cantidad_equivalente,
             v.precio_venta,
+            v.precio_costo_equivalente,
             v.descripcion,
             v.nivel,
             p.nombre as producto_nombre,
-            p.tipo_producto
+            p.tipo_producto,
+            p.stock_actual as stock_base,
+            -- Stock disponible en esta presentación
+            FLOOR(p.stock_actual / v.cantidad_equivalente) as stock_disponible
         FROM variaciones_producto v
         JOIN unidades_medida u ON v.unidad_id = u.id
         JOIN productos p ON v.producto_id = p.id
         WHERE v.producto_id = %s AND v.activo = TRUE
-        ORDER BY v.nivel, v.precio_venta
+        ORDER BY v.cantidad_equivalente ASC
     ''', (producto_id,))
     
     variaciones = cursor.fetchall()
     cursor.close()
     
     return jsonify(variaciones)
+
 
 @app.route('/productos/<int:producto_id>/precios-detalle', methods=['GET'])
 @admin_required
@@ -924,14 +1193,16 @@ def detalle_precios_producto(producto_id):
             v.precio_costo_equivalente as costo_unitario,
             v.precio_venta,
             v.precio_venta - v.precio_costo_equivalente as ganancia,
-            ROUND(((v.precio_venta - v.precio_costo_equivalente) / v.precio_costo_equivalente * 100), 2) as margen,
+            ROUND(((v.precio_venta - v.precio_costo_equivalente) / NULLIF(v.precio_costo_equivalente, 0) * 100), 2) as margen,
             v.descripcion,
-            v.nivel
+            v.nivel,
+            -- Stock en esta presentación
+            FLOOR(p.stock_actual / v.cantidad_equivalente) as stock_presentacion
         FROM productos p
         LEFT JOIN variaciones_producto v ON p.id = v.producto_id
         LEFT JOIN unidades_medida u ON v.unidad_id = u.id
-        WHERE p.id = %s
-        ORDER BY v.nivel
+        WHERE p.id = %s AND (v.activo = TRUE OR v.activo IS NULL)
+        ORDER BY v.cantidad_equivalente ASC
     ''', (producto_id,))
     
     precios = cursor.fetchall()
@@ -940,9 +1211,85 @@ def detalle_precios_producto(producto_id):
     return render_template('admin/detalle_precios.html', precios=precios, producto_id=producto_id)
 
 
+# ===== NUEVA RUTA: Obtener unidades para presentaciones =====
+@app.route('/unidades/presentaciones', methods=['GET'])
+@admin_required
+def obtener_unidades_presentacion():
+    """Obtiene las unidades disponibles para presentaciones (excluye bases)"""
+    cursor = mysql.connection.cursor(DictCursor)
+    
+    cursor.execute('''
+        SELECT id, nombre, abreviatura 
+        FROM unidades_medida 
+        WHERE activo = TRUE 
+        AND abreviatura NOT IN ('PST', 'TAB', 'CAP', 'ML', 'G')
+        ORDER BY nombre
+    ''')
+    
+    unidades = cursor.fetchall()
+    cursor.close()
+    
+    return jsonify(unidades)
+
+
+# ===== NUEVA RUTA: Agregar presentación a producto existente =====
+@app.route('/productos/<int:producto_id>/agregar-presentacion', methods=['POST'])
+@admin_required
+def agregar_presentacion_producto(producto_id):
+    """Agrega una nueva presentación a un producto existente"""
+    cursor = mysql.connection.cursor(DictCursor)
+    
+    try:
+        data = request.json
+        
+        unidad_id = data.get('unidad_id')
+        cantidad = int(data.get('cantidad', 0))
+        precio_venta = float(data.get('precio_venta', 0))
+        descripcion = data.get('descripcion', '')
+        
+        if not all([unidad_id, cantidad > 0, precio_venta > 0]):
+            return jsonify({'success': False, 'error': 'Datos incompletos'})
+        
+        # Verificar que no exista ya esta presentación
+        cursor.execute('''
+            SELECT id FROM variaciones_producto 
+            WHERE producto_id = %s AND unidad_id = %s
+        ''', (producto_id, unidad_id))
+        
+        if cursor.fetchone():
+            return jsonify({'success': False, 'error': 'Esta presentación ya existe'})
+        
+        # Obtener costo base del producto
+        cursor.execute('SELECT precio_costo FROM productos WHERE id = %s', (producto_id,))
+        producto = cursor.fetchone()
+        
+        if not producto:
+            return jsonify({'success': False, 'error': 'Producto no encontrado'})
+        
+        costo_equivalente = producto['precio_costo'] * cantidad
+        
+        # Insertar nueva presentación
+        cursor.execute('''
+            INSERT INTO variaciones_producto 
+            (producto_id, unidad_id, cantidad_equivalente, precio_venta,
+             precio_costo_equivalente, descripcion, activo)
+            VALUES (%s, %s, %s, %s, %s, %s, TRUE)
+        ''', (producto_id, unidad_id, cantidad, precio_venta, 
+              costo_equivalente, descripcion))
+        
+        mysql.connection.commit()
+        return jsonify({'success': True, 'message': 'Presentación agregada'})
+        
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({'success': False, 'error': str(e)})
+    finally:
+        cursor.close()
+
 # ========================
 # GESTIÓN DE COMPRAS
 # ========================
+
 @app.route('/compras')
 @admin_required
 def compras():
@@ -952,8 +1299,28 @@ def compras():
     cursor.execute('SELECT id, nombre FROM proveedores WHERE activo = 1 ORDER BY nombre')
     proveedores = cursor.fetchall()
     
-    cursor.execute('SELECT id, nombre, precio_costo, stock_actual FROM productos WHERE activo = 1 ORDER BY nombre')
+    # Cargar productos con sus presentaciones
+    cursor.execute('''
+        SELECT 
+            p.id, 
+            p.nombre,
+            p.codigo,
+            p.precio_costo,
+            p.stock_actual,
+            u.abreviatura as unidad_base,
+            COUNT(v.id) as num_presentaciones
+        FROM productos p
+        JOIN unidades_medida u ON p.unidad_base_id = u.id
+        LEFT JOIN variaciones_producto v ON p.id = v.producto_id
+        WHERE p.activo = 1
+        GROUP BY p.id
+        ORDER BY p.nombre
+    ''')
     productos = cursor.fetchall()
+    
+    # También cargar unidades de medida para el selector
+    cursor.execute('SELECT id, nombre, abreviatura FROM unidades_medida WHERE activo = 1')
+    unidades = cursor.fetchall()
     
     # Cargar compras para la tabla
     cursor.execute('''
@@ -970,6 +1337,7 @@ def compras():
     return render_template('admin/compras.html', 
                          proveedores=proveedores,
                          productos=productos,
+                         unidades=unidades,
                          compras=compras_lista,
                          today=datetime.now().strftime('%Y-%m-%d'))
 
@@ -990,9 +1358,10 @@ def registrar_compra():
         
         cursor = mysql.connection.cursor(DictCursor)
         
-        # Calcular total basado en los detalles
+        # Obtener arrays del formulario
         producto_ids = request.form.getlist('producto_id[]')
         cantidades = request.form.getlist('cantidad[]')
+        unidad_ids = request.form.getlist('unidad_id[]')  # ¡NUEVO! Unidad en que se compra
         precios = request.form.getlist('precio_unitario[]')
         
         total_costo = 0
@@ -1000,22 +1369,50 @@ def registrar_compra():
         
         # Procesar y validar detalles
         for i in range(len(producto_ids)):
-            if producto_ids[i] and cantidades[i] and precios[i]:
+            if producto_ids[i] and cantidades[i] and unidad_ids[i] and precios[i]:
                 try:
                     cantidad = int(cantidades[i])
+                    unidad_id = int(unidad_ids[i])
                     precio = float(precios[i])
                     
                     if cantidad > 0 and precio > 0:
                         subtotal = cantidad * precio
                         total_costo += subtotal
                         
+                        # Buscar la equivalencia de esta unidad en el producto
+                        cursor.execute('''
+                            SELECT cantidad_equivalente 
+                            FROM variaciones_producto 
+                            WHERE producto_id = %s AND unidad_id = %s AND activo = 1
+                        ''', (producto_ids[i], unidad_id))
+                        
+                        equivalencia = cursor.fetchone()
+                        
+                        if equivalencia:
+                            # Si existe la presentación, calcular unidades base
+                            unidades_base_por_unidad = equivalencia['cantidad_equivalente']
+                        else:
+                            # Si no existe, asumir que es la unidad base (1:1)
+                            # Pero deberías crearla automáticamente
+                            cursor.execute('''
+                                INSERT INTO variaciones_producto 
+                                (producto_id, unidad_id, cantidad_equivalente, activo)
+                                VALUES (%s, %s, 1, 1)
+                            ''', (producto_ids[i], unidad_id))
+                            unidades_base_por_unidad = 1
+                        
+                        unidades_base_recibidas = cantidad * unidades_base_por_unidad
+                        
                         detalles_validos.append({
                             'producto_id': producto_ids[i],
                             'cantidad': cantidad,
+                            'unidad_id': unidad_id,
                             'precio': precio,
-                            'subtotal': subtotal
+                            'subtotal': subtotal,
+                            'unidades_base_recibidas': unidades_base_recibidas
                         })
-                except (ValueError, TypeError):
+                except (ValueError, TypeError) as e:
+                    print(f"Error en detalle {i}: {e}")
                     continue
         
         if not detalles_validos:
@@ -1041,34 +1438,41 @@ def registrar_compra():
         
         # Insertar detalles y actualizar stock
         for detalle in detalles_validos:
-            # Insertar detalle de compra
+            # Insertar detalle de compra (AHORA CON LA UNIDAD CORRECTA)
             cursor.execute('''
-                INSERT INTO detalles_compra (compra_id, producto_id, cantidad, 
-                                            unidad_id, precio_unitario, subtotal)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO detalles_compra (
+                    compra_id, producto_id, cantidad, 
+                    unidad_id, precio_unitario, subtotal
+                ) VALUES (%s, %s, %s, %s, %s, %s)
             ''', (
                 compra_id,
                 detalle['producto_id'],
                 detalle['cantidad'],
-                1,  # unidad_id por defecto
+                detalle['unidad_id'],  # ¡YA NO ES 1 FIJO!
                 detalle['precio'],
                 detalle['subtotal']
             ))
             
-            # Obtener stock actual
+            # Obtener stock actual (en unidad base)
             cursor.execute('SELECT stock_actual FROM productos WHERE id = %s', (detalle['producto_id'],))
             result = cursor.fetchone()
             
             if result:
                 stock_anterior = result['stock_actual']
-                stock_nuevo = stock_anterior + detalle['cantidad']
+                # Actualizar stock con las unidades base recibidas
+                stock_nuevo = stock_anterior + detalle['unidades_base_recibidas']
                 
                 # Actualizar stock
                 cursor.execute('''
                     UPDATE productos 
-                    SET stock_actual = %s 
+                    SET stock_actual = %s,
+                        precio_costo = %s  -- Actualizar costo promedio
                     WHERE id = %s
-                ''', (stock_nuevo, detalle['producto_id']))
+                ''', (
+                    stock_nuevo,
+                    detalle['precio'] / detalle['unidades_base_recibidas'],  # Costo por unidad base
+                    detalle['producto_id']
+                ))
                 
                 # Registrar movimiento
                 cursor.execute('''
@@ -1080,12 +1484,12 @@ def registrar_compra():
                     ) VALUES (%s, 'entrada', %s, %s, %s, 'compra', %s, %s, %s)
                 ''', (
                     detalle['producto_id'],
-                    detalle['cantidad'],
+                    detalle['unidades_base_recibidas'],  # Cantidad en unidad base
                     stock_anterior,
                     stock_nuevo,
                     compra_id,
                     session['usuario_id'],
-                    f"Compra #{numero_documento}"
+                    f"Compra #{numero_documento} - {detalle['cantidad']} unidades"
                 ))
         
         mysql.connection.commit()
@@ -1097,9 +1501,9 @@ def registrar_compra():
     except Exception as e:
         mysql.connection.rollback()
         flash(f'❌ Error al registrar la compra: {str(e)}', 'danger')
+        print(f"Error en compra: {str(e)}")  # Para debug
         return redirect(url_for('compras'))
 
-@app.route('/compras/<int:compra_id>/detalle')
 @app.route('/compras/<int:compra_id>/detalle')
 @admin_required
 def detalle_compra(compra_id):
@@ -1128,26 +1532,38 @@ def detalle_compra(compra_id):
             flash('Compra no encontrada', 'danger')
             return redirect(url_for('compras'))
         
-        # Obtener detalles de la compra con unidades_medida
+        # Obtener detalles de la compra con información completa
         cursor.execute('''
             SELECT 
                 dc.*,
                 pr.codigo as producto_codigo,
                 pr.nombre as producto_nombre,
                 pr.descripcion as producto_descripcion,
+                pr.unidad_base_id,
+                ub.nombre as unidad_base_nombre,
+                ub.abreviatura as unidad_base_abrev,
                 um.nombre as unidad_nombre,
-                um.abreviatura as unidad_abreviatura
+                um.abreviatura as unidad_abreviatura,
+                v.cantidad_equivalente
             FROM detalles_compra dc
             JOIN productos pr ON dc.producto_id = pr.id
+            LEFT JOIN unidades_medida ub ON pr.unidad_base_id = ub.id
             LEFT JOIN unidades_medida um ON dc.unidad_id = um.id
+            LEFT JOIN variaciones_producto v ON v.producto_id = pr.id AND v.unidad_id = dc.unidad_id
             WHERE dc.compra_id = %s
             ORDER BY dc.id ASC
         ''', (compra_id,))
         
         detalles = cursor.fetchall()
         
-        # Calcular subtotal (suma de todos los subtotales)
+        # Calcular estadísticas
         subtotal = sum(detalle['subtotal'] for detalle in detalles)
+        
+        # Calcular total de unidades base recibidas
+        total_unidades_base = 0
+        for detalle in detalles:
+            if detalle['cantidad_equivalente']:
+                total_unidades_base += detalle['cantidad'] * detalle['cantidad_equivalente']
         
         cursor.close()
         
@@ -1155,12 +1571,65 @@ def detalle_compra(compra_id):
                              compra=compra,
                              detalles=detalles,
                              subtotal=subtotal,
+                             total_unidades_base=total_unidades_base,
                              now=datetime.now())
                              
     except Exception as e:
         cursor.close()
         flash(f'Error al cargar el detalle: {str(e)}', 'danger')
         return redirect(url_for('compras'))
+
+# NUEVA RUTA: Obtener presentaciones de un producto
+@app.route('/productos/<int:producto_id>/presentaciones')
+@admin_required
+def obtener_presentaciones_producto(producto_id):
+    """Devuelve las presentaciones disponibles para un producto"""
+    cursor = mysql.connection.cursor(DictCursor)
+    
+    # Obtener todas las unidades de medida disponibles
+    cursor.execute('SELECT id, nombre, abreviatura FROM unidades_medida ORDER BY nombre')
+    todas_unidades = cursor.fetchall()
+    
+    # Obtener las variaciones del producto
+    cursor.execute('''
+        SELECT 
+            v.id,
+            v.unidad_id,
+            u.nombre as unidad_nombre,
+            u.abreviatura,
+            v.cantidad_equivalente,
+            v.descripcion,
+            p.unidad_base_id
+        FROM variaciones_producto v
+        JOIN unidades_medida u ON v.unidad_id = u.id
+        JOIN productos p ON v.producto_id = p.id
+        WHERE v.producto_id = %s AND v.activo = 1
+        ORDER BY v.cantidad_equivalente ASC
+    ''', (producto_id,))
+    
+    presentaciones = cursor.fetchall()
+    
+    # Si no hay presentaciones configuradas, devolver todas las unidades
+    # para que el usuario pueda seleccionar (esto ayuda a configurar)
+    if not presentaciones:
+        cursor.execute('SELECT unidad_base_id FROM productos WHERE id = %s', (producto_id,))
+        producto = cursor.fetchone()
+        
+        # Crear presentaciones por defecto con las unidades más comunes
+        presentaciones = []
+        for unidad in todas_unidades[:5]:  # Solo las primeras 5 como ejemplo
+            presentaciones.append({
+                'id': None,
+                'unidad_id': unidad['id'],
+                'unidad_nombre': unidad['nombre'],
+                'abreviatura': unidad['abreviatura'],
+                'cantidad_equivalente': 1,
+                'descripcion': f'Compra en {unidad["nombre"]}',
+                'unidad_base_id': producto['unidad_base_id'] if producto else None
+            })
+    
+    cursor.close()
+    return jsonify(presentaciones)
 
 # ========================
 # GESTIÓN DE PROVEEDORES
@@ -3738,6 +4207,10 @@ def toggle_estado_usuario():
 @app.route('/favicon.ico')
 def favicon():
     return '', 204
+
+@app.route('/manifest.json')
+def manifest():
+    return send_from_directory('static', 'manifest.json')
 
 # Manejo de errores
 @app.errorhandler(404)

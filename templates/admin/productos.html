@@ -5,31 +5,55 @@
 {% block content %}
 <div class="page-header">
     <h1>💊 Gestión de Productos</h1>
-    <button class="btn btn-primary" data-toggle="modal" data-target="#modalProducto">+ Nuevo Producto</button>
-    <a href="{{ url_for('productos', mostrar_inactivos=1) }}" class="btn btn-secondary">Ver Inactivos</a>
+    <div class="header-actions">
+        <button class="btn btn-primary" onclick="abrirModalNuevoProducto()">
+            <i class="fas fa-plus"></i> Nuevo Producto
+        </button>
+        <a href="{{ url_for('productos', mostrar_inactivos=1) if not mostrar_inactivos else url_for('productos') }}" class="btn btn-secondary">
+            <i class="fas fa-eye-slash"></i> {{ 'Ver Activos' if mostrar_inactivos else 'Ver Inactivos' }}
+        </a>
+    </div>
 </div>
 
 <!-- Filtros -->
 <div class="filters-bar">
     <form method="GET" action="{{ url_for('productos') }}" class="filter-form">
-        <input type="text" name="buscar" placeholder="Buscar producto..." 
-               value="{{ buscar }}" class="input-search">
-        <select name="categoria" class="input-select">
-            <option value="">Todas las categorías</option>
-            {% for categoria in categorias %}
-                <option value="{{ categoria.id }}" 
-                    {% if categoria.id|string == categoria_seleccionada %}selected{% endif %}>
-                    {{ categoria.nombre }}
-                </option>
-            {% endfor %}
-        </select>
-        <select name="tipo" class="input-select">
-            <option value="">Todos los tipos</option>
-            <option value="simple" {% if tipo_seleccionado == 'simple' %}selected{% endif %}>Producto Simple</option>
-            <option value="jerarquico" {% if tipo_seleccionado == 'jerarquico' %}selected{% endif %}>Producto Jerárquico</option>
-        </select>
-        <button type="submit" class="btn btn-primary">Filtrar</button>
-        <a href="{{ url_for('productos') }}" class="btn btn-secondary">Limpiar</a>
+        <div class="filter-group">
+            <i class="fas fa-search"></i>
+            <input type="text" name="buscar" placeholder="Buscar por código, nombre o lote..." 
+                   value="{{ buscar }}" class="input-search">
+        </div>
+        
+        <div class="filter-group">
+            <i class="fas fa-tags"></i>
+            <select name="categoria" class="input-select">
+                <option value="">Todas las categorías</option>
+                {% for categoria in categorias %}
+                    <option value="{{ categoria.id }}" 
+                        {% if categoria.id|string == categoria_seleccionada %}selected{% endif %}>
+                        {{ categoria.nombre }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="filter-group">
+            <i class="fas fa-layer-group"></i>
+            <select name="tipo" class="input-select">
+                <option value="">Todos los tipos</option>
+                <option value="simple" {% if tipo_seleccionado == 'simple' %}selected{% endif %}>Producto Simple</option>
+                <option value="jerarquico" {% if tipo_seleccionado == 'jerarquico' %}selected{% endif %}>Producto Jerárquico</option>
+            </select>
+        </div>
+        
+        <input type="hidden" name="mostrar_inactivos" value="{{ '1' if mostrar_inactivos else '0' }}">
+        
+        <button type="submit" class="btn btn-primary">
+            <i class="fas fa-filter"></i> Filtrar
+        </button>
+        <a href="{{ url_for('productos') }}" class="btn btn-secondary">
+            <i class="fas fa-times"></i> Limpiar
+        </a>
     </form>
 </div>
 
@@ -44,74 +68,87 @@
                 <th>Categoría</th>
                 <th>Stock</th>
                 <th>Costo</th>
-                <th>Venta</th>
+                <th>Venta Base</th>
+                <th>Presentaciones</th>
                 <th>Acciones</th>
             </tr>
         </thead>
         <tbody>
             {% for p in productos %}
-            <tr>
-                <td>{{ p.codigo }}</td>
-                <td>{{ p.nombre }}</td>
+            <tr class="{% if not p.activo %}inactive-row{% endif %}">
+                <td><strong>{{ p.codigo }}</strong></td>
+                <td>
+                    {{ p.nombre }}
+                    {% if p.fecha_vencimiento and p.fecha_vencimiento <= now %}
+                        <span class="badge badge-danger" title="Vencido">⚠️</span>
+                    {% endif %}
+                </td>
                 <td>
                     {% if p.tipo_producto == 'jerarquico' %}
                         <span class="badge badge-info">📦 Jerárquico</span>
-                        {% if p.total_variaciones > 0 %}
-                            <button class="btn btn-small btn-info" onclick="verVariaciones({{ p.id }})">
-                                {{ p.total_variaciones }} presentaciones
-                            </button>
-                        {% endif %}
                     {% else %}
                         <span class="badge badge-secondary">📦 Simple</span>
                     {% endif %}
                 </td>
-                <td>{{ p.categoria_nombre }}</td>
-                <td class="stock-cell {% if p.stock_actual <= p.stock_minimo %}bajo-stock{% endif %}">
-                    {{ p.stock_actual }} {{ p.abreviatura or p.unidad_nombre }}
+                <td>{{ p.categoria_nombre or 'Sin categoría' }}</td>
+                <td class="stock-cell {% if p.estado_stock == 'bajo' %}bajo-stock{% endif %}"
+                    title="{{ p.stock_formateado }}">
+                    {{ p.stock_actual }} {{ p.abreviatura or 'und' }}
+                    {% if p.estado_stock == 'bajo' %}
+                        <span class="stock-warning">⚠️</span>
+                    {% endif %}
                 </td>
                 <td>C$ {{ "%.2f"|format(p.precio_costo) }}</td>
-                <td>C$ {{ "%.2f"|format(p.precio_venta) }}</td>
+                <td>C$ {{ "%.2f"|format(p.precio_venta) }} / {{ p.abreviatura or 'und' }}</td>
                 <td>
-                    <button class="btn btn-small btn-edit" 
-                            data-toggle="modal" 
-                            data-target="#modalEditarProducto"
-                            data-id="{{ p.id }}"
-                            data-codigo="{{ p.codigo }}"
-                            data-nombre="{{ p.nombre }}"
-                            data-descripcion="{{ p.descripcion or '' }}"
-                            data-categoria-id="{{ p.categoria_id }}"
-                            data-principio-activo="{{ p.principio_activo or '' }}"
-                            data-presentacion="{{ p.presentacion or '' }}"
-                            data-unidad-base-id="{{ p.unidad_base_id }}"
-                            data-precio-costo="{{ p.precio_costo }}"
-                            data-precio-venta="{{ p.precio_venta }}"
-                            data-stock-actual="{{ p.stock_actual }}"
-                            data-stock-minimo="{{ p.stock_minimo }}"
-                            data-lote="{{ p.lote or '' }}"
-                            data-fecha-vencimiento="{{ p.fecha_vencimiento or '' }}"
-                            data-activo="{{ p.activo }}"
-                            data-tipo-producto="{{ p.tipo_producto or 'simple' }}">
-                        Editar
-                    </button>
-                    
-                    <!-- Botón para ver precios detalle -->
-                    <a href="{{ url_for('detalle_precios_producto', producto_id=p.id) }}" 
-                       class="btn btn-small btn-info" 
-                       {% if p.tipo_producto != 'jerarquico' %}style="display: none;"{% endif %}>
-                        Precios
-                    </a>
-                    
-                    <!-- Formulario para eliminar -->
-                    <form method="POST" action="#" 
-                          style="display: inline;" 
-                          onsubmit="return confirm('¿Está seguro de eliminar este producto?');">
-                        <button type="submit" class="btn btn-small btn-danger">Eliminar</button>
-                    </form>
+                    {% if p.total_variaciones and p.total_variaciones > 0 %}
+                        <button class="btn-icon btn-info" onclick="verPresentaciones({{ p.id }})" 
+                                title="Ver presentaciones">
+                            <i class="fas fa-boxes"></i>
+                            <span class="badge-count">{{ p.total_variaciones }}</span>
+                        </button>
+                    {% else %}
+                        <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <div class="action-buttons">
+                        <button class="btn-icon btn-edit" 
+                                onclick="editarProducto({{ p.id }})"
+                                title="Editar producto">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        
+                        {% if p.tipo_producto == 'jerarquico' %}
+                        <a href="{{ url_for('detalle_precios_producto', producto_id=p.id) }}" 
+                           class="btn-icon btn-info" 
+                           title="Ver detalle de precios">
+                            <i class="fas fa-chart-line"></i>
+                        </a>
+                        {% endif %}
+                        
+                        {% if p.activo %}
+                        <button class="btn-icon btn-danger" 
+                                onclick="eliminarProducto({{ p.id }})"
+                                title="Desactivar producto">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                        {% else %}
+                        <button class="btn-icon btn-success" 
+                                onclick="activarProducto({{ p.id }})"
+                                title="Activar producto">
+                            <i class="fas fa-undo"></i>
+                        </button>
+                        {% endif %}
+                    </div>
                 </td>
             </tr>
             {% else %}
             <tr>
-                <td colspan="8" class="text-center">No hay productos registrados</td>
+                <td colspan="9" class="text-center empty-table">
+                    <i class="fas fa-box-open"></i>
+                    <p>No hay productos registrados</p>
+                </td>
             </tr>
             {% endfor %}
         </tbody>
@@ -119,195 +156,321 @@
 </div>
 
 <!-- Modal para Nuevo Producto -->
-<div id="modalProducto" class="modal">
-    <div class="modal-content">
+<div id="modalNuevoProducto" class="modal">
+    <div class="modal-content modal-lg">
         <div class="modal-header">
-            <h2>Nuevo Producto</h2>
-            <button class="btn-close" onclick="cerrarModal('modalProducto')">&times;</button>
+            <h2><i class="fas fa-plus-circle"></i> Nuevo Producto</h2>
+            <button class="btn-close" onclick="cerrarModal('modalNuevoProducto')">&times;</button>
         </div>
+        
         <form method="POST" action="{{ url_for('productos') }}" class="form" id="formNuevoProducto">
-            <!-- Tipo de Producto -->
-            <div class="form-group">
-                <label>Tipo de Producto</label>
-                <select name="tipo_producto" id="tipo_producto" onchange="toggleTipoProducto()" required>
-                    <option value="simple">Producto Simple (Unidad única)</option>
-                    <option value="jerarquico">Producto Jerárquico (Cajon → Sobre → Blíster → Pastilla)</option>
-                </select>
-            </div>
-
-            <!-- Datos Básicos -->
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Código *</label>
-                    <input type="text" name="codigo" required>
-                </div>
-                <div class="form-group">
-                    <label>Nombre *</label>
-                    <input type="text" name="nombre" required>
-                </div>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Principio Activo</label>
-                    <input type="text" name="principio_activo">
-                </div>
-                <div class="form-group">
-                    <label>Presentación</label>
-                    <input type="text" name="presentacion">
+            <!-- Selector de Tipo de Producto -->
+            <div class="form-section">
+                <h3 class="section-title">
+                    <i class="fas fa-cog"></i> Tipo de Producto
+                </h3>
+                <div class="tipo-selector">
+                    <label class="tipo-option">
+                        <input type="radio" name="tipo_producto" value="simple" checked onchange="toggleTipoProducto('nuevo')">
+                        <span class="tipo-card">
+                            <i class="fas fa-cube"></i>
+                            <strong>Producto Simple</strong>
+                            <small>Una sola presentación (pastillas, ml, gramos)</small>
+                        </span>
+                    </label>
+                    <label class="tipo-option">
+                        <input type="radio" name="tipo_producto" value="jerarquico" onchange="toggleTipoProducto('nuevo')">
+                        <span class="tipo-card">
+                            <i class="fas fa-sitemap"></i>
+                            <strong>Producto Jerárquico</strong>
+                            <small>Múltiples presentaciones (Caja → Sobre → Blister → Pastilla)</small>
+                        </span>
+                    </label>
                 </div>
             </div>
 
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Categoría *</label>
-                    <select name="categoria_id" required>
-                        <option value="">Seleccionar categoría</option>
-                        {% for categoria in categorias %}
-                            <option value="{{ categoria.id }}">{{ categoria.nombre }}</option>
-                        {% endfor %}
-                    </select>
+            <!-- Datos Básicos (comunes a ambos tipos) -->
+            <div class="form-section">
+                <h3 class="section-title">
+                    <i class="fas fa-info-circle"></i> Información Básica
+                </h3>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Código <span class="required">*</span></label>
+                        <input type="text" name="codigo" id="nuevo_codigo" required 
+                               placeholder="Ej: IBU001" class="form-control">
+                        <small>Identificador único del producto</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Nombre <span class="required">*</span></label>
+                        <input type="text" name="nombre" id="nuevo_nombre" required 
+                               placeholder="Ej: Ibuprofeno 400mg" class="form-control">
+                    </div>
                 </div>
-                <div class="form-group" id="campo_unidad_base">
-                    <label>Unidad Base *</label>
-                    <select name="unidad_base_id" id="unidad_base_id" required>
-                        <option value="">Seleccionar unidad</option>
-                        {% for unidad in unidades %}
-                            <option value="{{ unidad.id }}">{{ unidad.nombre }} ({{ unidad.abreviatura }})</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
 
-            <div class="form-group">
-                <label>Descripción</label>
-                <textarea name="descripcion" rows="3"></textarea>
-            </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Principio Activo</label>
+                        <input type="text" name="principio_activo" id="nuevo_principio_activo" 
+                               placeholder="Ej: Ibuprofeno" class="form-control">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Presentación Comercial</label>
+                        <input type="text" name="presentacion" id="nuevo_presentacion" 
+                               placeholder="Ej: Tabletas recubiertas" class="form-control">
+                    </div>
+                </div>
 
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Lote</label>
-                    <input type="text" name="lote">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Categoría</label>
+                        <select name="categoria_id" id="nuevo_categoria_id" class="form-control">
+                            <option value="">-- Sin categoría --</option>
+                            {% for categoria in categorias %}
+                                <option value="{{ categoria.id }}">{{ categoria.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="form-group" id="nuevo_campo_unidad_base">
+                        <label>Unidad Base <span class="required">*</span></label>
+                        <select name="unidad_base_id" id="nuevo_unidad_base_id" required class="form-control">
+                            <option value="">-- Seleccionar unidad base --</option>
+                            {% for unidad in unidades %}
+                                <option value="{{ unidad.id }}">
+                                    {{ unidad.nombre }} ({{ unidad.abreviatura }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <small>Unidad más pequeña que se puede vender</small>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>Fecha Vencimiento</label>
-                    <input type="date" name="fecha_vencimiento">
-                </div>
-            </div>
 
-            <div class="form-row">
                 <div class="form-group">
-                    <label>Stock Actual</label>
-                    <input type="number" name="stock_actual" id="stock_actual" value="0" min="0">
-                </div>
-                <div class="form-group">
-                    <label>Stock Mínimo</label>
-                    <input type="number" name="stock_minimo" value="5" min="0">
+                    <label>Descripción</label>
+                    <textarea name="descripcion" id="nuevo_descripcion" rows="3" 
+                              class="form-control" placeholder="Descripción detallada del producto..."></textarea>
                 </div>
             </div>
 
             <!-- SECCIÓN PARA PRODUCTO SIMPLE -->
-            <div id="seccion_simple" style="display: block;">
+            <div id="nuevo_seccion_simple" class="form-section">
+                <h3 class="section-title">
+                    <i class="fas fa-tag"></i> Precios y Stock
+                </h3>
+                
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Precio Costo (C$) *</label>
-                        <input type="number" name="precio_costo" id="precio_costo_simple" step="0.01" min="0">
+                        <label>Precio de Costo (C$) <span class="required">*</span></label>
+                        <input type="number" name="precio_costo" id="nuevo_precio_costo" 
+                               step="0.01" min="0.01" required class="form-control"
+                               oninput="calcularPrecioVentaSimple('nuevo')">
                     </div>
+                    
                     <div class="form-group">
-                        <label>Porcentaje Ganancia %</label>
-                        <input type="number" name="porcentaje_ganancia" id="porcentaje_simple" step="0.01" min="0" value="30" onchange="calcularPrecioVentaSimple()">
+                        <label>Porcentaje de Ganancia %</label>
+                        <input type="number" name="porcentaje_ganancia" id="nuevo_porcentaje" 
+                               step="0.01" min="0" value="30" class="form-control"
+                               oninput="calcularPrecioVentaSimple('nuevo')">
                     </div>
                 </div>
+
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Precio Venta (C$) *</label>
-                        <input type="number" name="precio_venta" id="precio_venta_simple" step="0.01" min="0">
+                        <label>Precio de Venta (C$) <span class="required">*</span></label>
+                        <input type="number" name="precio_venta" id="nuevo_precio_venta" 
+                               step="0.01" min="0.01" required class="form-control">
                     </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Stock Actual</label>
+                        <input type="number" name="stock_actual" id="nuevo_stock_actual" 
+                               value="0" min="0" class="form-control">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Stock Mínimo</label>
+                        <input type="number" name="stock_minimo" id="nuevo_stock_minimo" 
+                               value="5" min="0" class="form-control">
+                    </div>
+                </div>
+
+                <!-- Presentaciones adicionales para producto simple -->
+                <div class="presentaciones-container">
+                    <h4>
+                        <i class="fas fa-boxes"></i> 
+                        Presentaciones adicionales (opcional)
+                        <button type="button" class="btn btn-small btn-secondary" onclick="agregarPresentacionSimple()">
+                            <i class="fas fa-plus"></i> Agregar
+                        </button>
+                    </h4>
+                    <div id="nuevo_presentaciones_simple" class="presentaciones-list"></div>
+                    <small class="text-muted">Configure aquí otras formas de vender el producto (ej: Blister, Caja)</small>
                 </div>
             </div>
 
             <!-- SECCIÓN PARA PRODUCTO JERÁRQUICO -->
-            <div id="seccion_jerarquico" style="display: none;">
-                <div class="card">
-                    <div class="card-header bg-info text-white">
-                        <h5>Configuración de Presentaciones Jerárquicas</h5>
+            <div id="nuevo_seccion_jerarquico" class="form-section" style="display: none;">
+                <h3 class="section-title">
+                    <i class="fas fa-sitemap"></i> Configuración Jerárquica
+                </h3>
+                
+                <div class="jerarquico-container">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Ejemplo:</strong> Caja de 25 sobres, cada sobre con 3 blisteres, cada blister con 9 pastillas
                     </div>
-                    <div class="card-body">
-                        <div class="alert alert-info">
-                            <strong>Ejemplo:</strong> Caja de Vitaminas C con 25 sobres, cada sobre tiene 3 blíster, cada blíster 9 pastillas
-                        </div>
 
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>🏢 Costo de la Caja (C$) *</label>
-                                <input type="number" name="costo_caja" id="costo_caja" step="0.01" min="0" onchange="calcularJerarquico()">
+                    <div class="jerarquico-grid">
+                        <!-- Nivel 1: Caja -->
+                        <div class="nivel-card nivel-caja">
+                            <div class="nivel-header">
+                                <i class="fas fa-box"></i>
+                                <h4>Caja (Presentación mayor)</h4>
                             </div>
-                            <div class="form-group">
-                                <label>📨 Sobres por Caja *</label>
-                                <input type="number" name="sobres_por_caja" id="sobres_por_caja" min="1" value="1" onchange="calcularJerarquico()">
-                            </div>
-                        </div>
-
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>💊 Blíster por Sobre *</label>
-                                <input type="number" name="blister_por_sobre" id="blister_por_sobre" min="1" value="1" onchange="calcularJerarquico()">
-                            </div>
-                            <div class="form-group">
-                                <label>💊 Pastillas por Blíster *</label>
-                                <input type="number" name="pastillas_por_blister" id="pastillas_por_blister" min="1" value="1" onchange="calcularJerarquico()">
+                            <div class="nivel-body">
+                                <div class="form-group">
+                                    <label>Costo de la Caja (C$) *</label>
+                                    <input type="number" name="costo_caja" id="nuevo_costo_caja" 
+                                           step="0.01" min="0.01" required class="form-control"
+                                           oninput="calcularJerarquico('nuevo')">
+                                </div>
+                                <div class="form-group">
+                                    <label>Cantidad de Sobres por Caja *</label>
+                                    <input type="number" name="sobres_por_caja" id="nuevo_sobres_por_caja" 
+                                           min="1" value="1" required class="form-control"
+                                           oninput="calcularJerarquico('nuevo')">
+                                </div>
                             </div>
                         </div>
 
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Porcentaje de Ganancia %</label>
-                                <input type="number" name="porcentaje_ganancia_jer" id="porcentaje_jerarquico" step="0.01" value="30" onchange="calcularJerarquico()">
+                        <!-- Nivel 2: Sobre -->
+                        <div class="nivel-card nivel-sobre">
+                            <div class="nivel-header">
+                                <i class="fas fa-envelope"></i>
+                                <h4>Sobre</h4>
+                            </div>
+                            <div class="nivel-body">
+                                <div class="form-group">
+                                    <label>Blisteres por Sobre *</label>
+                                    <input type="number" name="blister_por_sobre" id="nuevo_blister_por_sobre" 
+                                           min="1" value="1" required class="form-control"
+                                           oninput="calcularJerarquico('nuevo')">
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Vista Previa de Cálculos -->
-                        <div class="mt-3 p-3 bg-light rounded" id="vista_previa_jerarquico">
-                            <h6>📊 Vista Previa de Precios:</h6>
-                            <table class="table table-sm table-bordered">
-                                <thead>
-                                    <tr>
-                                        <th>Presentación</th>
-                                        <th>Costo Unitario</th>
-                                        <th>Precio Venta</th>
-                                        <th>Ganancia</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>📨 Sobre</td>
-                                        <td id="costo_sobre_display">C$0.00</td>
-                                        <td id="precio_sobre_display">C$0.00</td>
-                                        <td id="ganancia_sobre_display">C$0.00</td>
-                                    </tr>
-                                    <tr>
-                                        <td>💊 Blíster</td>
-                                        <td id="costo_blister_display">C$0.00</td>
-                                        <td id="precio_blister_display">C$0.00</td>
-                                        <td id="ganancia_blister_display">C$0.00</td>
-                                    </tr>
-                                    <tr>
-                                        <td>💊 Pastilla</td>
-                                        <td id="costo_pastilla_display">C$0.00</td>
-                                        <td id="precio_pastilla_display">C$0.00</td>
-                                        <td id="ganancia_pastilla_display">C$0.00</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                            <small class="text-muted">Los precios se redondean automáticamente</small>
+                        <!-- Nivel 3: Blister -->
+                        <div class="nivel-card nivel-blister">
+                            <div class="nivel-header">
+                                <i class="fas fa-layer-group"></i>
+                                <h4>Blister</h4>
+                            </div>
+                            <div class="nivel-body">
+                                <div class="form-group">
+                                    <label>Pastillas por Blister *</label>
+                                    <input type="number" name="pastillas_por_blister" id="nuevo_pastillas_por_blister" 
+                                           min="1" value="1" required class="form-control"
+                                           oninput="calcularJerarquico('nuevo')">
+                                </div>
+                            </div>
                         </div>
+
+                        <!-- Nivel 4: Pastilla -->
+                        <div class="nivel-card nivel-pastilla">
+                            <div class="nivel-header">
+                                <i class="fas fa-pill"></i>
+                                <h4>Pastilla (Unidad Base)</h4>
+                            </div>
+                            <div class="nivel-body">
+                                <div class="form-group">
+                                    <label>Porcentaje de Ganancia %</label>
+                                    <input type="number" name="porcentaje_ganancia_jer" id="nuevo_porcentaje_jer" 
+                                           step="0.01" min="0" value="30" class="form-control"
+                                           oninput="calcularJerarquico('nuevo')">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Vista Previa de Cálculos -->
+                    <div class="vista-previa">
+                        <h4>📊 Vista Previa de Precios</h4>
+                        <div class="precios-grid">
+                            <div class="precio-item">
+                                <span class="presentacion">📦 Caja</span>
+                                <span class="valor" id="nuevo_precio_caja_display">C$0.00</span>
+                            </div>
+                            <div class="precio-item">
+                                <span class="presentacion">📨 Sobre</span>
+                                <span class="valor" id="nuevo_precio_sobre_display">C$0.00</span>
+                            </div>
+                            <div class="precio-item">
+                                <span class="presentacion">💊 Blister</span>
+                                <span class="valor" id="nuevo_precio_blister_display">C$0.00</span>
+                            </div>
+                            <div class="precio-item">
+                                <span class="presentacion">💊 Pastilla</span>
+                                <span class="valor" id="nuevo_precio_pastilla_display">C$0.00</span>
+                            </div>
+                        </div>
+                        <div class="total-unidades">
+                            <strong>Total pastillas por caja:</strong> 
+                            <span id="nuevo_total_pastillas">0</span>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Stock Inicial (en Cajas)</label>
+                            <input type="number" name="stock_inicial_cajas" id="nuevo_stock_cajas" 
+                                   value="0" min="0" class="form-control"
+                                   oninput="actualizarStockPastillas('nuevo')">
+                            <small>Equivale a <span id="nuevo_stock_pastillas">0</span> pastillas</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Stock Mínimo (en Cajas)</label>
+                            <input type="number" name="stock_minimo" id="nuevo_stock_minimo_cajas" 
+                                   value="5" min="0" class="form-control">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lote y Vencimiento -->
+            <div class="form-section">
+                <h3 class="section-title">
+                    <i class="fas fa-calendar"></i> Lote y Vencimiento
+                </h3>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Lote</label>
+                        <input type="text" name="lote" id="nuevo_lote" 
+                               placeholder="Ej: LOTE001" class="form-control">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Fecha de Vencimiento</label>
+                        <input type="date" name="fecha_vencimiento" id="nuevo_fecha_vencimiento" 
+                               class="form-control">
                     </div>
                 </div>
             </div>
 
             <div class="form-actions">
-                <button type="submit" class="btn btn-primary">Guardar Producto</button>
-                <button type="button" class="btn btn-secondary" onclick="cerrarModal('modalProducto')">Cancelar</button>
+                <button type="submit" class="btn btn-primary btn-lg">
+                    <i class="fas fa-save"></i> Guardar Producto
+                </button>
+                <button type="button" class="btn btn-secondary btn-lg" onclick="cerrarModal('modalNuevoProducto')">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
             </div>
         </form>
     </div>
@@ -315,416 +478,926 @@
 
 <!-- Modal para Editar Producto -->
 <div id="modalEditarProducto" class="modal">
-    <div class="modal-content">
+    <div class="modal-content modal-lg">
         <div class="modal-header">
-            <h2>Editar Producto</h2>
+            <h2><i class="fas fa-edit"></i> Editar Producto</h2>
             <button class="btn-close" onclick="cerrarModal('modalEditarProducto')">&times;</button>
         </div>
-        <form method="POST" id="formEditarProducto" class="form">
-            <input type="hidden" name="id" id="edit_id">
+        
+        <form method="POST" action="" id="formEditarProducto" class="form">
+            <!-- Tipo de producto (solo lectura en edición) -->
+            <input type="hidden" name="tipo_producto" id="edit_tipo_producto">
             
-            <!-- Tipo de Producto -->
-            <div class="form-group">
-                <label>Tipo de Producto</label>
-                <select name="tipo_producto" id="edit_tipo_producto" onchange="toggleTipoProductoEdit()">
-                    <option value="simple">Producto Simple (Unidad única)</option>
-                    <option value="jerarquico">Producto Jerárquico (Caja → Sobre → Blíster → Pastilla)</option>
-                </select>
-            </div>
-
             <!-- Datos Básicos -->
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Código *</label>
-                    <input type="text" name="codigo" id="edit_codigo" required>
-                </div>
-                <div class="form-group">
-                    <label>Nombre *</label>
-                    <input type="text" name="nombre" id="edit_nombre" required>
-                </div>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Principio Activo</label>
-                    <input type="text" name="principio_activo" id="edit_principio_activo">
-                </div>
-                <div class="form-group">
-                    <label>Presentación</label>
-                    <input type="text" name="presentacion" id="edit_presentacion">
-                </div>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Categoría *</label>
-                    <select name="categoria_id" id="edit_categoria_id" required>
-                        <option value="">Seleccionar categoría</option>
-                        {% for categoria in categorias %}
-                            <option value="{{ categoria.id }}">{{ categoria.nombre }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="form-group" id="edit_campo_unidad_base">
-                    <label>Unidad Base *</label>
-                    <select name="unidad_base_id" id="edit_unidad_base_id" required>
-                        <option value="">Seleccionar unidad</option>
-                        {% for unidad in unidades %}
-                            <option value="{{ unidad.id }}">{{ unidad.nombre }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-
-            <div class="form-group">
-                <label>Descripción</label>
-                <textarea name="descripcion" id="edit_descripcion" rows="3"></textarea>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Lote</label>
-                    <input type="text" name="lote" id="edit_lote">
-                </div>
-                <div class="form-group">
-                    <label>Fecha Vencimiento</label>
-                    <input type="date" name="fecha_vencimiento" id="edit_fecha_vencimiento">
-                </div>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Stock Actual</label>
-                    <input type="number" name="stock_actual" id="edit_stock_actual" min="0">
-                </div>
-                <div class="form-group">
-                    <label>Stock Mínimo</label>
-                    <input type="number" name="stock_minimo" id="edit_stock_minimo" min="0">
-                </div>
-            </div>
-
-            <!-- Sección Simple en Edición -->
-            <div id="edit_seccion_simple">
+            <div class="form-section">
+                <h3 class="section-title">
+                    <i class="fas fa-info-circle"></i> Información Básica
+                </h3>
+                
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Precio Costo (C$) *</label>
-                        <input type="number" name="precio_costo" id="edit_precio_costo" step="0.01" min="0">
+                        <label>Código <span class="required">*</span></label>
+                        <input type="text" name="codigo" id="edit_codigo" required class="form-control">
                     </div>
+                    
                     <div class="form-group">
-                        <label>Porcentaje Ganancia %</label>
-                        <input type="number" name="porcentaje_ganancia" id="edit_porcentaje" step="0.01" min="0" value="30" onchange="calcularPrecioVentaEdit()">
+                        <label>Nombre <span class="required">*</span></label>
+                        <input type="text" name="nombre" id="edit_nombre" required class="form-control">
                     </div>
                 </div>
+
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Precio Venta (C$) *</label>
-                        <input type="number" name="precio_venta" id="edit_precio_venta" step="0.01" min="0">
+                        <label>Principio Activo</label>
+                        <input type="text" name="principio_activo" id="edit_principio_activo" class="form-control">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Presentación</label>
+                        <input type="text" name="presentacion" id="edit_presentacion" class="form-control">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Categoría</label>
+                        <select name="categoria_id" id="edit_categoria_id" class="form-control">
+                            <option value="">-- Sin categoría --</option>
+                            {% for categoria in categorias %}
+                                <option value="{{ categoria.id }}">{{ categoria.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="form-group" id="edit_campo_unidad_base">
+                        <label>Unidad Base <span class="required">*</span></label>
+                        <select name="unidad_base_id" id="edit_unidad_base_id" required class="form-control">
+                            <option value="">-- Seleccionar unidad base --</option>
+                            {% for unidad in unidades %}
+                                <option value="{{ unidad.id }}">{{ unidad.nombre }} ({{ unidad.abreviatura }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Descripción</label>
+                    <textarea name="descripcion" id="edit_descripcion" rows="3" class="form-control"></textarea>
+                </div>
+            </div>
+
+            <!-- Precios y Stock (varían según tipo) -->
+            <div id="edit_seccion_simple" class="form-section">
+                <h3 class="section-title">
+                    <i class="fas fa-tag"></i> Precios y Stock
+                </h3>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Precio de Costo (C$) *</label>
+                        <input type="number" name="precio_costo" id="edit_precio_costo" 
+                               step="0.01" min="0.01" required class="form-control"
+                               oninput="calcularPrecioVentaSimple('edit')">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Porcentaje de Ganancia %</label>
+                        <input type="number" name="porcentaje_ganancia" id="edit_porcentaje" 
+                               step="0.01" min="0" value="30" class="form-control"
+                               oninput="calcularPrecioVentaSimple('edit')">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Precio de Venta (C$) *</label>
+                        <input type="number" name="precio_venta" id="edit_precio_venta" 
+                               step="0.01" min="0.01" required class="form-control">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Stock Actual</label>
+                        <input type="number" name="stock_actual" id="edit_stock_actual" 
+                               min="0" class="form-control">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Stock Mínimo</label>
+                        <input type="number" name="stock_minimo" id="edit_stock_minimo" 
+                               min="0" class="form-control">
                     </div>
                 </div>
             </div>
 
-            <!-- Sección Jerárquico en Edición -->
-            <div id="edit_seccion_jerarquico" style="display: none;">
-                <div class="card">
-                    <div class="card-header bg-info text-white">
-                        <h5>Configuración de Presentaciones</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Costo de Caja (C$)</label>
-                                <input type="number" name="costo_caja" id="edit_costo_caja" step="0.01" min="0" onchange="calcularJerarquicoEdit()">
-                            </div>
-                            <div class="form-group">
-                                <label>Porcentaje Ganancia %</label>
-                                <input type="number" name="porcentaje_ganancia_jer" id="edit_porcentaje_jer" step="0.01" value="30" onchange="calcularJerarquicoEdit()">
-                            </div>
+            <div id="edit_seccion_jerarquico" class="form-section" style="display: none;">
+                <h3 class="section-title">
+                    <i class="fas fa-sitemap"></i> Configuración Jerárquica
+                </h3>
+                
+                <div class="jerarquico-container">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Costo de Caja (C$)</label>
+                            <input type="number" name="costo_caja" id="edit_costo_caja" 
+                                   step="0.01" min="0" class="form-control"
+                                   oninput="calcularJerarquico('edit')">
                         </div>
-                        <p class="text-muted">Los cambios en costos recalcularán todos los precios</p>
+                        
+                        <div class="form-group">
+                            <label>Porcentaje de Ganancia %</label>
+                            <input type="number" name="porcentaje_ganancia_jer" id="edit_porcentaje_jer" 
+                                   step="0.01" min="0" value="30" class="form-control"
+                                   oninput="calcularJerarquico('edit')">
+                        </div>
+                    </div>
+
+                    <div class="vista-previa">
+                        <h4>📊 Precios Actuales</h4>
+                        <div id="edit_precios_container" class="precios-grid">
+                            <!-- Se llena con JavaScript -->
+                        </div>
+                    </div>
+
+                    <p class="text-muted">
+                        <i class="fas fa-info-circle"></i>
+                        Los cambios en costos recalcularán todos los precios automáticamente
+                    </p>
+                </div>
+            </div>
+
+            <!-- Lote y Vencimiento -->
+            <div class="form-section">
+                <h3 class="section-title">
+                    <i class="fas fa-calendar"></i> Lote y Vencimiento
+                </h3>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Lote</label>
+                        <input type="text" name="lote" id="edit_lote" class="form-control">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Fecha de Vencimiento</label>
+                        <input type="date" name="fecha_vencimiento" id="edit_fecha_vencimiento" class="form-control">
                     </div>
                 </div>
             </div>
 
             <div class="form-group">
-                <label>
-                    <input type="checkbox" name="activo" id="edit_activo">
-                    Producto Activo
+                <label class="checkbox-label">
+                    <input type="checkbox" name="activo" id="edit_activo" checked>
+                    <span>Producto Activo</span>
                 </label>
             </div>
 
             <div class="form-actions">
-                <button type="submit" class="btn btn-primary">Actualizar Producto</button>
-                <button type="button" class="btn btn-secondary" onclick="cerrarModal('modalEditarProducto')">Cancelar</button>
+                <button type="submit" class="btn btn-primary btn-lg">
+                    <i class="fas fa-save"></i> Actualizar Producto
+                </button>
+                <button type="button" class="btn btn-secondary btn-lg" onclick="cerrarModal('modalEditarProducto')">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
             </div>
         </form>
     </div>
 </div>
 
-<!-- Modal para Ver Variaciones -->
-<div id="modalVariaciones" class="modal">
-    <div class="modal-content" style="max-width: 600px;">
+<!-- Modal para Ver Presentaciones -->
+<div id="modalPresentaciones" class="modal">
+    <div class="modal-content" style="max-width: 500px;">
         <div class="modal-header">
-            <h2>Presentaciones del Producto</h2>
-            <button class="btn-close" onclick="cerrarModal('modalVariaciones')">&times;</button>
+            <h2><i class="fas fa-boxes"></i> Presentaciones</h2>
+            <button class="btn-close" onclick="cerrarModal('modalPresentaciones')">&times;</button>
         </div>
-        <div id="contenido_variaciones" class="p-3">
+        <div id="contenido_presentaciones" class="modal-body">
             <!-- Se llena con JavaScript -->
         </div>
     </div>
 </div>
 
 <script>
-// Función para calcular precio de venta (simple)
-function calcularPrecioVenta(precio_costo_id, porcentaje_id, precio_venta_id) {
-    const costo = parseFloat(document.getElementById(precio_costo_id)?.value) || 0;
-    const porcentaje = parseFloat(document.getElementById(porcentaje_id)?.value) || 30;
-    const precioVenta = costo + (costo * porcentaje / 100);
-    if (document.getElementById(precio_venta_id)) {
-        document.getElementById(precio_venta_id).value = precioVenta.toFixed(2);
-    }
+// ========== VARIABLES GLOBALES ==========
+let productosData = {{ productos|tojson|safe }};
+let unidadesData = {{ unidades|tojson|safe }};
+
+// ========== FUNCIONES PARA MODALES ==========
+function abrirModalNuevoProducto() {
+    document.getElementById('modalNuevoProducto').style.display = 'block';
+    document.body.style.overflow = 'hidden';
+    document.getElementById('formNuevoProducto').reset();
+    toggleTipoProducto('nuevo');
 }
 
-function calcularPrecioVentaSimple() {
-    calcularPrecioVenta('precio_costo_simple', 'porcentaje_simple', 'precio_venta_simple');
+function cerrarModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+    document.body.style.overflow = 'auto';
 }
 
-function calcularPrecioVentaEdit() {
-    calcularPrecioVenta('edit_precio_costo', 'edit_porcentaje', 'edit_precio_venta');
-}
-
-// Función para alternar entre tipos de producto
-function toggleTipoProducto() {
-    const tipo = document.getElementById('tipo_producto').value;
-    const seccionSimple = document.getElementById('seccion_simple');
-    const seccionJerarquico = document.getElementById('seccion_jerarquico');
-    const campoUnidadBase = document.getElementById('campo_unidad_base');
+// ========== FUNCIONES PARA TIPO DE PRODUCTO ==========
+function toggleTipoProducto(contexto) {
+    const tipo = document.querySelector(`input[name="tipo_producto"]:checked`).value;
+    const seccionSimple = document.getElementById(`${contexto}_seccion_simple`);
+    const seccionJerarquico = document.getElementById(`${contexto}_seccion_jerarquico`);
+    const campoUnidadBase = document.getElementById(`${contexto}_campo_unidad_base`);
     
     if (tipo === 'jerarquico') {
         seccionSimple.style.display = 'none';
         seccionJerarquico.style.display = 'block';
         campoUnidadBase.style.display = 'none';
         
-        // Para productos jerárquicos, la unidad base es pastilla (PST)
-        document.getElementById('unidad_base_id').value = '';
-        
         // Quitar required de campos simples
-        document.getElementById('precio_costo_simple').required = false;
-        document.querySelector('[name="precio_venta"]').required = false;
+        const simpleFields = ['precio_costo', 'precio_venta'];
+        simpleFields.forEach(f => {
+            const field = document.getElementById(`${contexto}_${f}`);
+            if (field) field.required = false;
+        });
         
         // Agregar required a campos jerárquicos
-        document.getElementById('costo_caja').required = true;
-        document.getElementById('sobres_por_caja').required = true;
-        document.getElementById('blister_por_sobre').required = true;
-        document.getElementById('pastillas_por_blister').required = true;
+        const jerFields = ['costo_caja', 'sobres_por_caja', 'blister_por_sobre', 'pastillas_por_blister'];
+        jerFields.forEach(f => {
+            const field = document.getElementById(`${contexto}_${f}`);
+            if (field) field.required = true;
+        });
+        
+        // Calcular valores iniciales
+        calcularJerarquico(contexto);
     } else {
         seccionSimple.style.display = 'block';
         seccionJerarquico.style.display = 'none';
         campoUnidadBase.style.display = 'block';
         
         // Quitar required de campos jerárquicos
-        document.getElementById('costo_caja').required = false;
-        document.getElementById('sobres_por_caja').required = false;
-        document.getElementById('blister_por_sobre').required = false;
-        document.getElementById('pastillas_por_blister').required = false;
+        const jerFields = ['costo_caja', 'sobres_por_caja', 'blister_por_sobre', 'pastillas_por_blister'];
+        jerFields.forEach(f => {
+            const field = document.getElementById(`${contexto}_${f}`);
+            if (field) field.required = false;
+        });
         
         // Agregar required a campos simples
-        document.getElementById('precio_costo_simple').required = true;
-        document.querySelector('[name="precio_venta"]').required = true;
+        const simpleFields = ['precio_costo', 'precio_venta'];
+        simpleFields.forEach(f => {
+            const field = document.getElementById(`${contexto}_${f}`);
+            if (field) field.required = true;
+        });
     }
 }
 
-function toggleTipoProductoEdit() {
-    const tipo = document.getElementById('edit_tipo_producto').value;
-    const seccionSimple = document.getElementById('edit_seccion_simple');
-    const seccionJerarquico = document.getElementById('edit_seccion_jerarquico');
-    const campoUnidadBase = document.getElementById('edit_campo_unidad_base');
+// ========== FUNCIONES PARA CÁLCULOS ==========
+function calcularPrecioVentaSimple(contexto) {
+    const costo = parseFloat(document.getElementById(`${contexto}_precio_costo`)?.value) || 0;
+    const porcentaje = parseFloat(document.getElementById(`${contexto}_porcentaje`)?.value) || 30;
+    const precioVenta = costo * (1 + porcentaje / 100);
     
-    if (tipo === 'jerarquico') {
-        seccionSimple.style.display = 'none';
-        seccionJerarquico.style.display = 'block';
-        campoUnidadBase.style.display = 'none';
-    } else {
-        seccionSimple.style.display = 'block';
-        seccionJerarquico.style.display = 'none';
-        campoUnidadBase.style.display = 'block';
+    const precioVentaInput = document.getElementById(`${contexto}_precio_venta`);
+    if (precioVentaInput) {
+        precioVentaInput.value = precioVenta.toFixed(2);
     }
 }
 
-// Función para calcular precios jerárquicos
-function calcularJerarquico() {
-    const costo_caja = parseFloat(document.getElementById('costo_caja').value) || 0;
-    const sobres = parseInt(document.getElementById('sobres_por_caja').value) || 1;
-    const blister = parseInt(document.getElementById('blister_por_sobre').value) || 1;
-    const pastillas = parseInt(document.getElementById('pastillas_por_blister').value) || 1;
-    const porcentaje = parseFloat(document.getElementById('porcentaje_jerarquico').value) || 30;
+function calcularJerarquico(contexto) {
+    // Obtener valores
+    const costo_caja = parseFloat(document.getElementById(`${contexto}_costo_caja`)?.value) || 0;
+    const sobres = parseInt(document.getElementById(`${contexto}_sobres_por_caja`)?.value) || 1;
+    const blister = parseInt(document.getElementById(`${contexto}_blister_por_sobre`)?.value) || 1;
+    const pastillas = parseInt(document.getElementById(`${contexto}_pastillas_por_blister`)?.value) || 1;
+    const porcentaje = parseFloat(document.getElementById(`${contexto}_porcentaje_jer`)?.value) || 30;
     
     if (costo_caja > 0 && sobres > 0 && blister > 0 && pastillas > 0) {
+        // Calcular total de pastillas por caja
+        const total_pastillas = sobres * blister * pastillas;
+        document.getElementById(`${contexto}_total_pastillas`).textContent = total_pastillas;
+        
         // Calcular costos unitarios
-        const costo_sobre = costo_caja / sobres;
-        const costo_blister = costo_sobre / blister;
-        const costo_pastilla = costo_blister / pastillas;
+        const costo_pastilla = costo_caja / total_pastillas;
+        const costo_blister = costo_pastilla * pastillas;
+        const costo_sobre = costo_blister * blister;
         
-        // Calcular precios de venta con redondeo
-        const precio_caja = Math.round(costo_caja + (costo_caja * porcentaje / 100));
-        const precio_sobre = Math.round(costo_sobre + (costo_sobre * porcentaje / 100));
-        const precio_blister = Math.round(costo_blister + (costo_blister * porcentaje / 100));
-        const precio_pastilla = Math.round(costo_pastilla + (costo_pastilla * porcentaje / 100));
+        // Calcular precios de venta
+        const precio_pastilla = costo_pastilla * (1 + porcentaje/100);
+        const precio_blister = costo_blister * (1 + porcentaje/100);
+        const precio_sobre = costo_sobre * (1 + porcentaje/100);
+        const precio_caja = costo_caja * (1 + porcentaje/100);
         
-        // Actualizar vista previa
-        document.getElementById('costo_caja_display').innerHTML = `C$${costo_caja.toFixed(2)}`;
-        document.getElementById('precio_caja_display').innerHTML = `C$${precio_caja}`;
-        document.getElementById('ganancia_caja_display').innerHTML = `C$${(precio_caja - costo_caja).toFixed(2)}`;
+        // Actualizar displays
+        document.getElementById(`${contexto}_precio_pastilla_display`).textContent = 
+            `C$${precio_pastilla.toFixed(2)}`;
+        document.getElementById(`${contexto}_precio_blister_display`).textContent = 
+            `C$${precio_blister.toFixed(2)}`;
+        document.getElementById(`${contexto}_precio_sobre_display`).textContent = 
+            `C$${precio_sobre.toFixed(2)}`;
+        document.getElementById(`${contexto}_precio_caja_display`).textContent = 
+            `C$${precio_caja.toFixed(2)}`;
         
-        document.getElementById('costo_sobre_display').innerHTML = `C$${costo_sobre.toFixed(2)}`;
-        document.getElementById('precio_sobre_display').innerHTML = `C$${precio_sobre}`;
-        document.getElementById('ganancia_sobre_display').innerHTML = `C$${(precio_sobre - costo_sobre).toFixed(2)}`;
-        
-        document.getElementById('costo_blister_display').innerHTML = `C$${costo_blister.toFixed(2)}`;
-        document.getElementById('precio_blister_display').innerHTML = `C$${precio_blister}`;
-        document.getElementById('ganancia_blister_display').innerHTML = `C$${(precio_blister - costo_blister).toFixed(2)}`;
-        
-        document.getElementById('costo_pastilla_display').innerHTML = `C$${costo_pastilla.toFixed(2)}`;
-        document.getElementById('precio_pastilla_display').innerHTML = `C$${precio_pastilla}`;
-        document.getElementById('ganancia_pastilla_display').innerHTML = `C$${(precio_pastilla - costo_pastilla).toFixed(2)}`;
+        // Actualizar stock
+        actualizarStockPastillas(contexto);
     }
 }
 
-function calcularJerarquicoEdit() {
-    // Similar a calcularJerarquico pero para edición
-    const costo_caja = parseFloat(document.getElementById('edit_costo_caja').value) || 0;
-    const porcentaje = parseFloat(document.getElementById('edit_porcentaje_jer').value) || 30;
+function actualizarStockPastillas(contexto) {
+    const cajas = parseInt(document.getElementById(`${contexto}_stock_cajas`)?.value) || 0;
+    const sobres = parseInt(document.getElementById(`${contexto}_sobres_por_caja`)?.value) || 1;
+    const blister = parseInt(document.getElementById(`${contexto}_blister_por_sobre`)?.value) || 1;
+    const pastillas = parseInt(document.getElementById(`${contexto}_pastillas_por_blister`)?.value) || 1;
     
-    // Aquí podrías mostrar una vista previa similar
+    const total_pastillas = cajas * sobres * blister * pastillas;
+    const stockPastillasSpan = document.getElementById(`${contexto}_stock_pastillas`);
+    if (stockPastillasSpan) {
+        stockPastillasSpan.textContent = total_pastillas;
+    }
 }
 
-// Función para ver variaciones
-function verVariaciones(productoId) {
+// ========== FUNCIONES PARA PRESENTACIONES ADICIONALES ==========
+function agregarPresentacionSimple() {
+    const container = document.getElementById('nuevo_presentaciones_simple');
+    const index = container.children.length;
+    
+    const item = document.createElement('div');
+    item.className = 'presentacion-item';
+    item.innerHTML = `
+        <div class="presentacion-row">
+            <select name="presentacion_unidad[]" class="form-control" required>
+                <option value="">-- Unidad --</option>
+                {% for unidad in unidades %}
+                    {% if unidad.abreviatura not in ['PST', 'TAB', 'CAP', 'ML', 'G'] %}
+                    <option value="{{ unidad.id }}">{{ unidad.nombre }} ({{ unidad.abreviatura }})</option>
+                    {% endif %}
+                {% endfor %}
+            </select>
+            <input type="number" name="presentacion_cantidad[]" placeholder="Cantidad" min="1" value="10" class="form-control" required>
+            <input type="number" name="presentacion_precio[]" placeholder="Precio venta" step="0.01" min="0.01" class="form-control" required>
+            <input type="text" name="presentacion_desc[]" placeholder="Descripción" class="form-control">
+            <button type="button" class="btn-icon btn-danger" onclick="this.closest('.presentacion-item').remove()">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    `;
+    
+    container.appendChild(item);
+}
+
+// ========== FUNCIÓN PARA EDITAR PRODUCTO ==========
+function editarProducto(productoId) {
     fetch(`/productos/${productoId}/variaciones`)
         .then(response => response.json())
         .then(variaciones => {
-            let html = '<table class="table"><thead><tr><th>Presentación</th><th>Precio</th></tr></thead><tbody>';
-            variaciones.forEach(v => {
-                html += `<tr><td>${v.descripcion || v.unidad_nombre}</td><td>C$ ${v.precio_venta}</td></tr>`;
-            });
-            html += '</tbody></table>';
-            document.getElementById('contenido_variaciones').innerHTML = html;
-            document.getElementById('modalVariaciones').style.display = 'block';
-        });
-}
-
-// Funciones de modales
-function cerrarModal(modalId) {
-    document.getElementById(modalId).style.display = 'none';
-}
-
-// Configurar modal de edición
-document.addEventListener('DOMContentLoaded', function() {
-    const modalEditar = document.getElementById('modalEditarProducto');
-    
-    // Botones de editar
-    document.querySelectorAll('.btn-edit').forEach(button => {
-        button.addEventListener('click', function() {
-            const productoId = this.getAttribute('data-id');
-            const actionUrl = `/productos/${productoId}/editar`;
+            const producto = productosData.find(p => p.id == productoId);
+            if (!producto) return;
             
-            // Configurar formulario
-            const form = document.getElementById('formEditarProducto');
-            form.action = actionUrl;
+            // Configurar acción del formulario
+            document.getElementById('formEditarProducto').action = `/productos/${productoId}/editar`;
             
             // Llenar campos básicos
-            document.getElementById('edit_id').value = productoId;
-            document.getElementById('edit_codigo').value = this.getAttribute('data-codigo');
-            document.getElementById('edit_nombre').value = this.getAttribute('data-nombre');
-            document.getElementById('edit_descripcion').value = this.getAttribute('data-descripcion') || '';
-            document.getElementById('edit_categoria_id').value = this.getAttribute('data-categoria-id');
-            document.getElementById('edit_principio_activo').value = this.getAttribute('data-principio-activo') || '';
-            document.getElementById('edit_presentacion').value = this.getAttribute('data-presentacion') || '';
-            document.getElementById('edit_unidad_base_id').value = this.getAttribute('data-unidad-base-id');
-            document.getElementById('edit_precio_costo').value = this.getAttribute('data-precio-costo');
-            document.getElementById('edit_precio_venta').value = this.getAttribute('data-precio-venta');
-            document.getElementById('edit_stock_actual').value = this.getAttribute('data-stock-actual');
-            document.getElementById('edit_stock_minimo').value = this.getAttribute('data-stock-minimo');
-            document.getElementById('edit_lote').value = this.getAttribute('data-lote') || '';
-            document.getElementById('edit_fecha_vencimiento').value = this.getAttribute('data-fecha-vencimiento') || '';
+            document.getElementById('edit_codigo').value = producto.codigo;
+            document.getElementById('edit_nombre').value = producto.nombre;
+            document.getElementById('edit_descripcion').value = producto.descripcion || '';
+            document.getElementById('edit_categoria_id').value = producto.categoria_id || '';
+            document.getElementById('edit_principio_activo').value = producto.principio_activo || '';
+            document.getElementById('edit_presentacion').value = producto.presentacion || '';
+            document.getElementById('edit_unidad_base_id').value = producto.unidad_base_id || '';
+            document.getElementById('edit_precio_costo').value = producto.precio_costo;
+            document.getElementById('edit_precio_venta').value = producto.precio_venta;
+            document.getElementById('edit_porcentaje').value = producto.porcentaje_ganancia;
+            document.getElementById('edit_stock_actual').value = producto.stock_actual;
+            document.getElementById('edit_stock_minimo').value = producto.stock_minimo;
+            document.getElementById('edit_lote').value = producto.lote || '';
+            document.getElementById('edit_fecha_vencimiento').value = producto.fecha_vencimiento || '';
+            document.getElementById('edit_activo').checked = producto.activo == 1;
             
-            // Tipo de producto
-            const tipoProducto = this.getAttribute('data-tipo-producto') || 'simple';
-            document.getElementById('edit_tipo_producto').value = tipoProducto;
-            toggleTipoProductoEdit();
+            // Configurar tipo de producto
+            document.getElementById('edit_tipo_producto').value = producto.tipo_producto;
             
-            // Activo checkbox
-            const activoValue = this.getAttribute('data-activo');
-            document.getElementById('edit_activo').checked = (activoValue === 'True' || activoValue === 'true' || activoValue === '1');
+            if (producto.tipo_producto === 'jerarquico') {
+                document.getElementById('edit_seccion_simple').style.display = 'none';
+                document.getElementById('edit_seccion_jerarquico').style.display = 'block';
+                document.getElementById('edit_campo_unidad_base').style.display = 'none';
+                
+                // Cargar precios de presentaciones
+                let preciosHtml = '';
+                if (variaciones && variaciones.length > 0) {
+                    variaciones.forEach(v => {
+                        preciosHtml += `
+                            <div class="precio-item">
+                                <span class="presentacion">${v.unidad_nombre || v.abreviatura}</span>
+                                <span class="valor">C$${parseFloat(v.precio_venta).toFixed(2)}</span>
+                            </div>
+                        `;
+                    });
+                } else {
+                    preciosHtml = '<p class="text-muted">No hay presentaciones configuradas</p>';
+                }
+                document.getElementById('edit_precios_container').innerHTML = preciosHtml;
+                
+            } else {
+                document.getElementById('edit_seccion_simple').style.display = 'block';
+                document.getElementById('edit_seccion_jerarquico').style.display = 'none';
+                document.getElementById('edit_campo_unidad_base').style.display = 'block';
+            }
             
-            // Mostrar el modal
+            // Mostrar modal
             document.getElementById('modalEditarProducto').style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error al cargar los datos del producto');
         });
-    });
-    
-    // Botón para nuevo producto
-    document.querySelector('[data-target="#modalProducto"]')?.addEventListener('click', function() {
-        document.getElementById('modalProducto').style.display = 'block';
-        // Resetear formulario
-        document.getElementById('formNuevoProducto').reset();
-        toggleTipoProducto();
-    });
-    
-    // Cerrar modales
+}
+
+// ========== FUNCIÓN PARA VER PRESENTACIONES ==========
+function verPresentaciones(productoId) {
+    fetch(`/productos/${productoId}/variaciones`)
+        .then(response => response.json())
+        .then(variaciones => {
+            let html = '<table class="table"><thead><tr><th>Presentación</th><th>Precio</th><th>Stock</th></tr></thead><tbody>';
+            
+            if (!variaciones || variaciones.length === 0) {
+                html += '<tr><td colspan="3" class="text-center">No hay presentaciones registradas</td></tr>';
+            } else {
+                variaciones.forEach(v => {
+                    html += `<tr>
+                        <td>${v.descripcion || v.unidad_nombre || v.abreviatura}</td>
+                        <td>C$ ${parseFloat(v.precio_venta).toFixed(2)}</td>
+                        <td>${v.stock_disponible || 0} ${v.abreviatura || ''}</td>
+                    </tr>`;
+                });
+            }
+            
+            html += '</tbody></table>';
+            document.getElementById('contenido_presentaciones').innerHTML = html;
+            document.getElementById('modalPresentaciones').style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error al cargar las presentaciones');
+        });
+}
+
+// ========== FUNCIONES PARA ELIMINAR/ACTIVAR ==========
+function eliminarProducto(productoId) {
+    if (confirm('¿Está seguro de desactivar este producto?')) {
+        fetch(`/productos/${productoId}/desactivar`, { method: 'POST' })
+            .then(response => {
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    alert('Error al desactivar el producto');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error al desactivar el producto');
+            });
+    }
+}
+
+function activarProducto(productoId) {
+    if (confirm('¿Está seguro de activar este producto?')) {
+        fetch(`/productos/${productoId}/activar`, { method: 'POST' })
+            .then(response => {
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    alert('Error al activar el producto');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error al activar el producto');
+            });
+    }
+}
+
+// ========== INICIALIZACIÓN ==========
+document.addEventListener('DOMContentLoaded', function() {
+    // Cerrar modales al hacer clic fuera
     document.querySelectorAll('.modal').forEach(modal => {
-        modal.querySelector('.btn-close').addEventListener('click', function() {
-            modal.style.display = 'none';
-        });
-        
         modal.addEventListener('click', function(e) {
             if (e.target === this) {
-                this.style.display = 'none';
+                cerrarModal(this.id);
             }
         });
+    });
+    
+    // Cerrar con tecla Escape
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.modal').forEach(modal => {
+                if (modal.style.display === 'block') {
+                    cerrarModal(modal.id);
+                }
+            });
+        }
     });
 });
 </script>
 
 <style>
-/* Estilos adicionales */
+/* ========== ESTILOS ADICIONALES ========== */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.header-actions {
+    display: flex;
+    gap: 1rem;
+}
+
+/* Filtros */
+.filters-bar {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.filter-form {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.filter-group {
+    flex: 1;
+    min-width: 200px;
+    position: relative;
+}
+
+.filter-group i {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+}
+
+.filter-group input,
+.filter-group select {
+    width: 100%;
+    padding: 0.75rem 1rem 0.75rem 2.5rem;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 0.95rem;
+}
+
+/* Tabla */
+.table-container {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    overflow: hidden;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table th {
+    background: #f8fafc;
+    padding: 1rem;
+    text-align: left;
+    font-weight: 600;
+    color: #475569;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.table td {
+    padding: 1rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.inactive-row {
+    opacity: 0.6;
+    background-color: #f8fafc;
+}
+
+/* Badges */
 .badge {
-    padding: 3px 8px;
-    border-radius: 4px;
-    font-size: 12px;
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
 }
 
 .badge-info {
-    background-color: #17a2b8;
-    color: white;
+    background: #e0f2fe;
+    color: #0369a1;
 }
 
 .badge-secondary {
-    background-color: #6c757d;
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.badge-danger {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.badge-count {
+    background: #ef4444;
     color: white;
+    border-radius: 50%;
+    padding: 2px 6px;
+    font-size: 0.7rem;
+    margin-left: 4px;
 }
 
-.card {
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    margin-top: 15px;
+/* Stock */
+.stock-cell {
+    font-weight: 500;
 }
 
-.card-header {
-    padding: 10px;
-    background-color: #f8f9fa;
-    border-bottom: 1px solid #ddd;
-    font-weight: bold;
+.stock-cell.bajo-stock {
+    color: #dc2626;
 }
 
-.card-header.bg-info {
-    background-color: #17a2b8;
-    color: white;
+.stock-warning {
+    margin-left: 4px;
+    font-size: 1.1rem;
 }
 
-.card-body {
-    padding: 15px;
+/* Botones de acción */
+.action-buttons {
+    display: flex;
+    gap: 0.5rem;
 }
 
-/* Estilos para modales */
+.btn-icon {
+    background: none;
+    border: none;
+    padding: 0.5rem;
+    border-radius: 8px;
+    cursor: pointer;
+    color: #64748b;
+    transition: all 0.2s;
+    font-size: 1rem;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-icon:hover {
+    background: #f1f5f9;
+    color: #2563eb;
+}
+
+.btn-icon.btn-info {
+    color: #0891b2;
+}
+
+.btn-icon.btn-info:hover {
+    background: #e0f2fe;
+}
+
+.btn-icon.btn-danger:hover {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.btn-icon.btn-success:hover {
+    background: #dcfce7;
+    color: #16a34a;
+}
+
+/* Tipos de producto */
+.tipo-selector {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.tipo-option {
+    cursor: pointer;
+}
+
+.tipo-option input[type="radio"] {
+    display: none;
+}
+
+.tipo-option input[type="radio"]:checked + .tipo-card {
+    border-color: #2563eb;
+    background: #eff6ff;
+}
+
+.tipo-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    transition: all 0.2s;
+    text-align: center;
+}
+
+.tipo-card i {
+    font-size: 2rem;
+    color: #2563eb;
+    margin-bottom: 0.5rem;
+}
+
+.tipo-card small {
+    color: #64748b;
+    margin-top: 0.25rem;
+}
+
+/* Jerárquico */
+.jerarquico-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.nivel-card {
+    background: white;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.nivel-header {
+    padding: 0.75rem;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.nivel-header i {
+    font-size: 1.2rem;
+}
+
+.nivel-header h4 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.nivel-body {
+    padding: 1rem;
+}
+
+.nivel-caja .nivel-header {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.nivel-sobre .nivel-header {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.nivel-blister .nivel-header {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.nivel-pastilla .nivel-header {
+    background: #f1f5f9;
+    color: #334155;
+}
+
+/* Vista previa */
+.vista-previa {
+    background: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 1rem;
+    margin: 1rem 0;
+}
+
+.precios-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-top: 0.5rem;
+}
+
+.precio-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem;
+    background: white;
+    border-radius: 8px;
+}
+
+.precio-item .presentacion {
+    font-weight: 500;
+    color: #475569;
+}
+
+.precio-item .valor {
+    font-weight: 700;
+    color: #2563eb;
+}
+
+/* Presentaciones adicionales */
+.presentaciones-container {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 2px dashed #e2e8f0;
+}
+
+.presentaciones-container h4 {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.presentacion-item {
+    margin-bottom: 0.5rem;
+}
+
+.presentacion-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 2fr auto;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+/* Total unidades */
+.total-unidades {
+    text-align: right;
+    padding: 0.5rem;
+    background: white;
+    border-radius: 8px;
+    margin-top: 0.5rem;
+}
+
+/* Formulario */
+.form-section {
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #1e293b;
+    margin-bottom: 1.5rem;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.form-group {
+    margin-bottom: 0;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: #475569;
+}
+
+.required {
+    color: #dc2626;
+}
+
+.form-control {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    transition: all 0.2s;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+
+/* Modal */
 .modal {
     display: none;
     position: fixed;
@@ -733,69 +1406,170 @@ document.addEventListener('DOMContentLoaded', function() {
     top: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0,0,0,0.5);
-}
-
-.modal-content {
-    background-color: white;
-    margin: 5% auto;
-    padding: 20px;
-    border-radius: 8px;
-    width: 90%;
-    max-width: 800px;
-    max-height: 90vh;
+    background: rgba(0,0,0,0.5);
     overflow-y: auto;
 }
 
+.modal-content {
+    background: white;
+    margin: 2rem auto;
+    border-radius: 16px;
+    width: 90%;
+    max-width: 900px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+
+.modal-lg {
+    max-width: 1000px;
+}
+
 .modal-header {
+    padding: 1.5rem 2rem;
+    border-bottom: 2px solid #f0f0f0;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 10px;
+    background: #f8fafc;
+    border-radius: 16px 16px 0 0;
 }
 
 .modal-header h2 {
     margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
 }
 
 .btn-close {
     background: none;
     border: none;
-    font-size: 24px;
+    font-size: 2rem;
     cursor: pointer;
-    color: #666;
+    color: #94a3b8;
+    transition: all 0.2s;
 }
 
 .btn-close:hover {
-    color: #333;
+    color: #1e293b;
+    transform: rotate(90deg);
 }
 
-.stock-cell.bajo-stock {
-    color: #dc3545;
-    font-weight: bold;
+.modal-body {
+    padding: 2rem;
 }
 
-/* Botones pequeños */
-.btn-small {
-    padding: 3px 8px;
-    font-size: 12px;
-    margin: 0 2px;
+/* Botones */
+.btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
-.btn-info {
-    background-color: #17a2b8;
+.btn-primary {
+    background: #2563eb;
     color: white;
 }
 
-/* Vista previa */
-#vista_previa_jerarquico table {
-    background: white;
+.btn-primary:hover {
+    background: #1d4ed8;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(37,99,235,0.3);
 }
 
-#vista_previa_jerarquico table td {
-    padding: 5px;
+.btn-secondary {
+    background: #f1f5f9;
+    color: #475569;
+    border: 2px solid #e2e8f0;
+}
+
+.btn-secondary:hover {
+    background: #e2e8f0;
+}
+
+.btn-small {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.85rem;
+}
+
+.btn-lg {
+    padding: 1rem 2rem;
+    font-size: 1.1rem;
+}
+
+/* Utilidades */
+.text-muted {
+    color: #64748b;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.empty-table {
+    padding: 3rem;
+    color: #94a3b8;
+}
+
+.empty-table i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.alert {
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.alert-info {
+    background: #e0f2fe;
+    color: #0369a1;
+    border: 1px solid #bae6fd;
+}
+
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 2rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .filter-form {
+        flex-direction: column;
+    }
+    
+    .filter-group {
+        width: 100%;
+    }
+    
+    .tipo-selector {
+        grid-template-columns: 1fr;
+    }
+    
+    .jerarquico-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .presentacion-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .modal-content {
+        margin: 1rem;
+        width: calc(100% - 2rem);
+    }
+    
+    .form-row {
+        grid-template-columns: 1fr;
+    }
 }
 </style>
 {% endblock %}
