@@ -2699,7 +2699,7 @@ def visualizar_ventas():
                              filtro_actual=filtro,
                              fecha_inicio=fecha_inicio,
                              fecha_fin=fecha_fin)
-
+#
 @app.route('/ventas/nueva', methods=['GET', 'POST'])
 @login_required
 def nueva_venta():
@@ -2725,9 +2725,7 @@ def nueva_venta():
             # Calcular cambio
             cambio = efectivo - total_venta
             
-            # ============================================
-            # CORREGIDO: Eliminado tipo_venta del INSERT
-            # ============================================
+            # Insertar cabecera de venta
             cursor.execute('''
                 INSERT INTO ventas (usuario_id, fecha_venta, total_venta, efectivo, cambio)
                 VALUES (%s, CURDATE(), %s, %s, %s)
@@ -2737,56 +2735,183 @@ def nueva_venta():
             
             # Procesar cada item
             for item in items:
-                # Insertar detalle de venta
-                cursor.execute('''
-                    INSERT INTO detalles_venta 
-                    (venta_id, tipo_detalle, referencia_id, cantidad, unidad_id, precio_unitario, subtotal)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                ''', (
-                    venta_id,
-                    item['tipo_detalle'],
-                    item['referencia_id'],
-                    item.get('cantidad', 1),
-                    item.get('unidad_id'),
-                    item['precio_unitario'],
-                    item['subtotal']
-                ))
+                tipo_detalle = item['tipo_detalle']
+                referencia_id = item['referencia_id']
+                cantidad = float(item.get('cantidad', 1))
+                precio_unitario = float(item['precio_unitario'])
+                subtotal = float(item['subtotal'])
+                variacion_id = item.get('variacion_id')
                 
-                # Si es producto, actualizar stock
-                if item['tipo_detalle'] == 'producto':
-                    # Verificar stock actual
-                    cursor.execute('SELECT stock_actual, nombre FROM productos WHERE id = %s', 
-                                 (item['referencia_id'],))
-                    producto = cursor.fetchone()
+                if tipo_detalle == 'producto':
+                    if variacion_id:
+                        # Es una variación de producto
+                        cursor.execute('''
+                            SELECT 
+                                v.*,
+                                p.stock_actual as stock_producto_base,
+                                p.nombre as producto_nombre,
+                                u.abreviatura as unidad_abrev,
+                                u2.abreviatura as unidad_base_abrev,
+                                v.cantidad_equivalente
+                            FROM variaciones_producto v
+                            JOIN productos p ON v.producto_id = p.id
+                            JOIN unidades_medida u ON v.unidad_id = u.id
+                            JOIN unidades_medida u2 ON p.unidad_base_id = u2.id
+                            WHERE v.id = %s AND v.activo = 1
+                        ''', (variacion_id,))
+                        
+                        variacion = cursor.fetchone()
+                        
+                        if not variacion:
+                            raise ValueError(f"Variación de producto no encontrada")
+                        
+                        # Calcular cantidad en unidades base (para actualizar stock)
+                        cantidad_base = cantidad * variacion['cantidad_equivalente']
+                        
+                        # Verificar stock
+                        if variacion['stock_producto_base'] < cantidad_base:
+                            raise ValueError(
+                                f"Stock insuficiente para {variacion['producto_nombre']} "
+                                f"en presentación {variacion['unidad_abrev']}. "
+                                f"Disponible: {int(variacion['stock_producto_base'] / variacion['cantidad_equivalente'])} "
+                                f"{variacion['unidad_abrev']}"
+                            )
+                        
+                        # Insertar detalle de venta con variación
+                        cursor.execute('''
+                            INSERT INTO detalles_venta 
+                            (venta_id, tipo_detalle, referencia_id, variacion_id, 
+                             cantidad, unidad_id, precio_unitario, subtotal, observaciones)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ''', (
+                            venta_id,
+                            tipo_detalle,
+                            referencia_id,
+                            variacion_id,
+                            cantidad,
+                            variacion['unidad_id'],
+                            precio_unitario,
+                            subtotal,
+                            f"Presentación: {variacion['unidad_abrev']} - {variacion.get('descripcion', 'Sin descripción')}"
+                        ))
+                        
+                        # Actualizar stock del producto base (restando la cantidad base)
+                        nuevo_stock = variacion['stock_producto_base'] - cantidad_base
+                        cursor.execute('''
+                            UPDATE productos 
+                            SET stock_actual = %s 
+                            WHERE id = %s
+                        ''', (nuevo_stock, referencia_id))
+                        
+                        # Registrar movimiento de inventario
+                        observacion_movimiento = (
+                            f"Venta #{venta_id} - "
+                            f"Presentación: {variacion['unidad_abrev']} - "
+                            f"Cantidad vendida: {cantidad} {variacion['unidad_abrev']} "
+                            f"(Equivalente a {cantidad_base} {variacion['unidad_base_abrev']})"
+                        )
+                        
+                        cursor.execute('''
+                            INSERT INTO movimientos_inventario 
+                            (producto_id, tipo_movimiento, cantidad, cantidad_anterior, 
+                             cantidad_nueva, referencia_tipo, referencia_id, usuario_id, observaciones)
+                            VALUES (%s, 'salida', %s, %s, %s, 'venta', %s, %s, %s)
+                        ''', (
+                            referencia_id,
+                            cantidad_base,
+                            variacion['stock_producto_base'],
+                            nuevo_stock,
+                            venta_id,
+                            session['usuario_id'],
+                            observacion_movimiento
+                        ))
                     
-                    if not producto:
-                        raise ValueError(f"Producto no encontrado")
-                    
-                    if producto['stock_actual'] < item['cantidad']:
-                        raise ValueError(f"Stock insuficiente para {producto['nombre']}. Disponible: {producto['stock_actual']}")
-                    
-                    # Actualizar stock
-                    nuevo_stock = producto['stock_actual'] - item['cantidad']
+                    else:
+                        # Producto simple sin variación
+                        cursor.execute('''
+                            SELECT stock_actual, nombre, unidad_base_id 
+                            FROM productos 
+                            WHERE id = %s
+                        ''', (referencia_id,))
+                        producto = cursor.fetchone()
+                        
+                        if not producto:
+                            raise ValueError(f"Producto no encontrado")
+                        
+                        if producto['stock_actual'] < cantidad:
+                            raise ValueError(
+                                f"Stock insuficiente para {producto['nombre']}. "
+                                f"Disponible: {producto['stock_actual']}"
+                            )
+                        
+                        # Insertar detalle de venta
+                        cursor.execute('''
+                            INSERT INTO detalles_venta 
+                            (venta_id, tipo_detalle, referencia_id, cantidad, 
+                             unidad_id, precio_unitario, subtotal)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        ''', (
+                            venta_id,
+                            tipo_detalle,
+                            referencia_id,
+                            cantidad,
+                            producto['unidad_base_id'],
+                            precio_unitario,
+                            subtotal
+                        ))
+                        
+                        # Actualizar stock
+                        nuevo_stock = producto['stock_actual'] - cantidad
+                        cursor.execute('''
+                            UPDATE productos 
+                            SET stock_actual = %s 
+                            WHERE id = %s
+                        ''', (nuevo_stock, referencia_id))
+                        
+                        # Registrar movimiento de inventario
+                        cursor.execute('''
+                            INSERT INTO movimientos_inventario 
+                            (producto_id, tipo_movimiento, cantidad, cantidad_anterior, 
+                             cantidad_nueva, referencia_tipo, referencia_id, usuario_id, observaciones)
+                            VALUES (%s, 'salida', %s, %s, %s, 'venta', %s, %s, %s)
+                        ''', (
+                            referencia_id,
+                            cantidad,
+                            producto['stock_actual'],
+                            nuevo_stock,
+                            venta_id,
+                            session['usuario_id'],
+                            f"Venta #{venta_id}"
+                        ))
+                
+                elif tipo_detalle == 'servicio':
+                    # Servicios
                     cursor.execute('''
-                        UPDATE productos 
-                        SET stock_actual = %s 
-                        WHERE id = %s
-                    ''', (nuevo_stock, item['referencia_id']))
-                    
-                    # Registrar movimiento de inventario
-                    cursor.execute('''
-                        INSERT INTO movimientos_inventario 
-                        (producto_id, tipo_movimiento, cantidad, cantidad_anterior, cantidad_nueva, 
-                         referencia_tipo, referencia_id, usuario_id, observaciones)
-                        VALUES (%s, 'salida', %s, %s, %s, 'venta', %s, %s, %s)
+                        INSERT INTO detalles_venta 
+                        (venta_id, tipo_detalle, referencia_id, cantidad, precio_unitario, subtotal)
+                        VALUES (%s, %s, %s, %s, %s, %s)
                     ''', (
-                        item['referencia_id'],
-                        item['cantidad'],
-                        producto['stock_actual'],
-                        nuevo_stock,
                         venta_id,
-                        session['usuario_id'],
-                        f"Venta #{venta_id}"
+                        tipo_detalle,
+                        referencia_id,
+                        cantidad,
+                        precio_unitario,
+                        subtotal
+                    ))
+                
+                elif tipo_detalle == 'combo':
+                    # Combos
+                    cursor.execute('''
+                        INSERT INTO detalles_venta 
+                        (venta_id, tipo_detalle, referencia_id, cantidad, precio_unitario, subtotal)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                    ''', (
+                        venta_id,
+                        tipo_detalle,
+                        referencia_id,
+                        cantidad,
+                        precio_unitario,
+                        subtotal
                     ))
             
             # Confirmar transacción
@@ -2797,7 +2922,6 @@ def nueva_venta():
                 'message': 'Venta registrada exitosamente',
                 'venta_id': venta_id,
                 'cambio': cambio
-                # Eliminado 'tipo_venta' del JSON response
             })
             
         except ValueError as e:
@@ -2805,32 +2929,54 @@ def nueva_venta():
             return jsonify({'success': False, 'message': str(e)}), 400
         except Exception as e:
             mysql.connection.rollback()
+            print(f"Error en nueva_venta: {str(e)}")
             return jsonify({'success': False, 'message': f'Error al procesar la venta: {str(e)}'}), 500
         finally:
             cursor.close()
     
     # GET: Mostrar formulario de venta
     try:
-        # Obtener productos activos con stock
+        # Obtener productos activos
         cursor.execute('''
-            SELECT p.*, c.nombre as categoria_nombre, u.abreviatura as unidad_abrev
+            SELECT 
+                p.*,
+                c.nombre as categoria_nombre,
+                u.abreviatura as unidad_abrev,
+                u.nombre as unidad_nombre
             FROM productos p
             LEFT JOIN categorias c ON p.categoria_id = c.id
             LEFT JOIN unidades_medida u ON p.unidad_base_id = u.id
-            WHERE p.activo = 1 AND p.stock_actual > 0
+            WHERE p.activo = 1
             ORDER BY p.nombre
         ''')
         productos = cursor.fetchall()
         
-        # Obtener variaciones de productos
+        # Obtener variaciones para cada producto jerárquico
         for producto in productos:
-            cursor.execute('''
-                SELECT v.*, u.abreviatura as unidad_abrev, u.nombre as unidad_nombre
-                FROM variaciones_producto v
-                JOIN unidades_medida u ON v.unidad_id = u.id
-                WHERE v.producto_id = %s AND v.activo = 1
-            ''', (producto['id'],))
-            producto['variaciones'] = cursor.fetchall()
+            if producto['tipo_producto'] == 'jerarquico':
+                cursor.execute('''
+                    SELECT 
+                        v.*,
+                        u.nombre as unidad_nombre,
+                        u.abreviatura as unidad_abrev,
+                        -- Calcular stock disponible
+                        FLOOR(p.stock_actual / v.cantidad_equivalente) as stock_disponible
+                    FROM variaciones_producto v
+                    JOIN unidades_medida u ON v.unidad_id = u.id
+                    JOIN productos p ON v.producto_id = p.id
+                    WHERE v.producto_id = %s AND v.activo = 1
+                    ORDER BY v.nivel, v.cantidad_equivalente
+                ''', (producto['id'],))
+                producto['variaciones'] = cursor.fetchall()
+                
+                # Convertir valores para la vista
+                for variacion in producto['variaciones']:
+                    if variacion.get('precio_venta'):
+                        variacion['precio_venta'] = float(variacion['precio_venta'])
+                    if variacion.get('stock_disponible'):
+                        variacion['stock_disponible'] = int(variacion['stock_disponible'])
+            else:
+                producto['variaciones'] = []
         
         # Obtener servicios activos
         cursor.execute('''
@@ -2861,21 +3007,20 @@ def nueva_venta():
     
     except Exception as e:
         cursor.close()
+        print(f"Error al cargar datos: {str(e)}")
         flash(f'Error al cargar datos: {str(e)}', 'error')
         return render_template('admin/punto_venta.html',
                              productos=[],
                              servicios=[],
                              combos=[])
-
+#
 @app.route('/ventas/<int:venta_id>', methods=['GET'])
 @login_required
 def detalle_venta(venta_id):
     cursor = mysql.connection.cursor(DictCursor)
     
     try:
-        # ============================================
-        # 1. OBTENER INFORMACIÓN DE LA VENTA - CORREGIDO
-        # ============================================
+        # Obtener información de la venta
         cursor.execute('''
             SELECT v.*, u.nombre as usuario_nombre, u.email as usuario_email, u.rol as usuario_rol
             FROM ventas v
@@ -2890,29 +3035,38 @@ def detalle_venta(venta_id):
             flash('Venta no encontrada', 'danger')
             return redirect(url_for('visualizar_ventas'))
         
-        # ============================================
-        # 2. OBTENER DETALLES DE LA VENTA
-        # ============================================
+        # Obtener detalles de la venta con información de variaciones
         cursor.execute('''
             SELECT 
                 dv.*,
                 -- Nombre del item según su tipo
                 CASE 
-                    WHEN dv.tipo_detalle = 'producto' THEN p.nombre
+                    WHEN dv.tipo_detalle = 'producto' THEN 
+                        CONCAT(
+                            p.nombre,
+                            IF(dv.variacion_id IS NOT NULL, 
+                               CONCAT(' (', u.abreviatura, ')'), 
+                               IF(p.tipo_producto = 'simple', 
+                                  CONCAT(' (', ub.abreviatura, ')'), 
+                                  ''))
+                        )
                     WHEN dv.tipo_detalle = 'servicio' THEN s.nombre
                     WHEN dv.tipo_detalle = 'combo' THEN c.nombre
                     ELSE 'Desconocido'
                 END as nombre_item,
-                -- Presentación solo para productos
-                CASE 
-                    WHEN dv.tipo_detalle = 'producto' THEN p.presentacion
-                    ELSE NULL
-                END as presentacion,
+                -- Información de variación
+                vp.unidad_id as variacion_unidad_id,
+                u.abreviatura as variacion_unidad,
+                vp.cantidad_equivalente,
+                vp.descripcion as variacion_descripcion,
+                -- Presentación
+                p.presentacion as presentacion,
                 -- Unidad de medida
-                u.abreviatura as unidad_abrev,
-                u.nombre as unidad_nombre,
+                COALESCE(u.abreviatura, ub.abreviatura) as unidad_abrev,
+                COALESCE(u.nombre, ub.nombre) as unidad_nombre,
                 -- Información adicional
                 dv.tipo_detalle as tipo_item,
+                p.tipo_producto as producto_tipo,
                 CASE
                     WHEN dv.tipo_detalle = 'producto' THEN p.id
                     WHEN dv.tipo_detalle = 'servicio' THEN s.id
@@ -2925,15 +3079,17 @@ def detalle_venta(venta_id):
                     WHEN dv.tipo_detalle = 'combo' AND c.id IS NULL THEN 'Combo no disponible'
                     ELSE 'Disponible'
                 END as estado_item,
-                -- Precio unitario formateado para la vista
+                -- Valores formateados
                 FORMAT(dv.precio_unitario, 2) as precio_unitario_formato,
-                -- Subtotal formateado para la vista
-                FORMAT(dv.subtotal, 2) as subtotal_formato
+                FORMAT(dv.subtotal, 2) as subtotal_formato,
+                dv.observaciones
             FROM detalles_venta dv
             LEFT JOIN productos p ON dv.tipo_detalle = 'producto' AND dv.referencia_id = p.id
             LEFT JOIN servicios s ON dv.tipo_detalle = 'servicio' AND dv.referencia_id = s.id
             LEFT JOIN combos c ON dv.tipo_detalle = 'combo' AND dv.referencia_id = c.id
-            LEFT JOIN unidades_medida u ON dv.unidad_id = u.id
+            LEFT JOIN unidades_medida ub ON p.unidad_base_id = ub.id
+            LEFT JOIN variaciones_producto vp ON dv.variacion_id = vp.id
+            LEFT JOIN unidades_medida u ON vp.unidad_id = u.id
             WHERE dv.venta_id = %s
             ORDER BY 
                 CASE dv.tipo_detalle
@@ -2947,9 +3103,7 @@ def detalle_venta(venta_id):
         
         detalles = cursor.fetchall()
         
-        # ============================================
-        # 3. CALCULAR RESUMEN DE LA VENTA
-        # ============================================
+        # Calcular resumen
         resumen_detalle = {
             'total_items': len(detalles),
             'total_productos': sum(1 for d in detalles if d['tipo_detalle'] == 'producto'),
@@ -2959,14 +3113,9 @@ def detalle_venta(venta_id):
             'items_no_disponibles': sum(1 for d in detalles if 'no disponible' in d['estado_item'].lower())
         }
         
-        # ============================================
-        # 4. VERIFICAR CONSISTENCIA DE TOTALES
-        # ============================================
+        # Verificar consistencia de totales
         if abs(float(resumen_detalle['subtotal']) - float(venta['total_venta'])) > 0.01:
-            # Registrar inconsistencia (opcional)
             print(f"ADVERTENCIA: Venta {venta_id} - Total calculado ({resumen_detalle['subtotal']}) != Total registrado ({venta['total_venta']})")
-            
-            # Ajustar el subtotal para que coincida con el total de la venta
             resumen_detalle['subtotal'] = float(venta['total_venta'])
         
         cursor.close()
@@ -2981,40 +3130,104 @@ def detalle_venta(venta_id):
         print(f"Error en detalle_venta ({venta_id}): {str(e)}")
         flash('Error al cargar el detalle de la venta', 'danger')
         return redirect(url_for('visualizar_ventas'))
-
+#
 @app.route('/api/productos/disponibles', methods=['GET'])
 @login_required
 def api_productos_disponibles():
-    """API para obtener productos disponibles para la venta"""
+    """API para obtener productos disponibles con sus variaciones jerárquicas"""
     cursor = mysql.connection.cursor(DictCursor)
     try:
+        # Obtener todos los productos activos
         cursor.execute('''
-            SELECT p.id, p.codigo, p.nombre, p.descripcion, 
-                   p.precio_venta, p.stock_actual,
-                   p.presentacion, p.lote, p.fecha_vencimiento,
-                   c.nombre as categoria_nombre,
-                   u.id as unidad_id, u.nombre as unidad_nombre, 
-                   u.abreviatura as unidad_abrev
+            SELECT 
+                p.id, 
+                p.codigo, 
+                p.nombre, 
+                p.descripcion, 
+                p.tipo_producto,
+                p.precio_venta as precio_base,
+                p.stock_actual as stock_base,
+                p.presentacion,
+                p.lote, 
+                p.fecha_vencimiento,
+                p.principio_activo,
+                c.nombre as categoria_nombre,
+                u.id as unidad_base_id, 
+                u.nombre as unidad_base_nombre, 
+                u.abreviatura as unidad_base_abrev
             FROM productos p
             LEFT JOIN categorias c ON p.categoria_id = c.id
             LEFT JOIN unidades_medida u ON p.unidad_base_id = u.id
-            WHERE p.activo = 1 AND p.stock_actual > 0
+            WHERE p.activo = 1
             ORDER BY p.nombre
         ''')
         productos = cursor.fetchall()
         
-        # Obtener variaciones para cada producto
+        # Para cada producto, obtener sus variaciones
         for producto in productos:
-            cursor.execute('''
-                SELECT v.*, u.nombre as unidad_nombre, u.abreviatura as unidad_abrev
-                FROM variaciones_producto v
-                JOIN unidades_medida u ON v.unidad_id = u.id
-                WHERE v.producto_id = %s AND v.activo = 1
-            ''', (producto['id'],))
-            producto['variaciones'] = cursor.fetchall()
+            if producto['tipo_producto'] == 'jerarquico':
+                cursor.execute('''
+                    SELECT 
+                        v.id,
+                        v.producto_id,
+                        v.presentacion_padre_id,
+                        v.nivel,
+                        v.unidad_id,
+                        v.cantidad_equivalente,
+                        v.cantidad_por_padre,
+                        v.precio_venta,
+                        v.porcentaje_ganancia,
+                        v.descripcion,
+                        v.activo,
+                        u.nombre as unidad_nombre,
+                        u.abreviatura as unidad_abrev,
+                        -- Calcular stock disponible basado en el producto base
+                        FLOOR(p.stock_actual / v.cantidad_equivalente) as stock_disponible,
+                        -- Información de la presentación padre
+                        vp.unidad_id as padre_unidad_id,
+                        up.nombre as padre_unidad_nombre,
+                        up.abreviatura as padre_unidad_abrev
+                    FROM variaciones_producto v
+                    JOIN unidades_medida u ON v.unidad_id = u.id
+                    JOIN productos p ON v.producto_id = p.id
+                    LEFT JOIN variaciones_producto vp ON v.presentacion_padre_id = vp.id
+                    LEFT JOIN unidades_medida up ON vp.unidad_id = up.id
+                    WHERE v.producto_id = %s AND v.activo = 1
+                    ORDER BY v.nivel, v.cantidad_equivalente
+                ''', (producto['id'],))
+                
+                variaciones = cursor.fetchall()
+                
+                # Convertir valores Decimal a float para JSON
+                for variacion in variaciones:
+                    if variacion.get('precio_venta'):
+                        variacion['precio_venta'] = float(variacion['precio_venta'])
+                    if variacion.get('porcentaje_ganancia'):
+                        variacion['porcentaje_ganancia'] = float(variacion['porcentaje_ganancia'])
+                    if variacion.get('stock_disponible'):
+                        variacion['stock_disponible'] = int(variacion['stock_disponible'])
+                    
+                    # Construir nombre de presentación completo
+                    presentacion_nombre = variacion['unidad_abrev']
+                    if variacion.get('padre_unidad_abrev'):
+                        presentacion_nombre = f"{variacion['padre_unidad_abrev']} → {presentacion_nombre}"
+                    
+                    variacion['presentacion_completa'] = presentacion_nombre
+                
+                producto['variaciones'] = variaciones
+            else:
+                producto['variaciones'] = []
+            
+            # Convertir valores numéricos a float
+            if producto.get('precio_base'):
+                producto['precio_base'] = float(producto['precio_base'])
+            if producto.get('stock_base'):
+                producto['stock_base'] = int(producto['stock_base'])
         
         return jsonify(productos)
+        
     except Exception as e:
+        print(f"Error en api_productos_disponibles: {str(e)}")
         return jsonify({'error': str(e)}), 500
     finally:
         cursor.close()
