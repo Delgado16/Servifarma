@@ -9,7 +9,7 @@
         <i class="fas fa-boxes"></i> 
         Gestión de Inventario
     </h1>
-    <div style="display: flex; gap: 10px;">
+    <div class="action-buttons-group">
         <a href="{{ url_for('entrada_inventario') }}" class="btn btn-success">
             <i class="fas fa-plus-circle"></i> Entrada
         </a>
@@ -22,16 +22,35 @@
     </div>
 </div>
 
-<!-- Stock Actual -->
-<div class="table-container" style="margin-bottom: 20px;">
-    <div style="padding: 15px 20px; border-bottom: 1px solid #eee; background-color: #f8f9fa;">
-        <h3 style="margin: 0; font-size: 1.1rem; color: #0d6efd;">
+<!-- Stock Actual - Versión Responsive -->
+<div class="table-container stock-container">
+    <div class="section-header">
+        <h3>
             <i class="fas fa-cubes"></i> 
             Stock Actual de Productos
         </h3>
+        <div class="stock-stats">
+            <span class="stat-badge" id="totalProductos">
+                <i class="fas fa-box"></i> {{ productos_stock|length }} productos
+            </span>
+            <span class="stat-badge stat-warning" id="stockBajo">
+                <i class="fas fa-exclamation-triangle"></i> 
+                {% set bajo_stock_count = 0 %}
+                {% for producto in productos_stock %}
+                    {% set stock_actual_val = producto.stock_actual|default(0)|int %}
+                    {% set stock_minimo_val = producto.stock_minimo|default(0)|int %}
+                    {% if stock_actual_val <= stock_minimo_val %}
+                        {% set bajo_stock_count = bajo_stock_count + 1 %}
+                    {% endif %}
+                {% endfor %}
+                {{ bajo_stock_count }} bajo stock
+            </span>
+        </div>
     </div>
-    <div style="padding: 20px;">
-        <div style="overflow-x: auto;">
+    
+    <div class="table-responsive-wrapper">
+        <!-- Versión Desktop: Tabla -->
+        <div class="desktop-table">
             <table class="table" id="tablaStock">
                 <thead>
                     <tr>
@@ -46,66 +65,172 @@
                 </thead>
                 <tbody>
                     {% for producto in productos_stock %}
-                    <tr class="{% if producto.stock_actual <= 0 %}sin-stock-row{% elif producto.stock_actual <= producto.stock_minimo %}bajo-stock-row{% endif %}">
-                        <td><strong>{{ producto.codigo }}</strong></td>
-                        <td>{{ producto.nombre }}</td>
-                        <td class="text-right {% if producto.stock_actual <= producto.stock_minimo %}stock-critico{% endif %}">
-                            {{ producto.stock_actual }}
+                    {% set stock_actual = producto.stock_actual|default(0)|int %}
+                    {% set stock_minimo = producto.stock_minimo|default(0)|int %}
+                    <tr class="{% if stock_actual <= 0 %}sin-stock-row{% elif stock_actual <= stock_minimo %}bajo-stock-row{% endif %}">
+                        <td data-label="Código"><strong>{{ producto.codigo }}</strong></td>
+                        <td data-label="Producto">{{ producto.nombre }}</td>
+                        <td data-label="Stock Actual" class="text-right {% if stock_actual <= stock_minimo %}stock-critico{% endif %}">
+                            <span class="stock-number">{{ stock_actual }}</span>
                         </td>
-                        <td>{{ producto.unidad }}</td>
-                        <td class="text-right">{{ producto.stock_minimo }}</td>
-                        <td class="text-center">
-                            {% if producto.stock_actual <= 0 %}
+                        <td data-label="Unidad">{{ producto.unidad }}</td>
+                        <td data-label="Stock Mínimo" class="text-right">{{ stock_minimo }}</td>
+                        <td data-label="Estado" class="text-center">
+                            {% if stock_actual <= 0 %}
                             <span class="badge badge-dark">SIN STOCK</span>
-                            {% elif producto.stock_actual <= producto.stock_minimo %}
+                            {% elif stock_actual <= stock_minimo %}
                             <span class="badge badge-danger">Stock Bajo</span>
-                            {% elif producto.stock_actual <= producto.stock_minimo * 2 %}
+                            {% elif stock_actual <= stock_minimo * 2 %}
                             <span class="badge badge-warning">Stock Medio</span>
                             {% else %}
                             <span class="badge badge-success">Stock Normal</span>
                             {% endif %}
                         </td>
-                        <td class="text-center">
-                            <div style="display: flex; gap: 5px; justify-content: center;">
+                        <td data-label="Acciones" class="text-center actions-cell">
+                            <div class="action-buttons">
                                 <a href="{{ url_for('historial_producto', producto_id=producto.id) }}" 
-                                   class="btn btn-small btn-edit" title="Ver historial">
+                                   class="btn-icon btn-edit" title="Ver historial">
                                     <i class="fas fa-history"></i>
                                 </a>
                                 <a href="{{ url_for('entrada_inventario') }}?producto_id={{ producto.id }}" 
-                                   class="btn btn-small btn-success" title="Registrar entrada">
+                                   class="btn-icon btn-success" title="Registrar entrada">
                                     <i class="fas fa-plus-circle"></i>
                                 </a>
                                 <a href="{{ url_for('salida_inventario') }}?producto_id={{ producto.id }}" 
-                                   class="btn btn-small btn-warning" title="Registrar salida">
+                                   class="btn-icon btn-warning" title="Registrar salida">
                                     <i class="fas fa-minus-circle"></i>
                                 </a>
                             </div>
                         </td>
                     </tr>
                     {% else %}
-                    <tr>
-                        <td colspan="7" class="text-center" style="padding: 40px;">
-                            <i class="fas fa-box-open" style="font-size: 48px; color: #ccc; margin-bottom: 10px; display: block;"></i>
+                    <tr id="fila-vacia-stock">
+                        <td colspan="7" class="text-center empty-table">
+                            <i class="fas fa-box-open"></i>
                             <p>No hay productos registrados</p>
+                            <a href="{{ url_for('productos') }}" class="btn btn-primary">
+                                <i class="fas fa-plus"></i> Crear primer producto
+                            </a>
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+        
+        <!-- Versión Mobile: Tarjetas de Stock -->
+        <div class="mobile-stock-cards">
+            {% for producto in productos_stock %}
+            {% set stock_actual = producto.stock_actual|default(0)|int %}
+            {% set stock_minimo = producto.stock_minimo|default(0)|int %}
+            <div class="stock-card {% if stock_actual <= 0 %}sin-stock-card{% elif stock_actual <= stock_minimo %}bajo-stock-card{% endif %}">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fas fa-cube"></i>
+                        <strong>{{ producto.nombre }}</strong>
+                        <span class="card-code">{{ producto.codigo }}</span>
+                    </div>
+                    <div class="card-status">
+                        {% if stock_actual <= 0 %}
+                        <span class="badge badge-dark">SIN STOCK</span>
+                        {% elif stock_actual <= stock_minimo %}
+                        <span class="badge badge-danger">Stock Bajo</span>
+                        {% elif stock_actual <= stock_minimo * 2 %}
+                        <span class="badge badge-warning">Stock Medio</span>
+                        {% else %}
+                        <span class="badge badge-success">Stock Normal</span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="card-body">
+                    <div class="stock-display">
+                        <div class="stock-number-large">
+                            {{ stock_actual }}
+                        </div>
+                        <div class="stock-unit">{{ producto.unidad }}</div>
+                    </div>
+                    <div class="stock-info">
+                        <div class="info-item">
+                            <span class="info-label">
+                                <i class="fas fa-arrow-down"></i> Stock Mínimo:
+                            </span>
+                            <span class="info-value">{{ stock_minimo }} {{ producto.unidad }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">
+                                <i class="fas fa-chart-line"></i> Estado:
+                            </span>
+                            <span class="info-value">
+                                {% if stock_actual <= 0 %}
+                                <span class="text-danger">Sin stock disponible</span>
+                                {% elif stock_actual <= stock_minimo %}
+                                <span class="text-warning">Por debajo del mínimo</span>
+                                {% else %}
+                                <span class="text-success">Stock suficiente</span>
+                                {% endif %}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card-actions">
+                    <a href="{{ url_for('historial_producto', producto_id=producto.id) }}" 
+                       class="btn-icon btn-edit" title="Ver historial">
+                        <i class="fas fa-history"></i> Historial
+                    </a>
+                    <a href="{{ url_for('entrada_inventario') }}?producto_id={{ producto.id }}" 
+                       class="btn-icon btn-success" title="Registrar entrada">
+                        <i class="fas fa-plus-circle"></i> Entrada
+                    </a>
+                    <a href="{{ url_for('salida_inventario') }}?producto_id={{ producto.id }}" 
+                       class="btn-icon btn-warning" title="Registrar salida">
+                        <i class="fas fa-minus-circle"></i> Salida
+                    </a>
+                </div>
+            </div>
+            {% else %}
+            <div class="empty-cards">
+                <i class="fas fa-box-open"></i>
+                <p>No hay productos registrados</p>
+                <a href="{{ url_for('productos') }}" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Crear primer producto
+                </a>
+            </div>
+            {% endfor %}
+        </div>
     </div>
 </div>
 
-<!-- Últimos Movimientos -->
-<div class="table-container">
-    <div style="padding: 15px 20px; border-bottom: 1px solid #eee; background-color: #f8f9fa;">
-        <h3 style="margin: 0; font-size: 1.1rem; color: #0d6efd;">
+<!-- Últimos Movimientos - Versión Responsive -->
+<div class="table-container movimientos-container">
+    <div class="section-header">
+        <h3>
             <i class="fas fa-history"></i> 
             Últimos Movimientos
         </h3>
+        <div class="movimiento-stats">
+            {% set entradas_count = 0 %}
+            {% set salidas_count = 0 %}
+            {% for mov in movimientos %}
+                {% if mov.tipo_movimiento == 'entrada' %}
+                    {% set entradas_count = entradas_count + 1 %}
+                {% elif mov.tipo_movimiento == 'salida' %}
+                    {% set salidas_count = salidas_count + 1 %}
+                {% endif %}
+            {% endfor %}
+            <span class="stat-badge stat-entrada">
+                <i class="fas fa-arrow-up"></i> {{ entradas_count }} entradas
+            </span>
+            <span class="stat-badge stat-salida">
+                <i class="fas fa-arrow-down"></i> {{ salidas_count }} salidas
+            </span>
+        </div>
     </div>
-    <div style="padding: 20px;">
-        <div style="overflow-x: auto;">
+    
+    <div class="table-responsive-wrapper">
+        <!-- Versión Desktop: Tabla -->
+        <div class="desktop-table">
             <table class="table" id="tablaMovimientos">
                 <thead>
                     <tr>
@@ -122,21 +247,23 @@
                 </thead>
                 <tbody>
                     {% for mov in movimientos %}
-                    <tr>
-                        <td>
-                            <i class="fas fa-calendar-alt" style="color: #666; margin-right: 5px;"></i>
-                            {{ mov.fecha_movimiento.strftime('%d/%m/%Y') }}
+                    <tr class="movimiento-row tipo-{{ mov.tipo_movimiento }}">
+                        <td data-label="Fecha" class="fecha-cell">
+                            <div class="fecha-info">
+                                <i class="fas fa-calendar-alt"></i>
+                                {{ mov.fecha_movimiento.strftime('%d/%m/%Y') }}
+                                <span class="hora-info">
+                                    <i class="fas fa-clock"></i>
+                                    {{ mov.fecha_movimiento.strftime('%H:%M') }}
+                                </span>
+                            </div>
+                        </td>
+                        <td data-label="Producto">
+                            <strong>{{ mov.producto_nombre }}</strong>
                             <br>
-                            <small style="color: #666;">
-                                <i class="fas fa-clock" style="margin-right: 3px;"></i>
-                                {{ mov.fecha_movimiento.strftime('%H:%M') }}
-                            </small>
+                            <small class="text-muted">{{ mov.codigo }}</small>
                         </td>
-                        <td>
-                            <strong>{{ mov.producto_nombre }}</strong><br>
-                            <small style="color: #666;">{{ mov.codigo }}</small>
-                        </td>
-                        <td class="text-center">
+                        <td data-label="Tipo" class="text-center">
                             {% if mov.tipo_movimiento == 'entrada' %}
                             <span class="badge badge-success">ENTRADA</span>
                             {% elif mov.tipo_movimiento == 'salida' %}
@@ -145,51 +272,137 @@
                             <span class="badge badge-info">AJUSTE</span>
                             {% endif %}
                         </td>
-                        <td class="text-right {% if mov.cantidad > 0 %}text-success{% else %}text-danger{% endif %}" style="font-weight: bold;">
-                            {{ mov.cantidad }} {{ mov.abreviatura }}
+                        <td data-label="Cantidad" class="text-right {% if mov.cantidad > 0 %}text-success{% else %}text-danger{% endif %} cantidad-cell">
+                            <strong>{{ mov.cantidad }} {{ mov.abreviatura }}</strong>
                         </td>
-                        <td class="text-right">{{ mov.cantidad_anterior }} {{ mov.abreviatura }}</td>
-                        <td class="text-right">{{ mov.cantidad_nueva }} {{ mov.abreviatura }}</td>
-                        <td>
+                        <td data-label="Stock Anterior" class="text-right">{{ mov.cantidad_anterior }} {{ mov.abreviatura }}</td>
+                        <td data-label="Stock Nuevo" class="text-right"><strong>{{ mov.cantidad_nueva }} {{ mov.abreviatura }}</strong></td>
+                        <td data-label="Usuario">
                             <span class="badge badge-secondary">
                                 <i class="fas fa-user"></i>
                                 {{ mov.usuario_nombre or 'N/A' }}
                             </span>
                         </td>
-                        <td>
+                        <td data-label="Referencia">
                             {% if mov.referencia_tipo and mov.referencia_tipo != 'manual' and mov.referencia_tipo != 'ajuste_manual' %}
                             <span class="badge badge-primary">{{ mov.referencia_tipo|title }}</span>
                             {% if mov.referencia_id %}
-                            <br><small>#{{ mov.referencia_id }}</small>
+                            <br><small class="text-muted">#{{ mov.referencia_id }}</small>
                             {% endif %}
                             {% else %}
                             <span class="badge badge-light">Manual</span>
                             {% endif %}
                         </td>
-                        <td>
+                        <td data-label="Observaciones" class="observaciones-cell">
                             {% if mov.observaciones %}
-                            <span data-bs-toggle="tooltip" title="{{ mov.observaciones }}" style="cursor: help;">
+                            <span class="observaciones-text" title="{{ mov.observaciones }}">
                                 <i class="fas fa-comment"></i>
-                                {{ mov.observaciones|truncate(15) }}
+                                {{ mov.observaciones|truncate(20) }}
                             </span>
+                            {% else %}
+                            <span class="text-muted">—</span>
                             {% endif %}
                         </td>
                     </tr>
                     {% else %}
-                    <tr>
-                        <td colspan="9" class="text-center" style="padding: 40px;">
-                            <i class="fas fa-exchange-alt" style="font-size: 48px; color: #ccc; margin-bottom: 10px; display: block;"></i>
+                    <tr id="fila-vacia-movimientos">
+                        <td colspan="9" class="text-center empty-table">
+                            <i class="fas fa-exchange-alt"></i>
                             <p>No hay movimientos registrados</p>
+                            <a href="{{ url_for('entrada_inventario') }}" class="btn btn-success">
+                                <i class="fas fa-plus-circle"></i> Registrar primera entrada
+                            </a>
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+        
+        <!-- Versión Mobile: Tarjetas de Movimientos -->
+        <div class="mobile-movimientos-cards">
+            {% for mov in movimientos %}
+            <div class="movimiento-card tipo-{{ mov.tipo_movimiento }}">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fas fa-{% if mov.tipo_movimiento == 'entrada' %}arrow-up{% elif mov.tipo_movimiento == 'salida' %}arrow-down{% else %}balance-scale{% endif %}"></i>
+                        <strong>{{ mov.producto_nombre }}</strong>
+                        <span class="card-code">{{ mov.codigo }}</span>
+                    </div>
+                    <div class="card-date">
+                        <i class="fas fa-calendar-alt"></i>
+                        {{ mov.fecha_movimiento.strftime('%d/%m/%Y %H:%M') }}
+                    </div>
+                </div>
+                
+                <div class="card-body">
+                    <div class="movimiento-details">
+                        <div class="detail-item">
+                            <span class="detail-label">Tipo:</span>
+                            <span class="detail-value">
+                                {% if mov.tipo_movimiento == 'entrada' %}
+                                <span class="badge badge-success">ENTRADA</span>
+                                {% elif mov.tipo_movimiento == 'salida' %}
+                                <span class="badge badge-danger">SALIDA</span>
+                                {% else %}
+                                <span class="badge badge-info">AJUSTE</span>
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Cantidad:</span>
+                            <span class="detail-value cantidad {% if mov.cantidad > 0 %}text-success{% else %}text-danger{% endif %}">
+                                <strong>{{ mov.cantidad }} {{ mov.abreviatura }}</strong>
+                            </span>
+                        </div>
+                        <div class="detail-item stock-change">
+                            <span class="detail-label">Stock:</span>
+                            <span class="detail-value">
+                                {{ mov.cantidad_anterior }} → {{ mov.cantidad_nueva }} {{ mov.abreviatura }}
+                            </span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Usuario:</span>
+                            <span class="detail-value">
+                                <i class="fas fa-user"></i> {{ mov.usuario_nombre or 'N/A' }}
+                            </span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Referencia:</span>
+                            <span class="detail-value">
+                                {% if mov.referencia_tipo and mov.referencia_tipo != 'manual' and mov.referencia_tipo != 'ajuste_manual' %}
+                                <span class="badge badge-primary">{{ mov.referencia_tipo|title }}</span>
+                                {% if mov.referencia_id %}
+                                <span class="reference-id">#{{ mov.referencia_id }}</span>
+                                {% endif %}
+                                {% else %}
+                                <span class="badge badge-light">Manual</span>
+                                {% endif %}
+                            </span>
+                        </div>
+                        {% if mov.observaciones %}
+                        <div class="detail-item full-width">
+                            <span class="detail-label">Observaciones:</span>
+                            <span class="detail-value observaciones">{{ mov.observaciones }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="empty-cards">
+                <i class="fas fa-exchange-alt"></i>
+                <p>No hay movimientos registrados</p>
+                <a href="{{ url_for('entrada_inventario') }}" class="btn btn-success">
+                    <i class="fas fa-plus-circle"></i> Registrar primera entrada
+                </a>
+            </div>
+            {% endfor %}
+        </div>
     </div>
 </div>
 
-<!-- Scripts para DataTables -->
+<!-- Scripts para DataTables (Optimizado) -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
@@ -199,153 +412,599 @@
 document.addEventListener('DOMContentLoaded', function() {
     // Inicializar tooltips de Bootstrap
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tooltipTriggerList.map(function(tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-
-    // Inicializar DataTables con opciones consistentes
-    if (typeof $.fn.DataTable !== 'undefined') {
-        // Tabla de Stock
-        $('#tablaStock').DataTable({
-            language: {
-                url: '//cdn.datatables.net/plug-ins/1.10.24/i18n/Spanish.json'
-            },
-            order: [[1, 'asc']],
-            pageLength: 10,
-            responsive: true,
-            dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip',
-            language: {
-                "search": "Buscar:",
-                "lengthMenu": "Mostrar _MENU_ registros por página",
-                "zeroRecords": "No se encontraron resultados",
-                "info": "Mostrando página _PAGE_ de _PAGES_",
-                "infoEmpty": "No hay registros disponibles",
-                "infoFiltered": "(filtrado de _MAX_ registros totales)",
-                "paginate": {
-                    "first": "Primero",
-                    "last": "Último",
-                    "next": "Siguiente",
-                    "previous": "Anterior"
-                }
-            }
+    if (typeof bootstrap !== 'undefined') {
+        tooltipTriggerList.map(function(tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
         });
+    }
+
+    // Inicializar DataTables solo en desktop y si hay datos
+    if (typeof $.fn.DataTable !== 'undefined') {
+        const isMobile = window.innerWidth <= 768;
         
-        // Tabla de Movimientos
-        $('#tablaMovimientos').DataTable({
-            language: {
-                url: '//cdn.datatables.net/plug-ins/1.10.24/i18n/Spanish.json'
-            },
-            order: [[0, 'desc']],
-            pageLength: 10,
-            responsive: true,
-            dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip',
-            language: {
-                "search": "Buscar:",
-                "lengthMenu": "Mostrar _MENU_ registros por página",
-                "zeroRecords": "No se encontraron resultados",
-                "info": "Mostrando página _PAGE_ de _PAGES_",
-                "infoEmpty": "No hay registros disponibles",
-                "infoFiltered": "(filtrado de _MAX_ registros totales)",
-                "paginate": {
-                    "first": "Primero",
-                    "last": "Último",
-                    "next": "Siguiente",
-                    "previous": "Anterior"
+        // Solo inicializar DataTables si no estamos en móvil
+        if (!isMobile) {
+            // Tabla de Stock
+            const tablaStock = document.getElementById('tablaStock');
+            if (tablaStock && tablaStock.querySelector('tbody tr:not(#fila-vacia-stock)')) {
+                try {
+                    $('#tablaStock').DataTable({
+                        language: {
+                            url: '//cdn.datatables.net/plug-ins/1.10.24/i18n/Spanish.json'
+                        },
+                        order: [[1, 'asc']],
+                        pageLength: 10,
+                        responsive: true,
+                        autoWidth: false,
+                        dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip'
+                    });
+                } catch(e) {
+                    console.warn('Error inicializando DataTable de stock:', e);
                 }
             }
+            
+            // Tabla de Movimientos
+            const tablaMovimientos = document.getElementById('tablaMovimientos');
+            if (tablaMovimientos && tablaMovimientos.querySelector('tbody tr:not(#fila-vacia-movimientos)')) {
+                try {
+                    $('#tablaMovimientos').DataTable({
+                        language: {
+                            url: '//cdn.datatables.net/plug-ins/1.10.24/i18n/Spanish.json'
+                        },
+                        order: [[0, 'desc']],
+                        pageLength: 10,
+                        responsive: true,
+                        autoWidth: false,
+                        dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip'
+                    });
+                } catch(e) {
+                    console.warn('Error inicializando DataTable de movimientos:', e);
+                }
+            }
+        }
+    }
+    
+    // Detectar cambio de orientación para recargar DataTables
+    window.addEventListener('resize', function() {
+        const wasMobile = window.innerWidth <= 768;
+        const currentMobile = window.innerWidth <= 768;
+        
+        if (wasMobile !== currentMobile) {
+            location.reload(); // Recargar para ajustar la vista
+        }
+    });
+    
+    // Mejorar experiencia en dispositivos táctiles
+    if ('ontouchstart' in window) {
+        const buttons = document.querySelectorAll('.btn, .btn-icon, .action-buttons a');
+        buttons.forEach(btn => {
+            btn.addEventListener('touchstart', function() {
+                this.style.transform = 'scale(0.98)';
+            });
+            btn.addEventListener('touchend', function() {
+                this.style.transform = '';
+            });
         });
     }
 });
 </script>
 
 <style>
-/* Estilos adicionales para el inventario */
+/* ========== VARIABLES GLOBALES ========== */
+:root {
+    --primary-color: #0d6efd;
+    --success-color: #28a745;
+    --warning-color: #ffc107;
+    --danger-color: #dc3545;
+    --info-color: #17a2b8;
+    --dark-color: #343a40;
+    --light-bg: #f8f9fa;
+    --border-color: #dee2e6;
+    --text-dark: #495057;
+    --text-light: #6c757d;
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
 
-/* Badges personalizados */
+/* ========== ESTILOS BASE ========== */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.page-header h1 {
+    margin: 0;
+    font-size: 1.8rem;
+    color: var(--text-dark);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.page-header h1 i {
+    color: var(--primary-color);
+}
+
+.action-buttons-group {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+/* ========== SECCIONES ========== */
+.table-container {
+    background: white;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 1.5rem;
+}
+
+.section-header {
+    padding: 1rem 1.5rem;
+    background: linear-gradient(135deg, var(--light-bg), white);
+    border-bottom: 2px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.section-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--primary-color);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.stock-stats,
+.movimiento-stats {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.stat-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.75rem;
+    background: var(--light-bg);
+    border-radius: 20px;
+    font-size: 0.85rem;
+    color: var(--text-dark);
+}
+
+.stat-warning {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.stat-entrada {
+    background: #d1e7dd;
+    color: #0f5132;
+}
+
+.stat-salida {
+    background: #f8d7da;
+    color: #842029;
+}
+
+/* ========== TABLA RESPONSIVE ========== */
+.table-responsive-wrapper {
+    padding: 1rem;
+}
+
+.desktop-table {
+    display: block;
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 800px;
+}
+
+.table th {
+    background-color: var(--light-bg);
+    padding: 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-dark);
+    border-bottom: 2px solid var(--border-color);
+}
+
+.table td {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+
+.table tbody tr:hover {
+    background-color: var(--light-bg);
+}
+
+/* ========== TARJETAS DE STOCK (MÓVIL) ========== */
+.mobile-stock-cards {
+    display: none;
+}
+
+.stock-card {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    margin-bottom: 1rem;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.stock-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.sin-stock-card {
+    background: #fff5f5;
+    border-left: 4px solid var(--danger-color);
+}
+
+.bajo-stock-card {
+    background: #fff9e6;
+    border-left: 4px solid var(--warning-color);
+}
+
+.stock-card .card-header {
+    padding: 1rem;
+    background: var(--light-bg);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.stock-card .card-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.stock-card .card-title i {
+    color: var(--primary-color);
+}
+
+.card-code {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    background: white;
+    padding: 0.2rem 0.5rem;
+    border-radius: 20px;
+}
+
+.stock-display {
+    text-align: center;
+    padding: 1.5rem;
+    background: var(--light-bg);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.stock-number-large {
+    font-size: 3rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    line-height: 1;
+}
+
+.stock-unit {
+    font-size: 0.9rem;
+    color: var(--text-light);
+    margin-top: 0.25rem;
+}
+
+.stock-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.info-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.info-item:last-child {
+    border-bottom: none;
+}
+
+.info-label {
+    font-weight: 500;
+    color: var(--text-dark);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.info-value {
+    color: var(--text-light);
+}
+
+/* ========== TARJETAS DE MOVIMIENTOS (MÓVIL) ========== */
+.mobile-movimientos-cards {
+    display: none;
+}
+
+.movimiento-card {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    margin-bottom: 1rem;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.movimiento-card:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.movimiento-card.tipo-entrada {
+    border-left: 4px solid var(--success-color);
+}
+
+.movimiento-card.tipo-salida {
+    border-left: 4px solid var(--danger-color);
+}
+
+.movimiento-card.tipo-ajuste {
+    border-left: 4px solid var(--info-color);
+}
+
+.movimiento-card .card-header {
+    padding: 1rem;
+    background: var(--light-bg);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.movimiento-card .card-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.card-date {
+    font-size: 0.8rem;
+    color: var(--text-light);
+}
+
+.movimiento-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.detail-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.detail-item.full-width {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+
+.detail-label {
+    font-weight: 500;
+    color: var(--text-dark);
+}
+
+.detail-value {
+    color: var(--text-light);
+}
+
+.detail-value.cantidad {
+    font-weight: 700;
+    font-size: 1.1rem;
+}
+
+.stock-change {
+    background: var(--light-bg);
+    padding: 0.5rem;
+    border-radius: 8px;
+}
+
+.observaciones {
+    font-size: 0.9rem;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.reference-id {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    margin-left: 0.25rem;
+}
+
+/* ========== BADGES ========== */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 20px;
+}
+
 .badge-success {
     background-color: #d1e7dd;
     color: #0f5132;
-    padding: 4px 8px;
-    border-radius: 10px;
-    font-size: 12px;
-    font-weight: 600;
-    display: inline-block;
 }
 
 .badge-danger {
     background-color: #f8d7da;
     color: #842029;
-    padding: 4px 8px;
-    border-radius: 10px;
-    font-size: 12px;
-    font-weight: 600;
-    display: inline-block;
 }
 
 .badge-warning {
     background-color: #fff3cd;
     color: #856404;
-    padding: 4px 8px;
-    border-radius: 10px;
-    font-size: 12px;
-    font-weight: 600;
-    display: inline-block;
 }
 
 .badge-info {
     background-color: #cff4fc;
     color: #055160;
-    padding: 4px 8px;
-    border-radius: 10px;
-    font-size: 12px;
-    font-weight: 600;
-    display: inline-block;
 }
 
 .badge-primary {
     background-color: #cfe2ff;
     color: #084298;
-    padding: 4px 8px;
-    border-radius: 10px;
-    font-size: 12px;
-    font-weight: 600;
-    display: inline-block;
 }
 
 .badge-secondary {
     background-color: #e9ecef;
     color: #41464b;
-    padding: 4px 8px;
-    border-radius: 10px;
-    font-size: 12px;
-    font-weight: 600;
-    display: inline-block;
 }
 
 .badge-dark {
     background-color: #343a40;
     color: white;
-    padding: 4px 8px;
-    border-radius: 10px;
-    font-size: 12px;
-    font-weight: 600;
-    display: inline-block;
 }
 
 .badge-light {
     background-color: #f8f9fa;
     color: #41464b;
-    padding: 4px 8px;
-    border-radius: 10px;
-    font-size: 12px;
-    font-weight: 600;
-    display: inline-block;
     border: 1px solid #dee2e6;
 }
 
-/* Estilos para stock crítico */
+/* ========== BOTONES ========== */
+.btn {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    text-decoration: none;
+}
+
+.btn-success {
+    background: var(--success-color);
+    color: white;
+}
+
+.btn-success:hover {
+    background: #218838;
+    transform: translateY(-1px);
+}
+
+.btn-warning {
+    background: var(--warning-color);
+    color: #000;
+}
+
+.btn-warning:hover {
+    background: #ffca2c;
+    transform: translateY(-1px);
+}
+
+.btn-info {
+    background: var(--info-color);
+    color: white;
+}
+
+.btn-info:hover {
+    background: #138496;
+    transform: translateY(-1px);
+}
+
+.btn-primary {
+    background: var(--primary-color);
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #0b5ed7;
+    transform: translateY(-1px);
+}
+
+.btn-icon {
+    background: none;
+    border: none;
+    padding: 0.5rem;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--text-light);
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    font-size: 0.9rem;
+    text-decoration: none;
+}
+
+.btn-icon:hover {
+    background: var(--light-bg);
+}
+
+.btn-icon.btn-edit:hover {
+    color: var(--primary-color);
+}
+
+.btn-icon.btn-success {
+    color: var(--success-color);
+}
+
+.btn-icon.btn-success:hover {
+    background: #d1e7dd;
+}
+
+.btn-icon.btn-warning {
+    color: var(--warning-color);
+}
+
+.btn-icon.btn-warning:hover {
+    background: #fff3cd;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+/* ========== ESTILOS DE STOCK ========== */
 .stock-critico {
-    color: #dc3545;
+    color: var(--danger-color);
     font-weight: bold;
 }
 
@@ -365,7 +1024,7 @@ document.addEventListener('DOMContentLoaded', function() {
     background-color: #fff3d6 !important;
 }
 
-/* Alineación de texto */
+/* ========== UTILIDADES ========== */
 .text-right {
     text-align: right;
 }
@@ -375,106 +1034,284 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 .text-success {
-    color: #28a745;
+    color: var(--success-color) !important;
 }
 
 .text-danger {
-    color: #dc3545;
+    color: var(--danger-color) !important;
 }
 
-/* Estilos para botones pequeños */
-.btn-small.btn-success {
-    background-color: #28a745;
-    color: white;
-    padding: 6px 10px;
+.text-warning {
+    color: var(--warning-color) !important;
 }
 
-.btn-small.btn-success:hover {
-    background-color: #218838;
+.text-muted {
+    color: var(--text-light) !important;
 }
 
-.btn-small.btn-warning {
-    background-color: #ffc107;
-    color: #000;
-    padding: 6px 10px;
+.empty-table,
+.empty-cards {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-light);
 }
 
-.btn-small.btn-warning:hover {
-    background-color: #ffca2c;
+.empty-table i,
+.empty-cards i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-    .page-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 15px;
-    }
-    
-    .page-header div {
-        width: 100%;
-        justify-content: flex-start;
-    }
-    
-    .table-container {
-        overflow-x: auto;
-    }
-    
-    .table {
-        min-width: 1000px;
-    }
+.empty-table p,
+.empty-cards p {
+    margin-bottom: 1rem;
 }
 
-/* Estilos para DataTables personalizados */
+/* ========== DATA TABLES PERSONALIZADO ========== */
 .dataTables_wrapper .dataTables_length,
 .dataTables_wrapper .dataTables_filter {
-    margin-bottom: 15px;
+    margin-bottom: 1rem;
 }
 
 .dataTables_wrapper .dataTables_length select {
-    padding: 5px;
-    border: 1px solid #ced4da;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--border-color);
     border-radius: 4px;
 }
 
 .dataTables_wrapper .dataTables_filter input {
-    padding: 5px 10px;
-    border: 1px solid #ced4da;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--border-color);
     border-radius: 4px;
-    margin-left: 5px;
+    margin-left: 0.5rem;
 }
 
 .dataTables_wrapper .dataTables_filter input:focus {
     outline: none;
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 0.2rem rgba(13,110,253,0.25);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
 }
 
 .dataTables_wrapper .dataTables_info {
-    margin-top: 10px;
-    color: #666;
+    margin-top: 0.5rem;
+    color: var(--text-light);
 }
 
 .dataTables_wrapper .dataTables_paginate {
-    margin-top: 10px;
+    margin-top: 0.5rem;
 }
 
 .dataTables_wrapper .paginate_button {
-    padding: 5px 10px;
-    margin: 0 2px;
-    border: 1px solid #dee2e6;
+    padding: 0.25rem 0.5rem;
+    margin: 0 0.125rem;
+    border: 1px solid var(--border-color);
     border-radius: 4px;
     cursor: pointer;
 }
 
 .dataTables_wrapper .paginate_button.current {
-    background-color: #0d6efd;
+    background-color: var(--primary-color);
     color: white !important;
-    border-color: #0d6efd;
+    border-color: var(--primary-color);
 }
 
 .dataTables_wrapper .paginate_button:hover:not(.current) {
-    background-color: #e9ecef;
+    background-color: var(--light-bg);
+}
+
+/* ========== MEDIA QUERIES ========== */
+
+/* Tablets */
+@media (max-width: 992px) {
+    .section-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .stock-stats,
+    .movimiento-stats {
+        width: 100%;
+        justify-content: space-between;
+    }
+    
+    .fecha-cell .hora-info {
+        display: inline-block;
+        margin-left: 0.5rem;
+    }
+}
+
+/* Móviles */
+@media (max-width: 768px) {
+    .page-header {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+    }
+    
+    .action-buttons-group {
+        justify-content: center;
+    }
+    
+    .action-buttons-group .btn {
+        flex: 1;
+        justify-content: center;
+    }
+    
+    .desktop-table {
+        display: none;
+    }
+    
+    .mobile-stock-cards {
+        display: block;
+    }
+    
+    .mobile-movimientos-cards {
+        display: block;
+    }
+    
+    .table-responsive-wrapper {
+        padding: 0.75rem;
+    }
+    
+    .stock-number-large {
+        font-size: 2.5rem;
+    }
+    
+    .card-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 1rem;
+        background: var(--light-bg);
+        border-top: 1px solid var(--border-color);
+    }
+    
+    .card-actions .btn-icon {
+        width: 100%;
+        justify-content: center;
+        padding: 0.75rem;
+    }
+    
+    .detail-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+    }
+    
+    .detail-value {
+        width: 100%;
+    }
+    
+    .stock-change {
+        width: 100%;
+    }
+}
+
+/* Móviles pequeños */
+@media (max-width: 480px) {
+    .page-header h1 {
+        font-size: 1.4rem;
+    }
+    
+    .btn {
+        font-size: 0.85rem;
+        padding: 0.5rem 0.75rem;
+    }
+    
+    .section-header h3 {
+        font-size: 1rem;
+    }
+    
+    .stat-badge {
+        font-size: 0.75rem;
+        padding: 0.2rem 0.6rem;
+    }
+    
+    .stock-number-large {
+        font-size: 2rem;
+    }
+    
+    .card-title {
+        font-size: 0.9rem;
+    }
+    
+    .badge {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.5rem;
+    }
+    
+    .fecha-info {
+        font-size: 0.85rem;
+    }
+}
+
+/* Orientación landscape en móviles */
+@media (max-width: 768px) and (orientation: landscape) {
+    .mobile-stock-cards {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+    
+    .mobile-movimientos-cards {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+    
+    .stock-card,
+    .movimiento-card {
+        margin-bottom: 0;
+    }
+}
+
+/* Pantallas grandes */
+@media (min-width: 1400px) {
+    .table-responsive-wrapper {
+        padding: 1.5rem;
+    }
+    
+    .table th,
+    .table td {
+        padding: 1rem;
+    }
+}
+
+/* Soporte para reducción de movimiento */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Impresión */
+@media print {
+    .btn,
+    .action-buttons-group,
+    .card-actions,
+    .action-buttons {
+        display: none !important;
+    }
+    
+    .desktop-table {
+        display: block;
+    }
+    
+    .mobile-stock-cards,
+    .mobile-movimientos-cards {
+        display: none;
+    }
+    
+    .table-container {
+        box-shadow: none;
+        border: 1px solid #ddd;
+    }
+    
+    .badge {
+        border: 1px solid #ddd;
+    }
 }
 </style>
 {% endblock %}

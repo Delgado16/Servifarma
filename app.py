@@ -17,6 +17,7 @@ import hashlib
 import os
 import traceback
 from dotenv import load_dotenv
+from datetime import date, datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 
 load_dotenv()
@@ -947,130 +948,338 @@ def productos():
                          mostrar_inactivos=mostrar_inactivos,
                          now=now)
 
-@app.route('/productos/<int:producto_id>/editar', methods=['POST'])
+# ========================
+# RUTAS PARA EDICIÓN DE PRODUCTOS
+# ========================
+
+@app.route('/productos/<int:producto_id>/editar', methods=['GET'])
 @admin_required
-def editar_producto(producto_id):
-    """Maneja la edición de productos desde modal (MEJORADO)"""
+def editar_producto_form(producto_id):
+    """Muestra el formulario de edición de producto"""
     cursor = mysql.connection.cursor(DictCursor)
     
     try:
-        data = request.form
-        
-        # Verificar si el producto existe
-        cursor.execute('SELECT * FROM productos WHERE id = %s', (producto_id,))
+        # Obtener el producto
+        cursor.execute('''
+            SELECT p.*, c.nombre as categoria_nombre, u.nombre as unidad_nombre 
+            FROM productos p
+            LEFT JOIN categorias c ON p.categoria_id = c.id
+            LEFT JOIN unidades_medida u ON p.unidad_base_id = u.id
+            WHERE p.id = %s
+        ''', (producto_id,))
         producto = cursor.fetchone()
         
         if not producto:
             flash('Producto no encontrado', 'error')
             return redirect(url_for('productos'))
         
+        # Obtener categorías para el formulario
+        cursor.execute('SELECT id, nombre FROM categorias WHERE activo = TRUE ORDER BY nombre')
+        categorias = cursor.fetchall()
+        
+        # Obtener unidades de medida
+        cursor.execute('''
+            SELECT id, nombre, abreviatura 
+            FROM unidades_medida 
+            WHERE activo = TRUE 
+            ORDER BY nombre
+        ''')
+        unidades = cursor.fetchall()
+        
+        # Obtener variaciones del producto
+        cursor.execute('''
+            SELECT v.*, u.nombre as unidad_nombre, u.abreviatura
+            FROM variaciones_producto v
+            JOIN unidades_medida u ON v.unidad_id = u.id
+            WHERE v.producto_id = %s AND v.activo = TRUE
+            ORDER BY v.nivel DESC, v.cantidad_equivalente ASC
+        ''', (producto_id,))
+        variaciones = cursor.fetchall()
+        
+        cursor.close()
+        
+        # Convertir valores Decimal a float para la plantilla con manejo de None
+        for key in ['precio_costo', 'precio_venta', 'porcentaje_ganancia']:
+            if producto.get(key) is not None:
+                try:
+                    producto[key] = float(producto[key])
+                except (TypeError, ValueError):
+                    producto[key] = 0.0
+            else:
+                producto[key] = 0.0
+        
+        # Inicializar valores jerárquicos con valores por defecto
+        producto['costo_caja'] = 0.0
+        producto['sobres_por_caja'] = 0
+        producto['blister_por_sobre'] = 0
+        producto['pastillas_por_blister'] = 0
+        
+        # Si es jerárquico, extraer datos de estructura
+        if producto['tipo_producto'] == 'jerarquico' and variaciones:
+            # Buscar variaciones por nivel
+            caja_var = next((v for v in variaciones if v['nivel'] == 1), None)
+            sobre_var = next((v for v in variaciones if v['nivel'] == 2), None)
+            blister_var = next((v for v in variaciones if v['nivel'] == 3), None)
+            
+            # Procesar caja (nivel 1)
+            if caja_var:
+                # Convertir precio_costo_equivalente a float
+                if caja_var.get('precio_costo_equivalente') is not None:
+                    try:
+                        producto['costo_caja'] = float(caja_var['precio_costo_equivalente'])
+                    except (TypeError, ValueError):
+                        producto['costo_caja'] = 0.0
+                else:
+                    producto['costo_caja'] = 0.0
+                
+                # Calcular sobres por caja
+                if sobre_var and sobre_var.get('cantidad_equivalente'):
+                    try:
+                        if caja_var.get('cantidad_equivalente') and sobre_var['cantidad_equivalente']:
+                            producto['sobres_por_caja'] = int(caja_var['cantidad_equivalente'] / sobre_var['cantidad_equivalente'])
+                        else:
+                            producto['sobres_por_caja'] = 1
+                    except (TypeError, ValueError, ZeroDivisionError):
+                        producto['sobres_por_caja'] = 1
+                else:
+                    producto['sobres_por_caja'] = 1
+            
+            # Procesar sobre y blister (niveles 2 y 3)
+            if sobre_var and blister_var:
+                # Calcular blister por sobre
+                if blister_var.get('cantidad_equivalente'):
+                    try:
+                        if sobre_var.get('cantidad_equivalente') and blister_var['cantidad_equivalente']:
+                            producto['blister_por_sobre'] = int(sobre_var['cantidad_equivalente'] / blister_var['cantidad_equivalente'])
+                        else:
+                            producto['blister_por_sobre'] = 1
+                    except (TypeError, ValueError, ZeroDivisionError):
+                        producto['blister_por_sobre'] = 1
+                else:
+                    producto['blister_por_sobre'] = 1
+            
+            # Procesar blister (nivel 3)
+            if blister_var:
+                if blister_var.get('cantidad_equivalente') is not None:
+                    try:
+                        producto['pastillas_por_blister'] = int(blister_var['cantidad_equivalente'])
+                    except (TypeError, ValueError):
+                        producto['pastillas_por_blister'] = 1
+                else:
+                    producto['pastillas_por_blister'] = 1
+        
+        # Convertir valores de variaciones a float con manejo de None
+        for variacion in variaciones:
+            for key in ['precio_costo_equivalente', 'precio_venta', 'porcentaje_ganancia']:
+                if variacion.get(key) is not None:
+                    try:
+                        variacion[key] = float(variacion[key])
+                    except (TypeError, ValueError):
+                        variacion[key] = 0.0
+                else:
+                    variacion[key] = 0.0
+        
+        # Debug: imprimir valores para verificar
+        print(f"Editando producto ID: {producto_id}, Tipo: {producto['tipo_producto']}")
+        print(f"precio_costo: {producto.get('precio_costo')}")
+        print(f"precio_venta: {producto.get('precio_venta')}")
+        print(f"porcentaje_ganancia: {producto.get('porcentaje_ganancia')}")
+        print(f"costo_caja: {producto.get('costo_caja')}")
+        print(f"sobres_por_caja: {producto.get('sobres_por_caja')}")
+        print(f"blister_por_sobre: {producto.get('blister_por_sobre')}")
+        print(f"pastillas_por_blister: {producto.get('pastillas_por_blister')}")
+        
+        return render_template('admin/editar_producto.html',
+                             producto=producto,
+                             categorias=categorias,
+                             unidades=unidades,
+                             variaciones=variaciones,
+                             now=datetime.now().date())
+        
+    except Exception as e:
+        if 'cursor' in locals():
+            cursor.close()
+        flash(f'Error al cargar el producto: {str(e)}', 'error')
+        print(f"Error en editar_producto_form: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return redirect(url_for('productos'))
+
+@app.route('/productos/<int:producto_id>/actualizar', methods=['POST'])
+@admin_required
+def actualizar_producto(producto_id):
+    """Procesa la actualización del producto"""
+    cursor = mysql.connection.cursor(DictCursor)
+    
+    try:
+        data = request.form
+        
+        # Validar campos básicos
+        if not data.get('codigo') or not data.get('nombre'):
+            flash('Código y nombre son requeridos', 'error')
+            return redirect(url_for('editar_producto_form', producto_id=producto_id))
+        
+        # Verificar si el código ya existe (excluyendo el producto actual)
+        cursor.execute('SELECT id FROM productos WHERE codigo = %s AND id != %s', 
+                      (data['codigo'].strip(), producto_id))
+        if cursor.fetchone():
+            flash('El código ya está registrado para otro producto', 'error')
+            return redirect(url_for('editar_producto_form', producto_id=producto_id))
+        
+        # Procesar fecha de vencimiento
         fecha_vencimiento = None
         if data.get('fecha_vencimiento'):
-            fecha_vencimiento = datetime.strptime(data['fecha_vencimiento'], '%Y-%m-%d').date()
+            try:
+                fecha_vencimiento = datetime.strptime(data['fecha_vencimiento'], '%Y-%m-%d').date()
+            except ValueError:
+                flash('Formato de fecha inválido', 'error')
+                return redirect(url_for('editar_producto_form', producto_id=producto_id))
         
-        # ===== PRODUCTO JERÁRQUICO =====
-        if producto['tipo_producto'] == 'jerarquico':
-            # Obtener la estructura actual
+        tipo_producto = data.get('tipo_producto', 'simple')
+        activo = 1 if data.get('activo') == 'on' else 0
+        
+        # ===== ACTUALIZACIÓN PRODUCTO SIMPLE =====
+        if tipo_producto == 'simple':
+            # Validar campos requeridos
+            if not data.get('unidad_base_id'):
+                flash('Unidad base requerida', 'error')
+                return redirect(url_for('editar_producto_form', producto_id=producto_id))
+            
+            try:
+                precio_costo = float(data.get('precio_costo', 0))
+                precio_venta = float(data.get('precio_venta', 0))
+                porcentaje = float(data.get('porcentaje_ganancia', 30))
+                
+                if precio_costo <= 0:
+                    flash('El precio de costo debe ser mayor a 0', 'error')
+                    return redirect(url_for('editar_producto_form', producto_id=producto_id))
+                
+                if precio_venta <= 0:
+                    flash('El precio de venta debe ser mayor a 0', 'error')
+                    return redirect(url_for('editar_producto_form', producto_id=producto_id))
+                    
+            except ValueError:
+                flash('Los precios deben ser números válidos', 'error')
+                return redirect(url_for('editar_producto_form', producto_id=producto_id))
+            
+            # Actualizar producto simple (NO modificar stock_actual)
+            cursor.execute('''
+                UPDATE productos SET
+                    codigo = %s,
+                    nombre = %s,
+                    descripcion = %s,
+                    categoria_id = %s,
+                    principio_activo = %s,
+                    presentacion = %s,
+                    unidad_base_id = %s,
+                    precio_costo = %s,
+                    porcentaje_ganancia = %s,
+                    precio_venta = %s,
+                    stock_minimo = %s,
+                    lote = %s,
+                    fecha_vencimiento = %s,
+                    activo = %s
+                WHERE id = %s
+            ''', (
+                data['codigo'].strip(),
+                data['nombre'].strip(),
+                data.get('descripcion', '').strip() or None,
+                data.get('categoria_id') or None,
+                data.get('principio_activo', '').strip() or None,
+                data.get('presentacion', '').strip() or None,
+                data.get('unidad_base_id'),
+                precio_costo,
+                porcentaje,
+                precio_venta,
+                int(data.get('stock_minimo', 5)) if data.get('stock_minimo') else 5,
+                data.get('lote', '').strip() or None,
+                fecha_vencimiento,
+                activo,
+                producto_id
+            ))
+            
+            # Actualizar variación base (nivel 4)
+            cursor.execute('''
+                UPDATE variaciones_producto SET
+                    precio_venta = %s,
+                    precio_costo_equivalente = %s,
+                    porcentaje_ganancia = %s
+                WHERE producto_id = %s AND nivel = 4
+            ''', (
+                precio_venta,
+                precio_costo,
+                porcentaje,
+                producto_id
+            ))
+        
+        # ===== ACTUALIZACIÓN PRODUCTO JERÁRQUICO =====
+        else:
+            try:
+                costo_caja = float(data.get('costo_caja', 0))
+                porcentaje = float(data.get('porcentaje_ganancia_jer', 30))
+                
+                if costo_caja <= 0:
+                    flash('El costo de la caja debe ser mayor a 0', 'error')
+                    return redirect(url_for('editar_producto_form', producto_id=producto_id))
+                    
+            except ValueError:
+                flash('Valores numéricos inválidos', 'error')
+                return redirect(url_for('editar_producto_form', producto_id=producto_id))
+            
+            # Obtener la estructura actual del producto desde variaciones
             cursor.execute('''
                 SELECT 
-                    MAX(CASE WHEN nivel = 1 THEN cantidad_equivalente END) as pastillas_por_caja,
-                    MAX(CASE WHEN nivel = 2 THEN cantidad_por_padre END) as sobres_por_caja,
-                    MAX(CASE WHEN nivel = 3 THEN cantidad_por_padre END) as blister_por_sobre,
-                    MAX(CASE WHEN nivel = 4 THEN cantidad_por_padre END) as pastillas_por_blister
-                FROM variaciones_producto
-                WHERE producto_id = %s
-            ''', (producto_id,))
+                    (SELECT cantidad_equivalente FROM variaciones_producto 
+                     WHERE producto_id = %s AND nivel = 1) as sobres_por_caja,
+                    (SELECT cantidad_equivalente / pastillas_por_blister FROM (
+                        SELECT cantidad_equivalente as pastillas_por_blister 
+                        FROM variaciones_producto 
+                        WHERE producto_id = %s AND nivel = 3
+                    ) as sub) as blister_por_sobre,
+                    (SELECT cantidad_equivalente FROM variaciones_producto 
+                     WHERE producto_id = %s AND nivel = 3) as pastillas_por_blister
+            ''', (producto_id, producto_id, producto_id))
+            
             estructura = cursor.fetchone()
             
-            # Si se actualiza el costo de la caja
-            if data.get('costo_caja'):
-                nuevo_costo_caja = float(data.get('costo_caja'))
-                porcentaje = float(data.get('porcentaje_ganancia', producto['porcentaje_ganancia']))
-                
-                # Recalcular todo
-                total_pastillas = estructura['pastillas_por_caja']
-                costo_por_pastilla = nuevo_costo_caja / total_pastillas
-                
-                # Actualizar producto
-                cursor.execute('''
-                    UPDATE productos SET
-                        codigo = %s,
-                        nombre = %s,
-                        descripcion = %s,
-                        categoria_id = %s,
-                        principio_activo = %s,
-                        presentacion = %s,
-                        precio_costo = %s,
-                        porcentaje_ganancia = %s,
-                        precio_venta = %s,
-                        stock_actual = %s,
-                        stock_minimo = %s,
-                        lote = %s,
-                        fecha_vencimiento = %s,
-                        activo = %s
-                    WHERE id = %s
-                ''', (
-                    data['codigo'].strip(),
-                    data['nombre'].strip(),
-                    data.get('descripcion', '').strip(),
-                    data.get('categoria_id'),
-                    data.get('principio_activo', '').strip(),
-                    data.get('presentacion', '').strip(),
-                    costo_por_pastilla,
-                    porcentaje,
-                    costo_por_pastilla * (1 + porcentaje/100),
-                    int(data.get('stock_actual', producto['stock_actual'])),
-                    int(data.get('stock_minimo', 5)),
-                    data.get('lote', '').strip(),
-                    fecha_vencimiento,
-                    data.get('activo') == 'on',
-                    producto_id
-                ))
-                
-                # Actualizar todas las variaciones
-                cursor.execute('''
-                    UPDATE variaciones_producto 
-                    SET precio_costo_equivalente = %s * cantidad_equivalente,
-                        precio_venta = %s * cantidad_equivalente * (1 + %s/100),
-                        porcentaje_ganancia = %s
-                    WHERE producto_id = %s
-                ''', (
-                    costo_por_pastilla, costo_por_pastilla, porcentaje,
-                    porcentaje, producto_id
-                ))
+            if estructura and estructura['sobres_por_caja'] and estructura['blister_por_sobre'] and estructura['pastillas_por_blister']:
+                sobres_por_caja = estructura['sobres_por_caja']
+                blister_por_sobre = estructura['blister_por_sobre']
+                pastillas_por_blister = estructura['pastillas_por_blister']
             else:
-                # Actualizar solo datos básicos
-                cursor.execute('''
-                    UPDATE productos SET
-                        codigo = %s,
-                        nombre = %s,
-                        descripcion = %s,
-                        categoria_id = %s,
-                        principio_activo = %s,
-                        presentacion = %s,
-                        stock_actual = %s,
-                        stock_minimo = %s,
-                        lote = %s,
-                        fecha_vencimiento = %s,
-                        activo = %s
-                    WHERE id = %s
-                ''', (
-                    data['codigo'].strip(),
-                    data['nombre'].strip(),
-                    data.get('descripcion', '').strip(),
-                    data.get('categoria_id'),
-                    data.get('principio_activo', '').strip(),
-                    data.get('presentacion', '').strip(),
-                    int(data.get('stock_actual', producto['stock_actual'])),
-                    int(data.get('stock_minimo', 5)),
-                    data.get('lote', '').strip(),
-                    fecha_vencimiento,
-                    data.get('activo') == 'on',
-                    producto_id
-                ))
-        
-        # ===== PRODUCTO SIMPLE =====
-        else:
+                # Si no se encuentra estructura, usar valores por defecto
+                sobres_por_caja = 1
+                blister_por_sobre = 1
+                pastillas_por_blister = 1
+            
+            # Obtener IDs de unidades
+            cursor.execute('''
+                SELECT 
+                    (SELECT id FROM unidades_medida WHERE abreviatura = 'PST') as pastilla_id,
+                    (SELECT id FROM unidades_medida WHERE abreviatura = 'BLI') as blister_id,
+                    (SELECT id FROM unidades_medida WHERE abreviatura = 'SBR') as sobre_id,
+                    (SELECT id FROM unidades_medida WHERE abreviatura = 'CJA') as caja_id
+            ''')
+            unidades_ids = cursor.fetchone()
+            
+            if not all(unidades_ids.values()):
+                flash('Error: No están configuradas todas las unidades de medida necesarias', 'error')
+                return redirect(url_for('editar_producto_form', producto_id=producto_id))
+            
+            # Calcular total de pastillas por caja
+            total_pastillas_por_caja = sobres_por_caja * blister_por_sobre * pastillas_por_blister
+            
+            # Calcular costos
+            costo_por_pastilla = costo_caja / total_pastillas_por_caja
+            costo_por_blister = costo_por_pastilla * pastillas_por_blister
+            costo_por_sobre = costo_por_blister * blister_por_sobre
+            
+            # Calcular precios
+            precio_pastilla = costo_por_pastilla * (1 + porcentaje/100)
+            precio_blister = costo_por_blister * (1 + porcentaje/100)
+            precio_sobre = costo_por_sobre * (1 + porcentaje/100)
+            precio_caja = costo_caja * (1 + porcentaje/100)
+            
             # Actualizar producto
             cursor.execute('''
                 UPDATE productos SET
@@ -1084,7 +1293,6 @@ def editar_producto(producto_id):
                     precio_costo = %s,
                     porcentaje_ganancia = %s,
                     precio_venta = %s,
-                    stock_actual = %s,
                     stock_minimo = %s,
                     lote = %s,
                     fecha_vencimiento = %s,
@@ -1093,48 +1301,72 @@ def editar_producto(producto_id):
             ''', (
                 data['codigo'].strip(),
                 data['nombre'].strip(),
-                data.get('descripcion', '').strip(),
-                data.get('categoria_id'),
-                data.get('principio_activo', '').strip(),
-                data.get('presentacion', '').strip(),
-                data.get('unidad_base_id'),
-                float(data.get('precio_costo', 0)),
-                float(data.get('porcentaje_ganancia', 30)),
-                float(data.get('precio_venta', 0)),
-                int(data.get('stock_actual', 0)),
-                int(data.get('stock_minimo', 5)),
-                data.get('lote', '').strip(),
+                data.get('descripcion', '').strip() or None,
+                data.get('categoria_id') or None,
+                data.get('principio_activo', '').strip() or None,
+                data.get('presentacion', '').strip() or None,
+                unidades_ids['pastilla_id'],
+                costo_por_pastilla,
+                porcentaje,
+                precio_pastilla,
+                int(data.get('stock_minimo', 5)) * total_pastillas_por_caja,
+                data.get('lote', '').strip() or None,
                 fecha_vencimiento,
-                data.get('activo') == 'on',
+                activo,
                 producto_id
             ))
             
-            # Actualizar variación base si existe
-            cursor.execute('''
-                UPDATE variaciones_producto 
-                SET precio_venta = %s,
-                    precio_costo_equivalente = %s,
-                    porcentaje_ganancia = %s
-                WHERE producto_id = %s AND cantidad_equivalente = 1
-            ''', (
-                float(data.get('precio_venta', 0)),
-                float(data.get('precio_costo', 0)),
-                float(data.get('porcentaje_ganancia', 30)),
-                producto_id
-            ))
+            # Actualizar variaciones
+            variaciones_config = [
+                {'nivel': 4, 'unidad_id': unidades_ids['pastilla_id'], 
+                 'cantidad': 1, 'costo': costo_por_pastilla, 'precio': precio_pastilla,
+                 'desc': 'Unidad base - Pastilla'},
+                {'nivel': 3, 'unidad_id': unidades_ids['blister_id'], 
+                 'cantidad': pastillas_por_blister, 'costo': costo_por_blister, 
+                 'precio': precio_blister, 'desc': f'Blister de {pastillas_por_blister} pastillas'},
+                {'nivel': 2, 'unidad_id': unidades_ids['sobre_id'], 
+                 'cantidad': pastillas_por_blister * blister_por_sobre, 
+                 'costo': costo_por_sobre, 'precio': precio_sobre,
+                 'desc': f'Sobre de {blister_por_sobre} blisteres'},
+                {'nivel': 1, 'unidad_id': unidades_ids['caja_id'], 
+                 'cantidad': total_pastillas_por_caja, 'costo': costo_caja, 
+                 'precio': precio_caja, 'desc': f'Caja de {sobres_por_caja} sobres'}
+            ]
+            
+            for variacion in variaciones_config:
+                cursor.execute('''
+                    INSERT INTO variaciones_producto 
+                    (producto_id, unidad_id, nivel, cantidad_equivalente,
+                     precio_costo_equivalente, porcentaje_ganancia, precio_venta,
+                     descripcion, activo)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+                    ON DUPLICATE KEY UPDATE
+                        nivel = VALUES(nivel),
+                        cantidad_equivalente = VALUES(cantidad_equivalente),
+                        precio_costo_equivalente = VALUES(precio_costo_equivalente),
+                        porcentaje_ganancia = VALUES(porcentaje_ganancia),
+                        precio_venta = VALUES(precio_venta),
+                        descripcion = VALUES(descripcion),
+                        activo = TRUE
+                ''', (
+                    producto_id, variacion['unidad_id'], variacion['nivel'],
+                    variacion['cantidad'], variacion['costo'], porcentaje,
+                    variacion['precio'], variacion['desc']
+                ))
         
         mysql.connection.commit()
         flash('✅ Producto actualizado exitosamente', 'success')
+        return redirect(url_for('productos'))
         
     except Exception as e:
         mysql.connection.rollback()
-        flash(f'❌ Error al actualizar producto: {str(e)}', 'error')
-        print(f"Error: {str(e)}")
+        flash(f'❌ Error al actualizar el producto: {str(e)}', 'error')
+        print(f"Error en actualizar_producto: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return redirect(url_for('editar_producto_form', producto_id=producto_id))
     finally:
         cursor.close()
-    
-    return redirect(url_for('productos'))
-
 
 # ===== RUTAS PARA CONSULTAR VARIACIONES (MEJORADAS) =====
 
@@ -2003,8 +2235,7 @@ def dashboard_vendedor():
                           productos_mas_vendidos=productos_mas_vendidos,
                           ventas_por_dia=ventas_por_dia,
                           productos_por_vencer=productos_por_vencer,
-                          resumen_tipos=resumen_tipos)
-    
+                          resumen_tipos=resumen_tipos)  
 
 @app.route('/vendedor/buscar-productos', methods=['GET'])
 @login_required
@@ -2121,7 +2352,6 @@ def buscar_productos():
                              'categoria': categoria,
                              'incluir_sin_stock': incluir_sin_stock
                          })
-
 
 @app.route('/api/categorias', methods=['GET'])
 @login_required
@@ -3772,12 +4002,42 @@ def api_calcular_costo():
 # MOVIMIENTOS DE INVENTARIOS
 # ===========================
 
+# Variable global para cache simple
+_stock_cache = {
+    'data': None,
+    'timestamp': None
+}
+
 @app.route('/inventario')
 @admin_required
 def inventario():
     cursor = mysql.connection.cursor(DictCursor)
     
-    # Obtener movimientos de inventario - CORREGIDO: quitamos mi.unidad_id que no existe
+    # Verificar cache (opcional, 30 segundos de cache)
+    if _stock_cache['data'] and _stock_cache['timestamp'] and \
+       datetime.now() - _stock_cache['timestamp'] < timedelta(seconds=30):
+        productos_stock = _stock_cache['data']
+        
+        # Solo obtener movimientos nuevos
+        cursor.execute('''
+            SELECT mi.*, p.nombre as producto_nombre, p.codigo,
+                   u.nombre as unidad_nombre, u.abreviatura,
+                   us.nombre as usuario_nombre
+            FROM movimientos_inventario mi
+            JOIN productos p ON mi.producto_id = p.id
+            LEFT JOIN unidades_medida u ON p.unidad_base_id = u.id
+            LEFT JOIN usuarios us ON mi.usuario_id = us.id
+            ORDER BY mi.fecha_movimiento DESC
+            LIMIT 100
+        ''')
+        movimientos = cursor.fetchall()
+        cursor.close()
+        
+        return render_template('admin/inventario/inventario.html', 
+                             movimientos=movimientos,
+                             productos_stock=productos_stock)
+    
+    # Si no hay cache, obtener todo
     cursor.execute('''
         SELECT mi.*, p.nombre as producto_nombre, p.codigo,
                u.nombre as unidad_nombre, u.abreviatura,
@@ -3789,21 +4049,24 @@ def inventario():
         ORDER BY mi.fecha_movimiento DESC
         LIMIT 100
     ''')
-    
     movimientos = cursor.fetchall()
     
-    # Obtener stock actual de productos - CORREGIDO: campo correcto unidad_base_id
     cursor.execute('''
-        SELECT p.id, p.nombre, p.codigo, p.stock_actual, p.stock_minimo,
+        SELECT p.id, p.nombre, p.codigo, 
+               CAST(COALESCE(p.stock_actual, 0) AS SIGNED) as stock_actual,
+               CAST(COALESCE(p.stock_minimo, 0) AS SIGNED) as stock_minimo,
                u.abreviatura as unidad
         FROM productos p
         LEFT JOIN unidades_medida u ON p.unidad_base_id = u.id
         WHERE p.activo = 1
         ORDER BY p.nombre
     ''')
-    
     productos_stock = cursor.fetchall()
     cursor.close()
+    
+    # Actualizar cache
+    _stock_cache['data'] = productos_stock
+    _stock_cache['timestamp'] = datetime.now()
     
     return render_template('admin/inventario/inventario.html', 
                          movimientos=movimientos,
@@ -4043,9 +4306,12 @@ def historial_producto(producto_id):
     movimientos = cursor.fetchall()
     cursor.close()
     
+    now = date.today()
+    
     return render_template('admin/inventario/historial_producto.html', 
                          producto=producto, 
-                         movimientos=movimientos)
+                         movimientos=movimientos,
+                         now=now)
 
 # ========================
 # REPORTES

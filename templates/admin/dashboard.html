@@ -3,407 +3,750 @@
 {% block title %}Dashboard Admin - Servifarma{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <h1>📊 Dashboard Administrativo</h1>
-    <p>Resumen general del sistema farmacéutico - {{ fecha_actual }}</p>
-</div>
-
-<!-- Resumen del día actual -->
-<div class="today-summary" style="background: #e8f4fd; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
-    <h3 style="margin-top: 0;">📅 Resumen de Hoy</h3>
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
-        <div>
-            <strong>Ventas:</strong> {{ resumen_hoy.total_ventas_hoy or 0 }}
-        </div>
-        <div>
-            <strong>Ingresos:</strong> C$ {{ "%.2f"|format(resumen_hoy.total_ingresos_hoy|float or 0) }}
-        </div>
-        <div>
-            <strong>Productos vendidos:</strong> {{ resumen_hoy.productos_vendidos_hoy or 0 }}
-        </div>
-        <div>
-            <strong>Vendedores activos:</strong> {{ resumen_hoy.vendedores_activos_hoy or 0 }}
-        </div>
-    </div>
-</div>
-
-<div class="stats-grid">
-    <div class="stat-card">
-        <div class="stat-icon">💊</div>
-        <div class="stat-content">
-            <h3>Productos Activos</h3>
-            <p class="stat-number">{{ stats.total_productos or 0 }}</p>
-        </div>
+<div class="dashboard-container">
+    <!-- Header -->
+    <div class="page-header">
+        <h1>📊 Dashboard Administrativo</h1>
+        <p>Resumen general del sistema farmacéutico - {{ fecha_actual }}</p>
     </div>
 
-    <div class="stat-card">
-        <div class="stat-icon">📦</div>
-        <div class="stat-content">
-            <h3>Stock Total</h3>
-            <p class="stat-number">{{ stats.stock_total or 0 }} unidades</p>
-        </div>
-    </div>
-
-    <div class="stat-card">
-        <div class="stat-icon">💰</div>
-        <div class="stat-content">
-            <h3>Inversión Total</h3>
-            <p class="stat-number">C$ {{ "%.2f"|format(stats.inversion_total|float or 0) }}</p>
-        </div>
-    </div>
-
-    <div class="stat-card">
-        <div class="stat-icon">📈</div>
-        <div class="stat-content">
-            <h3>Ventas (30 días)</h3>
-            <p class="stat-number">C$ {{ "%.2f"|format(ventas_stats.ganancia_total|float or 0) }}</p>
-            <small>{{ ventas_stats.total_ventas or 0 }} transacciones</small>
-        </div>
-    </div>
-
-    <div class="stat-card">
-        <div class="stat-icon">👥</div>
-        <div class="stat-content">
-            <h3>Usuarios Activos</h3>
-            <p class="stat-number">{{ usuarios_stats.total_usuarios or 0 }}</p>
-            <small>{{ usuarios_stats.admins or 0 }} admins | {{ usuarios_stats.vendedores or 0 }} vendedores</small>
-        </div>
-    </div>
-</div>
-
-<!-- Productos más vendidos -->
-<section class="dashboard-section" style="margin-bottom: 20px;">
-    <h2>🏆 Top 5 Productos Más Vendidos (30 días)</h2>
-    <div class="products-list">
-        {% if top_productos %}
-            {% for producto in top_productos %}
-            <div class="list-item">
-                <div class="item-info">
-                    <h4>{{ producto.nombre }}</h4>
-                    <p>Código: {{ producto.codigo }} | Categoría: {{ producto.categoria }} | Stock: {{ producto.stock_actual }}</p>
-                </div>
-                <div style="text-align: right;">
-                    <div><strong>{{ producto.total_vendido or 0 }}</strong> unidades</div>
-                    <small>C$ {{ "%.2f"|format(producto.total_ingresos|float or 0) }}</small>
-                </div>
+    <!-- Resumen del día actual -->
+    <div class="today-summary">
+        <h3>📅 Resumen de Hoy</h3>
+        <div class="summary-grid">
+            <div class="summary-item">
+                <span class="summary-label">Ventas:</span>
+                <span class="summary-value">{{ resumen_hoy.total_ventas_hoy or 0 }}</span>
             </div>
-            {% endfor %}
-        {% else %}
-            <p class="empty">No hay datos de ventas en los últimos 30 días</p>
-        {% endif %}
+            <div class="summary-item">
+                <span class="summary-label">Ingresos:</span>
+                <span class="summary-value">C$ {{ "%.2f"|format(resumen_hoy.total_ingresos_hoy|float or 0) }}</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Productos vendidos:</span>
+                <span class="summary-value">{{ resumen_hoy.productos_vendidos_hoy or 0 }}</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Vendedores activos:</span>
+                <span class="summary-value">{{ resumen_hoy.vendedores_activos_hoy or 0 }}</span>
+            </div>
+        </div>
     </div>
-</section>
 
-<div class="dashboard-sections">
+    <!-- Stats Grid -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon">💊</div>
+            <div class="stat-content">
+                <h3>Productos Activos</h3>
+                <p class="stat-number">{{ stats.total_productos or 0 }}</p>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon">📦</div>
+            <div class="stat-content">
+                <h3>Stock Total</h3>
+                <p class="stat-number">{{ stats.stock_total or 0 }} <span class="stat-unit">unidades</span></p>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon">💰</div>
+            <div class="stat-content">
+                <h3>Inversión Total</h3>
+                <p class="stat-number">C$ {{ "%.2f"|format(stats.inversion_total|float or 0) }}</p>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon">📈</div>
+            <div class="stat-content">
+                <h3>Ventas (30 días)</h3>
+                <p class="stat-number">C$ {{ "%.2f"|format(ventas_stats.ganancia_total|float or 0) }}</p>
+                <small>{{ ventas_stats.total_ventas or 0 }} transacciones</small>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon">👥</div>
+            <div class="stat-content">
+                <h3>Usuarios Activos</h3>
+                <p class="stat-number">{{ usuarios_stats.total_usuarios or 0 }}</p>
+                <small>{{ usuarios_stats.admins or 0 }} admins | {{ usuarios_stats.vendedores or 0 }} vendedores</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Productos -->
     <section class="dashboard-section">
-        <h2>⚠️ Productos Bajo Stock</h2>
-        <div id="bajo-stock" class="products-list">
-            {% if bajo_stock %}
-                {% for producto in bajo_stock %}
+        <h2>🏆 Top 5 Productos Más Vendidos (30 días)</h2>
+        <div class="products-list">
+            {% if top_productos %}
+                {% for producto in top_productos %}
                 <div class="list-item">
                     <div class="item-info">
                         <h4>{{ producto.nombre }}</h4>
-                        <p>Código: {{ producto.codigo }} | {{ producto.categoria }}</p>
-                        <p>Stock: <strong style="color: #dc3545;">{{ producto.stock_actual }}</strong> / Mínimo: {{ producto.stock_minimo }}</p>
-                        {% if producto.dias_para_vencer and producto.dias_para_vencer > 0 %}
-                        <p><small>Vence en: {{ producto.dias_para_vencer }} días</small></p>
+                        <p class="item-details">Código: {{ producto.codigo }} | Categoría: {{ producto.categoria }} | Stock: {{ producto.stock_actual }}</p>
+                    </div>
+                    <div class="item-stats">
+                        <div class="item-quantity">{{ producto.total_vendido or 0 }} <span class="stat-unit">unidades</span></div>
+                        <div class="item-amount">C$ {{ "%.2f"|format(producto.total_ingresos|float or 0) }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p class="empty">No hay datos de ventas en los últimos 30 días</p>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- Sección de bajo stock y últimas ventas -->
+    <div class="dashboard-sections">
+        <section class="dashboard-section">
+            <h2>⚠️ Productos Bajo Stock</h2>
+            <div class="products-list">
+                {% if bajo_stock %}
+                    {% for producto in bajo_stock %}
+                    <div class="list-item">
+                        <div class="item-info">
+                            <h4>{{ producto.nombre }}</h4>
+                            <p class="item-details">Código: {{ producto.codigo }} | {{ producto.categoria }}</p>
+                            <p class="stock-warning">Stock: <strong class="danger-text">{{ producto.stock_actual }}</strong> / Mínimo: {{ producto.stock_minimo }}</p>
+                            {% if producto.dias_para_vencer and producto.dias_para_vencer > 0 %}
+                            <p><small>Vence en: {{ producto.dias_para_vencer }} días</small></p>
+                            {% endif %}
+                        </div>
+                        <a href="/admin/productos/editar/{{ producto.codigo }}" class="btn-small">Actualizar</a>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="empty">No hay productos bajo stock</p>
+                {% endif %}
+            </div>
+        </section>
+
+        <section class="dashboard-section">
+            <h2>📋 Últimas Ventas</h2>
+            <div class="sales-list">
+                {% if ultimas_ventas %}
+                    {% for venta in ultimas_ventas %}
+                    <div class="list-item">
+                        <div class="item-info">
+                            <h4>Venta #{{ venta.id }}</h4>
+                            <p class="item-details">{{ venta.vendedor }} - {{ venta.fecha_formateada }}</p>
+                            <p><small>{{ venta.items_vendidos }} productos</small></p>
+                        </div>
+                        <div class="item-amount">C$ {{ "%.2f"|format(venta.total_venta|float) }}</div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="empty">No hay ventas registradas</p>
+                {% endif %}
+            </div>
+            
+            <div class="section-footer">
+                <a href="{{  url_for('visualizar_ventas') }}" class="btn-small">Ver todas las ventas</a>
+            </div>
+        </section>
+    </div>
+
+    <!-- Sección de productos próximos a vencer y vencidos -->
+    <div class="dashboard-sections">
+        <section class="dashboard-section">
+            <h2>⏰ Próximos a Vencer (60 días)</h2>
+            <div class="products-list">
+                {% if proximos_vencer %}
+                    {% for producto in proximos_vencer %}
+                    <div class="list-item urgency-{{ producto.nivel_urgencia }}">
+                        <div class="item-info">
+                            <h4>{{ producto.nombre }}</h4>
+                            <p class="item-details">Lote: {{ producto.lote or 'N/A' }} | Stock: {{ producto.stock_actual }}</p>
+                            <p class="expiry-date"><strong>Vence: {{ producto.fecha_vencimiento.strftime('%d/%m/%Y') }}</strong> ({{ producto.dias_para_vencer }} días)</p>
+                        </div>
+                        <span class="badge urgency-badge urgency-{{ producto.nivel_urgencia }}">
+                            {{ producto.nivel_urgencia|upper }}
+                        </span>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="empty">No hay productos próximos a vencer</p>
+                {% endif %}
+            </div>
+        </section>
+
+        <section class="dashboard-section">
+            <h2>❌ Productos Vencidos</h2>
+            <div class="products-list">
+                {% if productos_vencidos %}
+                    {% for producto in productos_vencidos %}
+                    <div class="list-item expired-item">
+                        <div class="item-info">
+                            <h4>{{ producto.nombre }}</h4>
+                            <p class="item-details">Lote: {{ producto.lote or 'N/A' }} | Stock: {{ producto.stock_actual }}</p>
+                            <p class="expired-date"><strong>Vencido: {{ producto.fecha_vencimiento.strftime('%d/%m/%Y') }}</strong> ({{ producto.dias_vencido }} días)</p>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="empty">No hay productos vencidos</p>
+                {% endif %}
+            </div>
+        </section>
+    </div>
+
+    <!-- Últimos movimientos -->
+    <section class="dashboard-section">
+        <h2>🔄 Últimos Movimientos de Inventario</h2>
+        <div class="movements-list">
+            {% if ultimos_movimientos %}
+                {% for movimiento in ultimos_movimientos %}
+                <div class="list-item">
+                    <div class="item-info">
+                        <h4>{{ movimiento.producto }}</h4>
+                        <p class="item-details">Código: {{ movimiento.codigo_producto }}</p>
+                        <div class="movement-details">
+                            <span class="badge movement-badge movement-{{ movimiento.tipo_movimiento }}">
+                                {{ movimiento.tipo_movimiento|upper }}
+                            </span>
+                            <span class="movement-quantity">{{ movimiento.cantidad }} unidades</span>
+                        </div>
+                        <p class="movement-meta"><small>Usuario: {{ movimiento.usuario }} | {{ movimiento.fecha }}</small></p>
+                        {% if movimiento.observaciones %}
+                        <p class="movement-obs"><small>Obs: {{ movimiento.observaciones }}</small></p>
                         {% endif %}
                     </div>
-                    <a href="/admin/productos/editar/{{ producto.codigo }}" class="btn-small">Actualizar</a>
                 </div>
                 {% endfor %}
             {% else %}
-                <p class="empty">No hay productos bajo stock</p>
+                <p class="empty">No hay movimientos recientes</p>
             {% endif %}
         </div>
     </section>
 
+    <!-- Gráfico de ventas diarias -->
     <section class="dashboard-section">
-        <h2>📋 Últimas Ventas</h2>
-        <div id="ultimas-ventas" class="sales-list">
-            {% if ultimas_ventas %}
-                {% for venta in ultimas_ventas %}
+        <h2>📊 Ventas Últimos 7 Días</h2>
+        <div class="chart-container">
+            {% set max_value = ventas_diarias|map(attribute='total')|max|default(0) %}
+            <div class="chart-bars">
+                {% for dia in ventas_diarias %}
+                <div class="chart-bar-item">
+                    <div class="bar-wrapper">
+                        <div class="bar" style="height: {{ (dia.total / max_value * 100) if max_value > 0 else 0 }}%; min-height: 30px;"></div>
+                    </div>
+                    <div class="bar-label">
+                        <div class="bar-day">{{ dia.fecha_corta }}</div>
+                        <div class="bar-value">C$ {{ "%.0f"|format(dia.total|float) }}</div>
+                        <div class="bar-count">({{ dia.num_ventas }} ventas)</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+
+    <!-- Ventas por categoría -->
+    <section class="dashboard-section">
+        <h2>📊 Ventas por Categoría (30 días)</h2>
+        <div class="categories-list">
+            {% if ventas_categorias %}
+                {% for categoria in ventas_categorias %}
                 <div class="list-item">
                     <div class="item-info">
-                        <h4>Venta #{{ venta.id }}</h4>
-                        <p>{{ venta.vendedor }} - {{ venta.fecha_formateada }}</p>
-                        <p><small>{{ venta.items_vendidos }} productos</small></p>
+                        <h4>{{ categoria.categoria }}</h4>
+                        <p class="item-details">{{ categoria.num_ventas }} ventas</p>
                     </div>
-                    <div class="item-amount">C$ {{ "%.2f"|format(venta.total_venta|float) }}</div>
+                    <div class="item-amount">C$ {{ "%.2f"|format(categoria.total|float) }}</div>
                 </div>
                 {% endfor %}
             {% else %}
-                <p class="empty">No hay ventas registradas</p>
-            {% endif %}
-        </div>
-        
-        <div style="margin-top: 15px; text-align: center;">
-            <a href="/admin/ventas" class="btn-small">Ver todas las ventas</a>
-        </div>
-    </section>
-</div>
-
-<!-- Sección de productos próximos a vencer y vencidos -->
-<div class="dashboard-sections" style="margin-top: 20px;">
-    <section class="dashboard-section">
-        <h2>⏰ Próximos a Vencer (60 días)</h2>
-        <div class="products-list">
-            {% if proximos_vencer %}
-                {% for producto in proximos_vencer %}
-                <div class="list-item" style="border-left: 4px solid 
-                    {% if producto.nivel_urgencia == 'critico' %}#dc3545
-                    {% elif producto.nivel_urgencia == 'alerta' %}#ffc107
-                    {% else %}#17a2b8{% endif %};">
-                    <div class="item-info">
-                        <h4>{{ producto.nombre }}</h4>
-                        <p>Lote: {{ producto.lote or 'N/A' }} | Stock: {{ producto.stock_actual }}</p>
-                        <p><strong>Vence: {{ producto.fecha_vencimiento.strftime('%d/%m/%Y') }}</strong> ({{ producto.dias_para_vencer }} días)</p>
-                    </div>
-                    <span class="badge" style="background: 
-                        {% if producto.nivel_urgencia == 'critico' %}#dc3545
-                        {% elif producto.nivel_urgencia == 'alerta' %}#ffc107
-                        {% else %}#17a2b8{% endif %}; 
-                        color: white; padding: 5px 10px; border-radius: 5px;">
-                        {{ producto.nivel_urgencia|upper }}
-                    </span>
-                </div>
-                {% endfor %}
-            {% else %}
-                <p class="empty">No hay productos próximos a vencer</p>
-            {% endif %}
-        </div>
-    </section>
-
-    <section class="dashboard-section">
-        <h2>❌ Productos Vencidos</h2>
-        <div class="products-list">
-            {% if productos_vencidos %}
-                {% for producto in productos_vencidos %}
-                <div class="list-item" style="border-left: 4px solid #6c757d;">
-                    <div class="item-info">
-                        <h4>{{ producto.nombre }}</h4>
-                        <p>Lote: {{ producto.lote or 'N/A' }} | Stock: {{ producto.stock_actual }}</p>
-                        <p><strong style="color: #dc3545;">Vencido: {{ producto.fecha_vencimiento.strftime('%d/%m/%Y') }}</strong> ({{ producto.dias_vencido }} días)</p>
-                    </div>
-                </div>
-                {% endfor %}
-            {% else %}
-                <p class="empty">No hay productos vencidos</p>
+                <p class="empty">No hay ventas por categoría en los últimos 30 días</p>
             {% endif %}
         </div>
     </section>
 </div>
-
-<!-- Últimos movimientos -->
-<section class="dashboard-section" style="margin-top: 20px;">
-    <h2>🔄 Últimos Movimientos de Inventario</h2>
-    <div class="movements-list">
-        {% if ultimos_movimientos %}
-            {% for movimiento in ultimos_movimientos %}
-            <div class="list-item">
-                <div class="item-info">
-                    <h4>{{ movimiento.producto }}</h4>
-                    <p>Código: {{ movimiento.codigo_producto }}</p>
-                    <p>
-                        <span class="badge" style="background: 
-                            {% if movimiento.tipo_movimiento == 'entrada' %}#28a745
-                            {% elif movimiento.tipo_movimiento == 'salida' %}#dc3545
-                            {% else %}#ffc107{% endif %}; 
-                            color: white; padding: 3px 8px; border-radius: 3px;">
-                            {{ movimiento.tipo_movimiento|upper }}
-                        </span>
-                        {{ movimiento.cantidad }} unidades
-                    </p>
-                    <p><small>Usuario: {{ movimiento.usuario }} | {{ movimiento.fecha }}</small></p>
-                    {% if movimiento.observaciones %}
-                    <p><small>Obs: {{ movimiento.observaciones }}</small></p>
-                    {% endif %}
-                </div>
-            </div>
-            {% endfor %}
-        {% else %}
-            <p class="empty">No hay movimientos recientes</p>
-        {% endif %}
-    </div>
-</section>
-
-<!-- Gráfico de ventas diarias (últimos 7 días) -->
-<section class="dashboard-section" style="margin-top: 20px;">
-    <h2>📊 Ventas Últimos 7 Días</h2>
-    <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin-top: 20px;">
-        {% for dia in ventas_diarias %}
-        <div style="text-align: center;">
-            <div style="background: #007bff; height: {{ (dia.total / ventas_diarias|map(attribute='total')|max * 100) if ventas_diarias|map(attribute='total')|max > 0 else 0 }}px; min-height: 30px; max-height: 150px; width: 100%; border-radius: 5px 5px 0 0;"></div>
-            <div><strong>{{ dia.fecha_corta }}</strong></div>
-            <div><small>C$ {{ "%.0f"|format(dia.total|float) }}</small></div>
-            <div><small>({{ dia.num_ventas }} ventas)</small></div>
-        </div>
-        {% endfor %}
-    </div>
-</section>
-
-<!-- Ventas por categoría -->
-<section class="dashboard-section" style="margin-top: 20px;">
-    <h2>📊 Ventas por Categoría (30 días)</h2>
-    <div class="categories-list">
-        {% if ventas_categorias %}
-            {% for categoria in ventas_categorias %}
-            <div class="list-item">
-                <div class="item-info">
-                    <h4>{{ categoria.categoria }}</h4>
-                    <p>{{ categoria.num_ventas }} ventas</p>
-                </div>
-                <div class="item-amount">C$ {{ "%.2f"|format(categoria.total|float) }}</div>
-            </div>
-            {% endfor %}
-        {% else %}
-            <p class="empty">No hay ventas por categoría en los últimos 30 días</p>
-        {% endif %}
-    </div>
-</section>
 
 <style>
-/* Estilos existentes más algunos adicionales */
+/* ========== ESTILOS MEJORADOS Y RESPONSIVOS ========== */
+:root {
+    --primary-color: #007bff;
+    --success-color: #28a745;
+    --danger-color: #dc3545;
+    --warning-color: #ffc107;
+    --info-color: #17a2b8;
+    --gray-light: #f8f9fa;
+    --gray-medium: #e9ecef;
+    --gray-dark: #6c757d;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+/* Contenedor principal con padding responsivo */
+.dashboard-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: clamp(0.5rem, 2vw, 1.5rem);
+}
+
+/* Header responsivo */
 .page-header {
-    margin-bottom: 30px;
+    margin-bottom: clamp(1rem, 3vw, 2rem);
 }
 
 .page-header h1 {
-    margin: 0 0 10px 0;
+    margin: 0 0 0.5rem 0;
+    font-size: clamp(1.2rem, 4vw, 1.8rem);
     color: #333;
 }
 
 .page-header p {
     margin: 0;
+    font-size: clamp(0.8rem, 3vw, 1rem);
     color: #666;
 }
 
+/* Resumen del día - Grid responsivo */
+.today-summary {
+    background: #e8f4fd;
+    padding: clamp(0.8rem, 3vw, 1.5rem);
+    border-radius: 10px;
+    margin-bottom: clamp(1rem, 3vw, 1.5rem);
+}
+
+.today-summary h3 {
+    margin-top: 0;
+    margin-bottom: clamp(0.8rem, 2vw, 1rem);
+    font-size: clamp(1rem, 3.5vw, 1.2rem);
+}
+
+.summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: clamp(0.8rem, 2vw, 1rem);
+}
+
+.summary-item {
+    background: white;
+    padding: clamp(0.6rem, 2vw, 1rem);
+    border-radius: 8px;
+    text-align: center;
+    transition: transform 0.2s;
+}
+
+.summary-item:hover {
+    transform: translateY(-2px);
+}
+
+.summary-label {
+    display: block;
+    font-size: clamp(0.75rem, 2.5vw, 0.85rem);
+    color: #666;
+    margin-bottom: 0.5rem;
+}
+
+.summary-value {
+    display: block;
+    font-size: clamp(1rem, 4vw, 1.25rem);
+    font-weight: bold;
+    color: #007bff;
+}
+
+/* Stats Grid - Responsive */
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 20px;
-    margin-bottom: 30px;
+    gap: clamp(0.8rem, 2vw, 1.25rem);
+    margin-bottom: clamp(1rem, 3vw, 1.5rem);
 }
 
 .stat-card {
     background: white;
     border-radius: 10px;
-    padding: 20px;
+    padding: clamp(0.8rem, 2vw, 1.25rem);
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: clamp(0.8rem, 2vw, 1rem);
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
 }
 
 .stat-icon {
-    font-size: 2.5rem;
-    background: #f8f9fa;
-    width: 60px;
-    height: 60px;
+    font-size: clamp(1.8rem, 5vw, 2.5rem);
+    background: var(--gray-light);
+    width: clamp(45px, 8vw, 60px);
+    height: clamp(45px, 8vw, 60px);
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 10px;
+    flex-shrink: 0;
+}
+
+.stat-content {
+    flex: 1;
+    min-width: 0; /* Previene overflow */
 }
 
 .stat-content h3 {
     margin: 0;
-    font-size: 0.9rem;
+    font-size: clamp(0.8rem, 2.5vw, 0.9rem);
     color: #666;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .stat-number {
-    margin: 5px 0;
-    font-size: 1.5rem;
+    margin: 0.25rem 0;
+    font-size: clamp(1rem, 4vw, 1.5rem);
     font-weight: bold;
     color: #333;
+    word-break: break-word;
+}
+
+.stat-unit {
+    font-size: clamp(0.7rem, 2vw, 0.85rem);
+    font-weight: normal;
 }
 
 .stat-content small {
     color: #999;
-    font-size: 0.8rem;
+    font-size: clamp(0.7rem, 2vw, 0.8rem);
+    display: inline-block;
 }
 
+/* Dashboard Sections - Grid Responsive */
 .dashboard-sections {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: clamp(0.8rem, 2vw, 1.25rem);
+    margin-bottom: clamp(0.8rem, 2vw, 1.25rem);
 }
 
 .dashboard-section {
     background: white;
     border-radius: 10px;
-    padding: 20px;
+    padding: clamp(0.8rem, 3vw, 1.25rem);
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    margin-bottom: clamp(0.8rem, 2vw, 1.25rem);
 }
 
 .dashboard-section h2 {
     margin-top: 0;
-    margin-bottom: 20px;
-    font-size: 1.2rem;
+    margin-bottom: clamp(0.8rem, 2.5vw, 1rem);
+    font-size: clamp(1rem, 3.5vw, 1.2rem);
     color: #333;
-    border-bottom: 2px solid #f0f0f0;
-    padding-bottom: 10px;
+    border-bottom: 2px solid var(--gray-medium);
+    padding-bottom: 0.75rem;
 }
 
+/* List Items - Mejorados para móvil */
 .list-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 15px;
-    border-bottom: 1px solid #f0f0f0;
+    padding: clamp(0.8rem, 2.5vw, 1rem);
+    border-bottom: 1px solid var(--gray-medium);
+    gap: 0.75rem;
+    transition: background-color 0.2s;
+}
+
+.list-item:hover {
+    background-color: var(--gray-light);
 }
 
 .list-item:last-child {
     border-bottom: none;
 }
 
-.item-info h4 {
-    margin: 0 0 5px 0;
-    font-size: 1rem;
+/* En móvil, los items se apilan verticalmente */
+@media (max-width: 640px) {
+    .list-item {
+        flex-direction: column;
+        text-align: center;
+        align-items: stretch;
+    }
+    
+    .list-item .item-info {
+        text-align: center;
+    }
+    
+    .list-item .btn-small {
+        align-self: center;
+        margin-top: 0.5rem;
+    }
 }
 
-.item-info p {
-    margin: 5px 0;
-    font-size: 0.9rem;
+.item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.item-info h4 {
+    margin: 0 0 0.25rem 0;
+    font-size: clamp(0.9rem, 3vw, 1rem);
+    word-break: break-word;
+}
+
+.item-details {
+    margin: 0.25rem 0;
+    font-size: clamp(0.75rem, 2.5vw, 0.85rem);
     color: #666;
+    word-break: break-word;
+}
+
+.item-stats {
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.item-quantity {
+    font-weight: bold;
+    font-size: clamp(0.9rem, 3vw, 1rem);
+    color: var(--primary-color);
 }
 
 .item-amount {
     font-weight: bold;
-    color: #28a745;
-    font-size: 1.1rem;
+    color: var(--success-color);
+    font-size: clamp(0.9rem, 3vw, 1rem);
 }
 
+/* Badges y estados */
+.badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 5px;
+    font-size: clamp(0.7rem, 2.5vw, 0.75rem);
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+    .badge {
+        white-space: normal;
+        text-align: center;
+    }
+}
+
+.urgency-badge {
+    color: white;
+}
+
+.urgency-critico {
+    background-color: var(--danger-color);
+}
+
+.urgency-alerta {
+    background-color: var(--warning-color);
+    color: #333;
+}
+
+.urgency-normal {
+    background-color: var(--info-color);
+}
+
+.movement-badge {
+    color: white;
+    margin-right: 0.5rem;
+}
+
+.movement-entrada {
+    background-color: var(--success-color);
+}
+
+.movement-salida {
+    background-color: var(--danger-color);
+}
+
+.movement-ajuste {
+    background-color: var(--warning-color);
+    color: #333;
+}
+
+.stock-warning .danger-text {
+    color: var(--danger-color);
+}
+
+.expiry-date strong {
+    color: var(--warning-color);
+}
+
+.expired-date strong {
+    color: var(--danger-color);
+}
+
+/* Botones */
 .btn-small {
     display: inline-block;
-    padding: 5px 10px;
-    font-size: 0.8rem;
-    background: #007bff;
+    padding: 0.5rem 1rem;
+    font-size: clamp(0.75rem, 2.5vw, 0.85rem);
+    background: var(--primary-color);
     color: white;
     text-decoration: none;
     border-radius: 5px;
-    transition: background 0.3s;
+    transition: all 0.3s;
+    text-align: center;
+    white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+    .btn-small {
+        white-space: normal;
+        width: 100%;
+    }
 }
 
 .btn-small:hover {
     background: #0056b3;
+    transform: translateY(-2px);
 }
 
+.section-footer {
+    margin-top: 1rem;
+    text-align: center;
+}
+
+/* Mensajes vacíos */
 .empty {
     text-align: center;
     color: #999;
-    padding: 20px;
+    padding: 1.5rem;
+    font-size: clamp(0.85rem, 2.5vw, 0.9rem);
 }
 
+/* Gráfico de ventas responsivo */
+.chart-container {
+    overflow-x: auto;
+    margin-top: 1rem;
+}
+
+.chart-bars {
+    display: flex;
+    gap: clamp(0.25rem, 1vw, 0.5rem);
+    min-width: 500px;
+    justify-content: center;
+}
+
+@media (max-width: 640px) {
+    .chart-bars {
+        min-width: 400px;
+    }
+}
+
+.chart-bar-item {
+    flex: 1;
+    text-align: center;
+}
+
+.bar-wrapper {
+    background: var(--gray-light);
+    border-radius: 5px 5px 0 0;
+    height: 150px;
+    display: flex;
+    align-items: flex-end;
+    margin-bottom: 0.5rem;
+}
+
+.bar {
+    background: var(--primary-color);
+    width: 100%;
+    border-radius: 5px 5px 0 0;
+    transition: height 0.3s ease;
+    min-height: 30px;
+}
+
+.bar-label {
+    font-size: clamp(0.7rem, 2.5vw, 0.8rem);
+}
+
+.bar-day {
+    font-weight: bold;
+    margin-bottom: 0.25rem;
+}
+
+.bar-value {
+    color: var(--success-color);
+    font-weight: bold;
+    font-size: clamp(0.7rem, 2.5vw, 0.8rem);
+}
+
+.bar-count {
+    color: #999;
+    font-size: clamp(0.6rem, 2vw, 0.7rem);
+}
+
+/* Movement details */
+.movement-details {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin: 0.5rem 0;
+}
+
+.movement-quantity {
+    font-weight: bold;
+    font-size: clamp(0.8rem, 2.5vw, 0.9rem);
+}
+
+.movement-meta,
+.movement-obs {
+    color: #666;
+    font-size: clamp(0.7rem, 2.5vw, 0.75rem);
+    word-break: break-word;
+}
+
+/* Loading state */
 .loading {
     text-align: center;
     color: #999;
-    padding: 20px;
+    padding: 1.5rem;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
+/* Mejoras para tablet */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .stats-grid {
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    }
+    
+    .stat-card {
+        padding: 1rem;
+    }
+    
+    .stat-icon {
+        width: 50px;
+        height: 50px;
+        font-size: 2rem;
+    }
+}
+
+/* Mejoras para pantallas muy pequeñas */
+@media (max-width: 480px) {
+    .summary-grid {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+    }
+    
+    .summary-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem;
+    }
+    
+    .summary-label {
+        margin-bottom: 0;
+    }
+    
     .stats-grid {
         grid-template-columns: 1fr;
     }
@@ -412,19 +755,54 @@
         grid-template-columns: 1fr;
     }
     
-    .list-item {
-        flex-direction: column;
+    .list-item .item-stats {
         text-align: center;
-        gap: 10px;
+        width: 100%;
+    }
+}
+
+/* Scroll suave */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Mejora de contraste y accesibilidad */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* Mejoras para touch en móvil */
+@media (hover: none) and (pointer: coarse) {
+    .list-item,
+    .stat-card,
+    .btn-small {
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+    }
+    
+    .btn-small:active {
+        transform: scale(0.98);
     }
 }
 </style>
 
 <script>
-// Pequeño script para manejar posibles errores de carga
 document.addEventListener('DOMContentLoaded', function() {
-    // Verificar si hay datos para mostrar
     console.log('Dashboard cargado correctamente');
+    
+    // Opcional: Ajustar altura de las barras del gráfico si es necesario
+    const bars = document.querySelectorAll('.bar');
+    bars.forEach(bar => {
+        const height = bar.style.height;
+        if (height === '0%') {
+            bar.style.minHeight = '30px';
+        }
+    });
 });
 </script>
 {% endblock %}

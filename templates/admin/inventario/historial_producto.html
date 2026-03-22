@@ -9,7 +9,7 @@
         <i class="fas fa-history"></i> 
         Historial de Producto
     </h1>
-    <div style="display: flex; gap: 10px;">
+    <div class="action-buttons-group">
         <a href="{{ url_for('entrada_inventario') }}?producto_id={{ producto.id }}" class="btn btn-success">
             <i class="fas fa-plus-circle"></i> Entrada
         </a>
@@ -25,60 +25,62 @@
     </div>
 </div>
 
-<!-- Información del Producto -->
-<div class="card" style="margin-bottom: 20px;">
-    <div style="padding: 15px 20px; border-bottom: 1px solid #eee; background-color: #f8f9fa;">
-        <h3 style="margin: 0; font-size: 1.1rem; color: #0d6efd;">
+<!-- Información del Producto - Versión Responsive -->
+<div class="card info-card">
+    <div class="card-header-custom">
+        <h3>
             <i class="fas fa-box"></i> 
             Información del Producto
         </h3>
     </div>
-    <div style="padding: 20px;">
-        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px;">
-            <div>
-                <small style="color: #666;">Código:</small>
-                <div style="font-weight: bold;">{{ producto.codigo }}</div>
+    <div class="card-body-custom">
+        <div class="info-grid info-grid-5">
+            <div class="info-item">
+                <small>Código:</small>
+                <div class="info-value"><strong>{{ producto.codigo }}</strong></div>
             </div>
-            <div>
-                <small style="color: #666;">Nombre:</small>
-                <div style="font-weight: bold;">{{ producto.nombre }}</div>
+            <div class="info-item">
+                <small>Nombre:</small>
+                <div class="info-value"><strong>{{ producto.nombre }}</strong></div>
             </div>
-            <div>
-                <small style="color: #666;">Stock Actual:</small>
-                <div style="font-weight: bold; {% if producto.stock_actual <= producto.stock_minimo %}color: #dc3545;{% endif %}">
-                    {{ producto.stock_actual }} {{ producto.abreviatura }}
+            <div class="info-item">
+                <small>Stock Actual:</small>
+                <div class="info-value stock-actual {% if producto.stock_actual <= producto.stock_minimo %}stock-critico{% endif %}">
+                    <i class="fas fa-cube"></i>
+                    <strong>{{ producto.stock_actual }} {{ producto.abreviatura }}</strong>
                 </div>
             </div>
-            <div>
-                <small style="color: #666;">Stock Mínimo:</small>
-                <div style="font-weight: bold;">{{ producto.stock_minimo }} {{ producto.abreviatura }}</div>
+            <div class="info-item">
+                <small>Stock Mínimo:</small>
+                <div class="info-value">{{ producto.stock_minimo }} {{ producto.abreviatura }}</div>
             </div>
-            <div>
-                <small style="color: #666;">Estado:</small>
-                <div>
+            <div class="info-item">
+                <small>Estado:</small>
+                <div class="info-value">
                     {% if producto.activo %}
-                    <span class="badge badge-success">Activo</span>
+                    <span class="badge badge-success">✓ Activo</span>
                     {% else %}
-                    <span class="badge badge-danger">Inactivo</span>
+                    <span class="badge badge-danger">✗ Inactivo</span>
                     {% endif %}
                 </div>
             </div>
         </div>
         
-        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top: 15px;">
+        <div class="info-grid info-grid-4">
             {% if producto.fecha_vencimiento %}
-            <div>
-                <small style="color: #666;">Fecha Vencimiento:</small>
-                <div>
+            <div class="info-item">
+                <small>Fecha Vencimiento:</small>
+                <div class="info-value">
                     <span class="badge {% if producto.fecha_vencimiento < now %}badge-danger{% elif (producto.fecha_vencimiento - now).days <= 30 %}badge-warning{% else %}badge-info{% endif %}">
+                        <i class="fas fa-calendar-alt"></i>
                         {{ producto.fecha_vencimiento.strftime('%d/%m/%Y') }}
                         {% set fecha_venc = producto.fecha_vencimiento %}
                         {% if fecha_venc and now and fecha_venc < now %}
-                        (VENCIDO)
+                        <span class="vencido-text">(VENCIDO)</span>
                         {% elif fecha_venc and now %}
                             {% set dias_restantes = (fecha_venc - now).days %}
                             {% if dias_restantes <= 30 %}
-                            ({{ dias_restantes }} días)
+                            <span class="dias-restantes">({{ dias_restantes }} días)</span>
                             {% endif %}
                         {% endif %}
                     </span>
@@ -87,87 +89,178 @@
             {% endif %}
             
             {% if producto.lote %}
-            <div>
-                <small style="color: #666;">Lote:</small>
-                <div><span class="badge badge-secondary">{{ producto.lote }}</span></div>
+            <div class="info-item">
+                <small>Lote:</small>
+                <div class="info-value">
+                    <span class="badge badge-secondary">
+                        <i class="fas fa-tag"></i> {{ producto.lote }}
+                    </span>
+                </div>
             </div>
             {% endif %}
             
             {% if producto.precio_venta %}
-            <div>
-                <small style="color: #666;">Precio de Venta:</small>
-                <div style="font-weight: bold; color: #28a745;">C$ {{ "{:,.2f}".format(producto.precio_venta) }}</div>
+            <div class="info-item">
+                <small>Precio de Venta:</small>
+                <div class="info-value precio-venta">
+                    <i class="fas fa-dollar-sign"></i>
+                    C$ {{ "{:,.2f}".format(producto.precio_venta) }}
+                </div>
             </div>
             {% endif %}
             
             {% if producto.precio_costo %}
-            <div>
-                <small style="color: #666;">Precio Costo:</small>
-                <div style="color: #666;">C$ {{ "{:,.2f}".format(producto.precio_costo) }}</div>
+            <div class="info-item">
+                <small>Precio Costo:</small>
+                <div class="info-value precio-costo">
+                    <i class="fas fa-tag"></i>
+                    C$ {{ "{:,.2f}".format(producto.precio_costo) }}
+                </div>
             </div>
             {% endif %}
             
             {% if producto.categoria_nombre %}
-            <div>
-                <small style="color: #666;">Categoría:</small>
-                <div><span class="badge badge-primary">{{ producto.categoria_nombre }}</span></div>
+            <div class="info-item">
+                <small>Categoría:</small>
+                <div class="info-value">
+                    <span class="badge badge-primary">{{ producto.categoria_nombre }}</span>
+                </div>
             </div>
             {% endif %}
         </div>
     </div>
 </div>
 
-<!-- Gráfico de Movimientos -->
-<div class="card" style="margin-bottom: 20px;">
-    <div style="padding: 15px 20px; border-bottom: 1px solid #eee; background-color: #f8f9fa;">
-        <h3 style="margin: 0; font-size: 1.1rem; color: #0d6efd;">
+<!-- Gráfico de Movimientos - Versión Responsive -->
+<div class="card chart-card">
+    <div class="card-header-custom">
+        <h3>
             <i class="fas fa-chart-line"></i> 
             Evolución del Stock
         </h3>
+        <div class="chart-info">
+            <span class="info-badge">
+                <i class="fas fa-chart-simple"></i>
+                Últimos {{ movimientos|length }} movimientos
+            </span>
+        </div>
     </div>
-    <div style="padding: 20px;">
-        <div style="height: 250px;">
+    <div class="card-body-custom">
+        <div class="chart-container">
             <canvas id="stockChart"></canvas>
         </div>
     </div>
 </div>
 
-<!-- Tabla de Movimientos -->
-<div class="card">
-    <div style="padding: 15px 20px; border-bottom: 1px solid #eee; background-color: #f8f9fa;">
-        <h3 style="margin: 0; font-size: 1.1rem; color: #0d6efd;">
+<!-- Tabla de Movimientos - Versión Responsive -->
+<div class="card movimientos-card">
+    <div class="card-header-custom">
+        <h3>
             <i class="fas fa-list"></i> 
             Historial de Movimientos
         </h3>
+        <div class="movimiento-filters">
+            <button class="filter-btn active" data-filter="all">Todos</button>
+            <button class="filter-btn" data-filter="entrada">Entradas</button>
+            <button class="filter-btn" data-filter="salida">Salidas</button>
+            <button class="filter-btn" data-filter="ajuste">Ajustes</button>
+        </div>
     </div>
-    <div style="padding: 20px;">
-        <div style="overflow-x: auto;">
-            <table class="table" id="tablaMovimientos">
-                <thead>
-                    <tr>
-                        <th>Fecha</th>
-                        <th class="text-center">Tipo</th>
-                        <th class="text-right">Cantidad</th>
-                        <th class="text-right">Stock Anterior</th>
-                        <th class="text-right">Stock Nuevo</th>
-                        <th>Referencia</th>
-                        <th>Usuario</th>
-                        <th>Observaciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for mov in movimientos %}
-                    <tr>
-                        <td>
-                            <i class="fas fa-calendar-alt" style="color: #666; margin-right: 5px;"></i>
-                            {{ mov.fecha_movimiento.strftime('%d/%m/%Y') }}
-                            <br>
-                            <small style="color: #666;">
-                                <i class="fas fa-clock" style="margin-right: 3px;"></i>
-                                {{ mov.fecha_movimiento.strftime('%H:%M') }}
-                            </small>
-                        </td>
-                        <td class="text-center">
+    <div class="card-body-custom">
+        <!-- Versión Desktop: Tabla -->
+        <div class="desktop-table">
+            <div style="overflow-x: auto;">
+                <table class="table" id="tablaMovimientos">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th class="text-center">Tipo</th>
+                            <th class="text-right">Cantidad</th>
+                            <th class="text-right">Stock Anterior</th>
+                            <th class="text-right">Stock Nuevo</th>
+                            <th>Referencia</th>
+                            <th>Usuario</th>
+                            <th>Observaciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for mov in movimientos %}
+                        <tr class="movimiento-row tipo-{{ mov.tipo_movimiento }}">
+                            <td data-label="Fecha" class="fecha-cell">
+                                <div class="fecha-info">
+                                    <i class="fas fa-calendar-alt"></i>
+                                    {{ mov.fecha_movimiento.strftime('%d/%m/%Y') }}
+                                    <span class="hora-info">
+                                        <i class="fas fa-clock"></i>
+                                        {{ mov.fecha_movimiento.strftime('%H:%M') }}
+                                    </span>
+                                </div>
+                            </td>
+                            <td data-label="Tipo" class="text-center">
+                                {% if mov.tipo_movimiento == 'entrada' %}
+                                <span class="badge badge-success">ENTRADA</span>
+                                {% elif mov.tipo_movimiento == 'salida' %}
+                                <span class="badge badge-danger">SALIDA</span>
+                                {% else %}
+                                <span class="badge badge-info">AJUSTE</span>
+                                {% endif %}
+                            </td>
+                            <td data-label="Cantidad" class="text-right cantidad-cell {% if mov.cantidad > 0 %}text-success{% else %}text-danger{% endif %}">
+                                <strong>{{ mov.cantidad }} {{ producto.abreviatura }}</strong>
+                            </td>
+                            <td data-label="Stock Anterior" class="text-right">{{ mov.cantidad_anterior }} {{ producto.abreviatura }}</td>
+                            <td data-label="Stock Nuevo" class="text-right"><strong>{{ mov.cantidad_nueva }} {{ producto.abreviatura }}</strong></td>
+                            <td data-label="Referencia">
+                                {% if mov.referencia_tipo and mov.referencia_tipo != 'manual' and mov.referencia_tipo != 'ajuste_manual' %}
+                                <span class="badge badge-primary">{{ mov.referencia_tipo|title }}</span>
+                                {% if mov.referencia_id %}
+                                <br><small class="reference-id">#{{ mov.referencia_id }}</small>
+                                {% endif %}
+                                {% else %}
+                                <span class="badge badge-light">Manual</span>
+                                {% endif %}
+                            </td>
+                            <td data-label="Usuario">
+                                <span class="badge badge-secondary">
+                                    <i class="fas fa-user"></i>
+                                    {{ mov.usuario_nombre or 'N/A' }}
+                                </span>
+                            </td>
+                            <td data-label="Observaciones" class="observaciones-cell">
+                                {% if mov.observaciones %}
+                                <span class="observaciones-text" title="{{ mov.observaciones }}">
+                                    <i class="fas fa-comment"></i>
+                                    {{ mov.observaciones|truncate(20) }}
+                                </span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr id="fila-vacia-movimientos">
+                            <td colspan="8" class="text-center empty-table">
+                                <i class="fas fa-exchange-alt"></i>
+                                <p>No hay movimientos registrados</p>
+                                <div class="empty-actions">
+                                    <a href="{{ url_for('entrada_inventario') }}?producto_id={{ producto.id }}" class="btn btn-success">
+                                        <i class="fas fa-plus-circle"></i> Registrar primera entrada
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Versión Mobile: Tarjetas de Movimientos -->
+        <div class="mobile-movimientos-cards">
+            {% for mov in movimientos %}
+            <div class="movimiento-card tipo-{{ mov.tipo_movimiento }}">
+                <div class="card-header-mobile">
+                    <div class="card-title">
+                        <i class="fas fa-{% if mov.tipo_movimiento == 'entrada' %}arrow-up{% elif mov.tipo_movimiento == 'salida' %}arrow-down{% else %}balance-scale{% endif %}"></i>
+                        <span class="tipo-badge">
                             {% if mov.tipo_movimiento == 'entrada' %}
                             <span class="badge badge-success">ENTRADA</span>
                             {% elif mov.tipo_movimiento == 'salida' %}
@@ -175,47 +268,65 @@
                             {% else %}
                             <span class="badge badge-info">AJUSTE</span>
                             {% endif %}
-                        </td>
-                        <td class="text-right {% if mov.cantidad > 0 %}text-success{% else %}text-danger{% endif %}" style="font-weight: bold;">
-                            {{ mov.cantidad }} {{ producto.abreviatura }}
-                        </td>
-                        <td class="text-right">{{ mov.cantidad_anterior }} {{ producto.abreviatura }}</td>
-                        <td class="text-right">{{ mov.cantidad_nueva }} {{ producto.abreviatura }}</td>
-                        <td>
-                            {% if mov.referencia_tipo and mov.referencia_tipo != 'manual' and mov.referencia_tipo != 'ajuste_manual' %}
-                            <span class="badge badge-primary">{{ mov.referencia_tipo|title }}</span>
-                            {% if mov.referencia_id %}
-                            <br><small>#{{ mov.referencia_id }}</small>
-                            {% endif %}
-                            {% else %}
-                            <span class="badge badge-light">Manual</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <span class="badge badge-secondary">
-                                <i class="fas fa-user"></i>
-                                {{ mov.usuario_nombre or 'N/A' }}
+                        </span>
+                    </div>
+                    <div class="card-date">
+                        <i class="fas fa-calendar-alt"></i>
+                        {{ mov.fecha_movimiento.strftime('%d/%m/%Y %H:%M') }}
+                    </div>
+                </div>
+                
+                <div class="card-body-mobile">
+                    <div class="movimiento-details">
+                        <div class="detail-item cantidad-detail">
+                            <span class="detail-label">Cantidad:</span>
+                            <span class="detail-value cantidad {% if mov.cantidad > 0 %}text-success{% else %}text-danger{% endif %}">
+                                <strong>{{ mov.cantidad }} {{ producto.abreviatura }}</strong>
                             </span>
-                        </td>
-                        <td>
-                            {% if mov.observaciones %}
-                            <span data-bs-toggle="tooltip" title="{{ mov.observaciones }}" style="cursor: help;">
-                                <i class="fas fa-comment"></i>
-                                {{ mov.observaciones|truncate(20) }}
+                        </div>
+                        <div class="detail-item stock-change-detail">
+                            <span class="detail-label">Stock:</span>
+                            <span class="detail-value">
+                                {{ mov.cantidad_anterior }} → {{ mov.cantidad_nueva }} {{ producto.abreviatura }}
                             </span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="8" class="text-center" style="padding: 40px;">
-                            <i class="fas fa-exchange-alt" style="font-size: 48px; color: #ccc; margin-bottom: 10px; display: block;"></i>
-                            <p>No hay movimientos registrados</p>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Usuario:</span>
+                            <span class="detail-value">
+                                <i class="fas fa-user"></i> {{ mov.usuario_nombre or 'N/A' }}
+                            </span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Referencia:</span>
+                            <span class="detail-value">
+                                {% if mov.referencia_tipo and mov.referencia_tipo != 'manual' and mov.referencia_tipo != 'ajuste_manual' %}
+                                <span class="badge badge-primary">{{ mov.referencia_tipo|title }}</span>
+                                {% if mov.referencia_id %}
+                                <span class="reference-id">#{{ mov.referencia_id }}</span>
+                                {% endif %}
+                                {% else %}
+                                <span class="badge badge-light">Manual</span>
+                                {% endif %}
+                            </span>
+                        </div>
+                        {% if mov.observaciones %}
+                        <div class="detail-item full-width">
+                            <span class="detail-label">Observaciones:</span>
+                            <span class="detail-value observaciones">{{ mov.observaciones }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="empty-cards">
+                <i class="fas fa-exchange-alt"></i>
+                <p>No hay movimientos registrados</p>
+                <a href="{{ url_for('entrada_inventario') }}?producto_id={{ producto.id }}" class="btn btn-success">
+                    <i class="fas fa-plus-circle"></i> Registrar primera entrada
+                </a>
+            </div>
+            {% endfor %}
         </div>
     </div>
 </div>
@@ -229,37 +340,85 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Inicializar tooltips de Bootstrap
+    // Inicializar tooltips
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tooltipTriggerList.map(function(tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-
-    // Inicializar DataTable
-    if (typeof $.fn.DataTable !== 'undefined') {
-        $('#tablaMovimientos').DataTable({
-            language: {
-                url: '//cdn.datatables.net/plug-ins/1.10.24/i18n/Spanish.json'
-            },
-            order: [[0, 'desc']],
-            pageLength: 25,
-            responsive: true,
-            dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip',
-            language: {
-                "search": "Buscar:",
-                "lengthMenu": "Mostrar _MENU_ registros por página",
-                "zeroRecords": "No se encontraron resultados",
-                "info": "Mostrando página _PAGE_ de _PAGES_",
-                "infoEmpty": "No hay registros disponibles",
-                "infoFiltered": "(filtrado de _MAX_ registros totales)",
-                "paginate": {
-                    "first": "Primero",
-                    "last": "Último",
-                    "next": "Siguiente",
-                    "previous": "Anterior"
-                }
+    if (typeof bootstrap !== 'undefined') {
+        tooltipTriggerList.map(function(tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    }
+    
+    // Filtros en móvil
+    const filterBtns = document.querySelectorAll('.filter-btn');
+    const movimientoRows = document.querySelectorAll('.movimiento-row');
+    const movimientoCards = document.querySelectorAll('.movimiento-card');
+    
+    filterBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const filter = this.dataset.filter;
+            
+            // Actualizar estado activo de botones
+            filterBtns.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Filtrar filas de tabla (desktop)
+            if (movimientoRows.length > 0) {
+                movimientoRows.forEach(row => {
+                    if (filter === 'all' || row.classList.contains(`tipo-${filter}`)) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+            }
+            
+            // Filtrar tarjetas (mobile)
+            if (movimientoCards.length > 0) {
+                movimientoCards.forEach(card => {
+                    if (filter === 'all' || card.classList.contains(`tipo-${filter}`)) {
+                        card.style.display = '';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
             }
         });
+    });
+
+    // Inicializar DataTable solo en desktop
+    const isMobile = window.innerWidth <= 768;
+    if (typeof $.fn.DataTable !== 'undefined' && !isMobile) {
+        const tablaMovimientos = document.getElementById('tablaMovimientos');
+        if (tablaMovimientos && tablaMovimientos.querySelector('tbody tr')) {
+            try {
+                $('#tablaMovimientos').DataTable({
+                    language: {
+                        url: '//cdn.datatables.net/plug-ins/1.10.24/i18n/Spanish.json'
+                    },
+                    order: [[0, 'desc']],
+                    pageLength: 25,
+                    responsive: true,
+                    autoWidth: false,
+                    dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip',
+                    language: {
+                        "search": "Buscar:",
+                        "lengthMenu": "Mostrar _MENU_ registros por página",
+                        "zeroRecords": "No se encontraron resultados",
+                        "info": "Mostrando página _PAGE_ de _PAGES_",
+                        "infoEmpty": "No hay registros disponibles",
+                        "infoFiltered": "(filtrado de _MAX_ registros totales)",
+                        "paginate": {
+                            "first": "Primero",
+                            "last": "Último",
+                            "next": "Siguiente",
+                            "previous": "Anterior"
+                        }
+                    }
+                });
+            } catch(e) {
+                console.warn('Error inicializando DataTable:', e);
+            }
+        }
     }
 
     // Datos para el gráfico
@@ -279,12 +438,11 @@ document.addEventListener('DOMContentLoaded', function() {
     if (fechas.length > 0) {
         var ctx = document.getElementById('stockChart').getContext('2d');
         
-        // Determinar colores de puntos según tendencia
         var pointColors = stocks.map(function(value, index, array) {
-            if (index === 0) return 'rgb(13, 110, 253)'; // Primer punto - azul
-            if (value < array[index-1]) return 'rgb(220, 53, 69)'; // Bajada - rojo
-            if (value > array[index-1]) return 'rgb(40, 167, 69)'; // Subida - verde
-            return 'rgb(255, 193, 7)'; // Sin cambio - amarillo
+            if (index === 0) return 'rgb(13, 110, 253)';
+            if (value < array[index-1]) return 'rgb(220, 53, 69)';
+            if (value > array[index-1]) return 'rgb(40, 167, 69)';
+            return 'rgb(255, 193, 7)';
         });
         
         var stockChart = new Chart(ctx, {
@@ -302,8 +460,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     pointBackgroundColor: pointColors,
                     pointBorderColor: 'white',
                     pointBorderWidth: 2,
-                    pointRadius: 5,
-                    pointHoverRadius: 7
+                    pointRadius: isMobile ? 3 : 5,
+                    pointHoverRadius: isMobile ? 5 : 7
                 }]
             },
             options: {
@@ -315,7 +473,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         position: 'top',
                         labels: {
                             usePointStyle: true,
-                            pointStyle: 'circle'
+                            pointStyle: 'circle',
+                            font: {
+                                size: isMobile ? 10 : 12
+                            }
                         }
                     },
                     tooltip: {
@@ -331,7 +492,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         beginAtZero: true,
                         title: {
                             display: true,
-                            text: 'Stock ({{ producto.abreviatura }})'
+                            text: 'Stock ({{ producto.abreviatura }})',
+                            font: {
+                                size: isMobile ? 10 : 12
+                            }
                         },
                         grid: {
                             color: 'rgba(0, 0, 0, 0.05)',
@@ -339,8 +503,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     },
                     x: {
                         title: {
-                            display: true,
-                            text: 'Fecha y Hora'
+                            display: !isMobile,
+                            text: 'Fecha y Hora',
+                            font: {
+                                size: isMobile ? 10 : 12
+                            }
+                        },
+                        ticks: {
+                            maxRotation: isMobile ? 45 : 0,
+                            autoSkip: true,
+                            maxTicksLimit: isMobile ? 6 : 10
                         },
                         grid: {
                             display: false
@@ -350,89 +522,540 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     } else {
-        document.getElementById('stockChart').parentElement.innerHTML = 
-            '<div style="text-align: center; padding: 40px; color: #666;">' +
-            '<i class="fas fa-chart-line" style="font-size: 48px; color: #ccc; margin-bottom: 10px; display: block;"></i>' +
-            '<p>No hay datos suficientes para mostrar el gráfico</p>' +
-            '</div>';
+        const chartContainer = document.getElementById('stockChart').parentElement;
+        if (chartContainer) {
+            chartContainer.innerHTML = `
+                <div class="empty-chart">
+                    <i class="fas fa-chart-line"></i>
+                    <p>No hay datos suficientes para mostrar el gráfico</p>
+                </div>
+            `;
+        }
+    }
+    
+    // Detectar cambio de orientación
+    window.addEventListener('resize', function() {
+        const wasMobile = window.innerWidth <= 768;
+        const currentMobile = window.innerWidth <= 768;
+        
+        if (wasMobile !== currentMobile) {
+            location.reload();
+        }
+    });
+    
+    // Mejorar experiencia en dispositivos táctiles
+    if ('ontouchstart' in window) {
+        const buttons = document.querySelectorAll('.btn, .filter-btn');
+        buttons.forEach(btn => {
+            btn.addEventListener('touchstart', function() {
+                this.style.transform = 'scale(0.98)';
+            });
+            btn.addEventListener('touchend', function() {
+                this.style.transform = '';
+            });
+        });
     }
 });
 </script>
 
 <style>
-/* Badges personalizados */
+/* ========== VARIABLES GLOBALES ========== */
+:root {
+    --primary-color: #0d6efd;
+    --success-color: #28a745;
+    --warning-color: #ffc107;
+    --danger-color: #dc3545;
+    --info-color: #17a2b8;
+    --light-bg: #f8f9fa;
+    --border-color: #dee2e6;
+    --text-dark: #495057;
+    --text-light: #6c757d;
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* ========== ESTILOS BASE ========== */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.page-header h1 {
+    margin: 0;
+    font-size: 1.8rem;
+    color: var(--text-dark);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.page-header h1 i {
+    color: var(--primary-color);
+}
+
+.action-buttons-group {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+/* ========== TARJETAS ========== */
+.card {
+    border: none;
+    border-radius: 12px;
+    box-shadow: var(--shadow-md);
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+}
+
+.card-header-custom {
+    padding: 1rem 1.5rem;
+    background: linear-gradient(135deg, var(--light-bg), white);
+    border-bottom: 2px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.card-header-custom h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--primary-color);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.card-body-custom {
+    padding: 1.5rem;
+}
+
+/* ========== INFORMACIÓN DEL PRODUCTO ========== */
+.info-grid {
+    display: grid;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.info-grid-5 {
+    grid-template-columns: repeat(5, 1fr);
+}
+
+.info-grid-4 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.info-item {
+    padding: 0.5rem;
+}
+
+.info-item small {
+    display: block;
+    color: var(--text-light);
+    font-size: 0.75rem;
+    margin-bottom: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.info-value {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-dark);
+}
+
+.stock-actual {
+    font-size: 1.1rem;
+}
+
+.stock-actual i {
+    color: var(--primary-color);
+    margin-right: 0.25rem;
+}
+
+.stock-critico {
+    color: var(--danger-color) !important;
+}
+
+.precio-venta {
+    color: var(--success-color);
+}
+
+.precio-costo {
+    color: var(--text-light);
+}
+
+.vencido-text {
+    font-weight: bold;
+    margin-left: 0.25rem;
+}
+
+.dias-restantes {
+    font-size: 0.7rem;
+    margin-left: 0.25rem;
+}
+
+/* ========== GRÁFICO ========== */
+.chart-container {
+    height: 300px;
+    position: relative;
+}
+
+.chart-info {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.info-badge {
+    background: var(--light-bg);
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    color: var(--text-light);
+}
+
+.empty-chart {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-light);
+}
+
+.empty-chart i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+/* ========== FILTROS ========== */
+.movimiento-filters {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.filter-btn {
+    padding: 0.25rem 0.75rem;
+    border: 1px solid var(--border-color);
+    background: white;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+}
+
+.filter-btn:hover {
+    background: var(--light-bg);
+}
+
+.filter-btn.active {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+/* ========== TABLA RESPONSIVE ========== */
+.desktop-table {
+    display: block;
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 900px;
+}
+
+.table th {
+    background-color: var(--light-bg);
+    padding: 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-dark);
+    border-bottom: 2px solid var(--border-color);
+}
+
+.table td {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+
+.table tbody tr:hover {
+    background-color: var(--light-bg);
+}
+
+.fecha-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.hora-info {
+    font-size: 0.75rem;
+    color: var(--text-light);
+}
+
+.cantidad-cell {
+    font-weight: 600;
+}
+
+.reference-id {
+    font-size: 0.7rem;
+    color: var(--text-light);
+}
+
+.observaciones-text {
+    cursor: help;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+/* ========== TARJETAS DE MOVIMIENTOS (MÓVIL) ========== */
+.mobile-movimientos-cards {
+    display: none;
+}
+
+.movimiento-card {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    margin-bottom: 1rem;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.movimiento-card:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.movimiento-card.tipo-entrada {
+    border-left: 4px solid var(--success-color);
+}
+
+.movimiento-card.tipo-salida {
+    border-left: 4px solid var(--danger-color);
+}
+
+.movimiento-card.tipo-ajuste {
+    border-left: 4px solid var(--info-color);
+}
+
+.card-header-mobile {
+    padding: 1rem;
+    background: var(--light-bg);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.card-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.card-title i {
+    font-size: 1.2rem;
+}
+
+.tipo-badge .badge {
+    margin: 0;
+}
+
+.card-date {
+    font-size: 0.8rem;
+    color: var(--text-light);
+}
+
+.card-body-mobile {
+    padding: 1rem;
+}
+
+.movimiento-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.detail-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.detail-item.full-width {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+
+.detail-label {
+    font-weight: 500;
+    color: var(--text-dark);
+}
+
+.detail-value {
+    color: var(--text-light);
+}
+
+.cantidad-detail .detail-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.stock-change-detail {
+    background: var(--light-bg);
+    padding: 0.5rem;
+    border-radius: 8px;
+}
+
+.observaciones {
+    font-size: 0.9rem;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+/* ========== BADGES ========== */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 20px;
+}
+
 .badge-success {
     background-color: #d1e7dd;
     color: #0f5132;
-    padding: 4px 8px;
-    border-radius: 10px;
-    font-size: 12px;
-    font-weight: 600;
-    display: inline-block;
 }
 
 .badge-danger {
     background-color: #f8d7da;
     color: #842029;
-    padding: 4px 8px;
-    border-radius: 10px;
-    font-size: 12px;
-    font-weight: 600;
-    display: inline-block;
 }
 
 .badge-warning {
     background-color: #fff3cd;
     color: #856404;
-    padding: 4px 8px;
-    border-radius: 10px;
-    font-size: 12px;
-    font-weight: 600;
-    display: inline-block;
 }
 
 .badge-info {
     background-color: #cff4fc;
     color: #055160;
-    padding: 4px 8px;
-    border-radius: 10px;
-    font-size: 12px;
-    font-weight: 600;
-    display: inline-block;
 }
 
 .badge-primary {
     background-color: #cfe2ff;
     color: #084298;
-    padding: 4px 8px;
-    border-radius: 10px;
-    font-size: 12px;
-    font-weight: 600;
-    display: inline-block;
 }
 
 .badge-secondary {
     background-color: #e9ecef;
     color: #41464b;
-    padding: 4px 8px;
-    border-radius: 10px;
-    font-size: 12px;
-    font-weight: 600;
-    display: inline-block;
 }
 
 .badge-light {
     background-color: #f8f9fa;
     color: #41464b;
-    padding: 4px 8px;
-    border-radius: 10px;
-    font-size: 12px;
-    font-weight: 600;
-    display: inline-block;
     border: 1px solid #dee2e6;
 }
 
-/* Alineación de texto */
+/* ========== BOTONES ========== */
+.btn {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    text-decoration: none;
+}
+
+.btn-success {
+    background: var(--success-color);
+    color: white;
+}
+
+.btn-success:hover {
+    background: #218838;
+    transform: translateY(-1px);
+}
+
+.btn-warning {
+    background: var(--warning-color);
+    color: #000;
+}
+
+.btn-warning:hover {
+    background: #ffca2c;
+    transform: translateY(-1px);
+}
+
+.btn-info {
+    background: var(--info-color);
+    color: white;
+}
+
+.btn-info:hover {
+    background: #138496;
+    transform: translateY(-1px);
+}
+
+.btn-secondary {
+    background: var(--light-bg);
+    color: var(--text-dark);
+    border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+    background: var(--border-color);
+    transform: translateY(-1px);
+}
+
+/* ========== ESTADOS VACÍOS ========== */
+.empty-table,
+.empty-cards {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-light);
+}
+
+.empty-table i,
+.empty-cards i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.empty-table p,
+.empty-cards p {
+    margin-bottom: 1rem;
+}
+
+.empty-actions {
+    margin-top: 1rem;
+}
+
+/* ========== UTILIDADES ========== */
 .text-right {
     text-align: right;
 }
@@ -442,108 +1065,193 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 .text-success {
-    color: #28a745;
+    color: var(--success-color) !important;
 }
 
 .text-danger {
-    color: #dc3545;
+    color: var(--danger-color) !important;
 }
 
-/* Información del producto */
-.card {
-    border: none;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+/* ========== MEDIA QUERIES ========== */
+
+/* Tablets */
+@media (max-width: 992px) {
+    .info-grid-5,
+    .info-grid-4 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .card-header-custom {
+        flex-direction: column;
+        align-items: flex-start;
+    }
 }
 
-.card > div:first-child {
-    border-radius: 8px 8px 0 0;
-}
-
-/* Responsive */
+/* Móviles */
 @media (max-width: 768px) {
     .page-header {
         flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+    }
+    
+    .action-buttons-group {
+        justify-content: center;
+    }
+    
+    .action-buttons-group .btn {
+        flex: 1;
+        justify-content: center;
+    }
+    
+    .desktop-table {
+        display: none;
+    }
+    
+    .mobile-movimientos-cards {
+        display: block;
+    }
+    
+    .info-grid-5,
+    .info-grid-4 {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+    }
+    
+    .info-item {
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .info-item:last-child {
+        border-bottom: none;
+    }
+    
+    .chart-container {
+        height: 250px;
+    }
+    
+    .movimiento-filters {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .filter-btn {
+        flex: 1;
+        text-align: center;
+        padding: 0.5rem;
+    }
+}
+
+/* Móviles pequeños */
+@media (max-width: 480px) {
+    .page-header h1 {
+        font-size: 1.4rem;
+    }
+    
+    .btn {
+        font-size: 0.85rem;
+        padding: 0.5rem 0.75rem;
+    }
+    
+    .card-header-custom h3 {
+        font-size: 1rem;
+    }
+    
+    .badge {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.5rem;
+    }
+    
+    .chart-container {
+        height: 200px;
+    }
+    
+    .movimiento-card .card-header-mobile {
+        flex-direction: column;
         align-items: flex-start;
-        gap: 15px;
     }
     
-    .page-header div {
-        flex-wrap: wrap;
+    .detail-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
     }
     
-    [style*="grid-template-columns: repeat(5, 1fr)"] {
-        grid-template-columns: repeat(2, 1fr) !important;
+    .detail-value {
+        width: 100%;
+    }
+}
+
+/* Orientación landscape en móviles */
+@media (max-width: 768px) and (orientation: landscape) {
+    .info-grid-5,
+    .info-grid-4 {
+        grid-template-columns: repeat(3, 1fr);
     }
     
-    [style*="grid-template-columns: repeat(4, 1fr)"] {
-        grid-template-columns: repeat(2, 1fr) !important;
+    .chart-container {
+        height: 200px;
     }
     
-    .table-container {
-        overflow-x: auto;
+    .mobile-movimientos-cards {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
     }
     
-    .table {
-        min-width: 1000px;
+    .movimiento-card {
+        margin-bottom: 0;
     }
 }
 
-/* Estilos para DataTables */
-.dataTables_wrapper .dataTables_length,
-.dataTables_wrapper .dataTables_filter {
-    margin-bottom: 15px;
+/* Pantallas grandes */
+@media (min-width: 1400px) {
+    .card-body-custom {
+        padding: 2rem;
+    }
+    
+    .chart-container {
+        height: 350px;
+    }
 }
 
-.dataTables_wrapper .dataTables_length select {
-    padding: 5px;
-    border: 1px solid #ced4da;
-    border-radius: 4px;
+/* Soporte para reducción de movimiento */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+    }
 }
 
-.dataTables_wrapper .dataTables_filter input {
-    padding: 5px 10px;
-    border: 1px solid #ced4da;
-    border-radius: 4px;
-    margin-left: 5px;
-}
-
-.dataTables_wrapper .dataTables_filter input:focus {
-    outline: none;
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 0.2rem rgba(13,110,253,0.25);
-}
-
-.dataTables_wrapper .dataTables_info {
-    margin-top: 10px;
-    color: #666;
-}
-
-.dataTables_wrapper .dataTables_paginate {
-    margin-top: 10px;
-}
-
-.dataTables_wrapper .paginate_button {
-    padding: 5px 10px;
-    margin: 0 2px;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-.dataTables_wrapper .paginate_button.current {
-    background-color: #0d6efd;
-    color: white !important;
-    border-color: #0d6efd;
-}
-
-.dataTables_wrapper .paginate_button:hover:not(.current) {
-    background-color: #e9ecef;
-}
-
-/* Tooltip personalizado */
-[data-bs-toggle="tooltip"] {
-    cursor: help;
+/* Impresión */
+@media print {
+    .btn,
+    .action-buttons-group,
+    .movimiento-filters,
+    .filter-btn,
+    .card-actions {
+        display: none !important;
+    }
+    
+    .desktop-table {
+        display: block;
+    }
+    
+    .mobile-movimientos-cards {
+        display: none;
+    }
+    
+    .card {
+        box-shadow: none;
+        border: 1px solid #ddd;
+        page-break-inside: avoid;
+    }
+    
+    .chart-container {
+        height: 200px;
+        page-break-inside: avoid;
+    }
 }
 </style>
 {% endblock %}

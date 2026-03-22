@@ -4,41 +4,69 @@
 
 {% block content %}
 <div class="page-header">
-    <h1>🏢 Gestión de Proveedores</h1>
-    <button class="btn btn-primary" data-toggle="modal" data-target="#modalProveedor">+ Nuevo Proveedor</button>
-    <a href="{{ url_for('proveedores', incluir_inactivos=1) }}" class="btn btn-secondary">Ver Inactivos</a>
+    <h1>
+        <i class="fas fa-building"></i>
+        Gestión de Proveedores
+    </h1>
+    <div class="header-actions">
+        <button class="btn btn-primary" data-toggle="modal" data-target="#modalProveedor">
+            <i class="fas fa-plus"></i> Nuevo Proveedor
+        </button>
+        <a href="{{ url_for('proveedores', incluir_inactivos=1) }}" class="btn btn-secondary">
+            <i class="fas fa-eye-slash"></i> Ver Inactivos
+        </a>
+    </div>
 </div>
 
-<!-- Filtros -->
+<!-- Filtros Responsive -->
 <div class="filters-bar">
     <form method="GET" action="{{ url_for('proveedores') }}" class="filter-form">
-        <input type="text" name="buscar" placeholder="Buscar por nombre, contacto o email..." 
-               value="{{ buscar }}" class="input-search">
-        <select name="ciudad" class="input-select">
-            <option value="">Todas las ciudades</option>
-            {% for ciudad in ciudades %}
-                <option value="{{ ciudad }}" 
-                    {% if ciudad_filtro == ciudad %}selected{% endif %}>
-                    {{ ciudad }}
-                </option>
-            {% endfor %}
-        </select>
-        <div class="form-check">
-            <input type="checkbox" name="incluir_inactivos" id="incluir_inactivos" 
-                   class="form-check-input" {% if incluir_inactivos %}checked{% endif %}>
-            <label for="incluir_inactivos" class="form-check-label">Mostrar inactivos</label>
+        <div class="filter-group">
+            <i class="fas fa-search"></i>
+            <input type="text" name="buscar" placeholder="Buscar por nombre, contacto o email..." 
+                   value="{{ buscar }}" class="input-search">
         </div>
-        <button type="submit" class="btn btn-primary">Filtrar</button>
-        <a href="{{ url_for('proveedores') }}" class="btn btn-secondary">Limpiar</a>
+        
+        <div class="filter-group">
+            <i class="fas fa-city"></i>
+            <select name="ciudad" class="input-select">
+                <option value="">Todas las ciudades</option>
+                {% for ciudad in ciudades %}
+                    <option value="{{ ciudad }}" 
+                        {% if ciudad_filtro == ciudad %}selected{% endif %}>
+                        {{ ciudad }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="filter-group checkbox-group">
+            <label class="checkbox-label">
+                <input type="checkbox" name="incluir_inactivos" id="incluir_inactivos" 
+                       class="checkbox-input" {% if incluir_inactivos %}checked{% endif %}>
+                <span class="checkbox-custom"></span>
+                <span class="checkbox-text">Mostrar inactivos</span>
+            </label>
+        </div>
+        
+        <div class="filter-actions">
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-filter"></i> Filtrar
+            </button>
+            <a href="{{ url_for('proveedores') }}" class="btn btn-secondary">
+                <i class="fas fa-times"></i> Limpiar
+            </a>
+        </div>
     </form>
 </div>
 
-<!-- Tabla de Proveedores -->
+<!-- Tabla de Proveedores Responsive -->
 <div class="table-container">
-    <table class="table">
-        <thead>
-            <tr>
-                <th>ID</th>
+    <!-- Versión Desktop: Tabla tradicional -->
+    <div class="desktop-table">
+        <table class="table">
+            <thead>
+                32<th>ID</th>
                 <th>Nombre</th>
                 <th>Email</th>
                 <th>Teléfono</th>
@@ -46,94 +74,231 @@
                 <th>Contacto</th>
                 <th>Estado</th>
                 <th>Acciones</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% if proveedores %}
-                {% for proveedor in proveedores %}
-                <tr class="{% if not proveedor.activo %}inactivo-row{% endif %}"
-                    data-id="{{ proveedor.id }}"
-                    data-nombre="{{ proveedor.nombre }}"
-                    data-email="{{ proveedor.email or '' }}"
-                    data-telefono="{{ proveedor.telefono or '' }}"
-                    data-ciudad="{{ proveedor.ciudad or '' }}"
-                    data-contacto="{{ proveedor.contacto or '' }}"
-                    data-direccion="{{ proveedor.direccion or '' }}"
-                    data-observaciones="{{ proveedor.observaciones or '' }}"
-                    data-activo="{{ 'true' if proveedor.activo else 'false' }}">
-                    <td>{{ proveedor.id }}</td>
-                    <td>{{ proveedor.nombre }}</td>
-                    <td>{{ proveedor.email or '-' }}</td>
-                    <td>{{ proveedor.telefono or '-' }}</td>
-                    <td>{{ proveedor.ciudad or '-' }}</td>
-                    <td>{{ proveedor.contacto or '-' }}</td>
-                    <td>
+            </thead>
+            <tbody>
+                {% if proveedores %}
+                    {% for proveedor in proveedores %}
+                    <tr class="{% if not proveedor.activo %}inactivo-row{% endif %}"
+                        data-id="{{ proveedor.id }}"
+                        data-nombre="{{ proveedor.nombre }}"
+                        data-email="{{ proveedor.email or '' }}"
+                        data-telefono="{{ proveedor.telefono or '' }}"
+                        data-ciudad="{{ proveedor.ciudad or '' }}"
+                        data-contacto="{{ proveedor.contacto or '' }}"
+                        data-direccion="{{ proveedor.direccion or '' }}"
+                        data-observaciones="{{ proveedor.observaciones or '' }}"
+                        data-activo="{{ 'true' if proveedor.activo else 'false' }}">
+                        <td data-label="ID">{{ proveedor.id }}</td>
+                        <td data-label="Nombre"><strong>{{ proveedor.nombre }}</strong></td>
+                        <td data-label="Email">{{ proveedor.email or '-' }}</td>
+                        <td data-label="Teléfono">{{ proveedor.telefono or '-' }}</td>
+                        <td data-label="Ciudad">{{ proveedor.ciudad or '-' }}</td>
+                        <td data-label="Contacto">{{ proveedor.contacto or '-' }}</td>
+                        <td data-label="Estado">
+                            {% if proveedor.activo %}
+                            <span class="badge success">✓ Activo</span>
+                            {% else %}
+                            <span class="badge danger">✗ Inactivo</span>
+                            {% endif %}
+                        </td>
+                        <td data-label="Acciones" class="actions-cell">
+                            <div class="action-buttons">
+                                <button class="btn-icon btn-edit" 
+                                        data-toggle="modal" 
+                                        data-target="#modalEditarProveedor"
+                                        onclick="cargarDatosDesdeFila(this)"
+                                        title="Editar proveedor">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                
+                                <form method="POST" 
+                                      action="{{ url_for(proveedor.activo and 'desactivar_proveedor' or 'activar_proveedor', id=proveedor.id) }}" 
+                                      style="display: inline;" 
+                                      onsubmit="return confirm('¿{{ proveedor.activo and 'Desactivar' or 'Activar' }} este proveedor?');">
+                                    <button type="submit" class="btn-icon {{ proveedor.activo and 'btn-warning' or 'btn-success' }}" 
+                                            title="{{ proveedor.activo and 'Desactivar' or 'Activar' }}">
+                                        <i class="fas {{ proveedor.activo and 'fa-ban' or 'fa-check-circle' }}"></i>
+                                    </button>
+                                </form>
+                                
+                                <form method="POST" action="{{ url_for('eliminar_proveedor', id=proveedor.id) }}" 
+                                      style="display: inline;" 
+                                      onsubmit="return confirm('⚠️ ¿Eliminar permanentemente este proveedor? Esta acción no se puede deshacer.');">
+                                    <button type="submit" class="btn-icon btn-danger" title="Eliminar permanentemente">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center empty-table">
+                            <i class="fas fa-building"></i>
+                            <p>
+                                {% if buscar or ciudad_filtro %}
+                                    No se encontraron proveedores con los filtros aplicados
+                                {% else %}
+                                    No hay proveedores registrados.
+                                    <br>
+                                    <button class="btn btn-primary mt-3" onclick="abrirModalNuevo()">
+                                        <i class="fas fa-plus"></i> Crear primer proveedor
+                                    </button>
+                                {% endif %}
+                            </p>
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Versión Mobile: Tarjetas -->
+    <div class="mobile-cards">
+        {% if proveedores %}
+            {% for proveedor in proveedores %}
+            <div class="proveedor-card {% if not proveedor.activo %}inactive-card{% endif %}">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fas fa-building"></i>
+                        <strong>{{ proveedor.nombre }}</strong>
+                        <span class="card-id">#{{ proveedor.id }}</span>
+                    </div>
+                    <div class="card-status">
                         {% if proveedor.activo %}
-                        <span class="badge success">Activo</span>
+                        <span class="badge success">✓ Activo</span>
                         {% else %}
-                        <span class="badge danger">Inactivo</span>
+                        <span class="badge danger">✗ Inactivo</span>
                         {% endif %}
-                    </td>
-                    <td>
-                        <button class="btn btn-small btn-edit" 
-                                data-toggle="modal" 
-                                data-target="#modalEditarProveedor"
-                                onclick="cargarDatosDesdeFila(this)">
-                            Editar
+                    </div>
+                </div>
+                
+                <div class="card-body">
+                    {% if proveedor.email %}
+                    <div class="card-row">
+                        <span class="card-label">
+                            <i class="fas fa-envelope"></i> Email:
+                        </span>
+                        <span class="card-value">{{ proveedor.email }}</span>
+                    </div>
+                    {% endif %}
+                    
+                    {% if proveedor.telefono %}
+                    <div class="card-row">
+                        <span class="card-label">
+                            <i class="fas fa-phone"></i> Teléfono:
+                        </span>
+                        <span class="card-value">{{ proveedor.telefono }}</span>
+                    </div>
+                    {% endif %}
+                    
+                    {% if proveedor.ciudad %}
+                    <div class="card-row">
+                        <span class="card-label">
+                            <i class="fas fa-city"></i> Ciudad:
+                        </span>
+                        <span class="card-value">{{ proveedor.ciudad }}</span>
+                    </div>
+                    {% endif %}
+                    
+                    {% if proveedor.contacto %}
+                    <div class="card-row">
+                        <span class="card-label">
+                            <i class="fas fa-user"></i> Contacto:
+                        </span>
+                        <span class="card-value">{{ proveedor.contacto }}</span>
+                    </div>
+                    {% endif %}
+                    
+                    {% if proveedor.direccion %}
+                    <div class="card-row">
+                        <span class="card-label">
+                            <i class="fas fa-map-marker-alt"></i> Dirección:
+                        </span>
+                        <span class="card-value">{{ proveedor.direccion }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="card-actions">
+                    <button class="btn-icon btn-edit" 
+                            onclick="cargarDatosDesdeFila(this)"
+                            data-id="{{ proveedor.id }}"
+                            data-nombre="{{ proveedor.nombre }}"
+                            data-email="{{ proveedor.email or '' }}"
+                            data-telefono="{{ proveedor.telefono or '' }}"
+                            data-ciudad="{{ proveedor.ciudad or '' }}"
+                            data-contacto="{{ proveedor.contacto or '' }}"
+                            data-direccion="{{ proveedor.direccion or '' }}"
+                            data-observaciones="{{ proveedor.observaciones or '' }}"
+                            data-activo="{{ 'true' if proveedor.activo else 'false' }}">
+                        <i class="fas fa-edit"></i> Editar
+                    </button>
+                    
+                    <form method="POST" 
+                          action="{{ url_for(proveedor.activo and 'desactivar_proveedor' or 'activar_proveedor', id=proveedor.id) }}" 
+                          style="display: inline;" 
+                          onsubmit="return confirm('¿{{ proveedor.activo and 'Desactivar' or 'Activar' }} este proveedor?');">
+                        <button type="submit" class="btn-icon {{ proveedor.activo and 'btn-warning' or 'btn-success' }}">
+                            <i class="fas {{ proveedor.activo and 'fa-ban' or 'fa-check-circle' }}"></i>
+                            {{ proveedor.activo and 'Desactivar' or 'Activar' }}
                         </button>
-                        
-                        <!-- Formulario para activar/desactivar -->
-                        <form method="POST" 
-                              action="{{ url_for(proveedor.activo and 'desactivar_proveedor' or 'activar_proveedor', id=proveedor.id) }}" 
-                              style="display: inline;" 
-                              onsubmit="return confirm('¿{{ proveedor.activo and 'Desactivar' or 'Activar' }} este proveedor?');">
-                            <button type="submit" class="btn btn-small {{ proveedor.activo and 'btn-warning' or 'btn-success' }}">
-                                {{ proveedor.activo and 'Desactivar' or 'Activar' }}
-                            </button>
-                        </form>
-                        
-                        <!-- Formulario para eliminar -->
-                        <form method="POST" action="{{ url_for('eliminar_proveedor', id=proveedor.id) }}" 
-                              style="display: inline;" 
-                              onsubmit="return confirm('¿Eliminar permanentemente este proveedor?');">
-                            <button type="submit" class="btn btn-small btn-danger">Eliminar</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            {% else %}
-                <tr>
-                    <td colspan="8" class="text-center">
-                        {% if buscar or ciudad_filtro %}
-                            No se encontraron proveedores con los filtros aplicados
-                        {% else %}
-                            No hay proveedores registrados.
-                        {% endif %}
-                    </td>
-                </tr>
-            {% endif %}
-        </tbody>
-    </table>
+                    </form>
+                    
+                    <form method="POST" action="{{ url_for('eliminar_proveedor', id=proveedor.id) }}" 
+                          style="display: inline;" 
+                          onsubmit="return confirm('⚠️ ¿Eliminar permanentemente este proveedor? Esta acción no se puede deshacer.');">
+                        <button type="submit" class="btn-icon btn-danger">
+                            <i class="fas fa-trash-alt"></i> Eliminar
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-cards">
+                <i class="fas fa-building"></i>
+                <p>
+                    {% if buscar or ciudad_filtro %}
+                        No se encontraron proveedores con los filtros aplicados
+                    {% else %}
+                        No hay proveedores registrados.
+                        <br>
+                        <button class="btn btn-primary mt-3" onclick="abrirModalNuevo()">
+                            <i class="fas fa-plus"></i> Crear primer proveedor
+                        </button>
+                    {% endif %}
+                </p>
+            </div>
+        {% endif %}
+    </div>
 </div>
 
-<!-- Modal para Nuevo Proveedor -->
+<!-- Modal para Nuevo Proveedor - Versión Mejorada -->
 <div id="modalProveedor" class="modal">
     <div class="modal-content">
         <div class="modal-header">
-            <h2>Nuevo Proveedor</h2>
+            <h2>
+                <i class="fas fa-plus-circle"></i>
+                Nuevo Proveedor
+            </h2>
             <button class="btn-close" onclick="cerrarModal('modalProveedor')">&times;</button>
         </div>
         <form method="POST" action="{{ url_for('crear_proveedor') }}" class="form">
             <div class="form-row">
                 <div class="form-group">
-                    <label>Nombre *</label>
+                    <label>Nombre <span class="required">*</span></label>
                     <input type="text" name="nombre" required 
-                           placeholder="Ingrese el nombre del proveedor">
+                           placeholder="Ingrese el nombre del proveedor"
+                           class="form-control">
+                    <small>Mínimo 2 caracteres</small>
                 </div>
                 <div class="form-group">
                     <label>Contacto</label>
                     <input type="text" name="contacto" 
-                           placeholder="Nombre de la persona de contacto">
+                           placeholder="Nombre de la persona de contacto"
+                           class="form-control">
                 </div>
             </div>
 
@@ -141,12 +306,14 @@
                 <div class="form-group">
                     <label>Email</label>
                     <input type="email" name="email" 
-                           placeholder="correo@ejemplo.com">
+                           placeholder="correo@ejemplo.com"
+                           class="form-control">
                 </div>
                 <div class="form-group">
                     <label>Teléfono</label>
                     <input type="text" name="telefono" 
-                           placeholder="Número telefónico">
+                           placeholder="Número telefónico"
+                           class="form-control">
                 </div>
             </div>
 
@@ -154,38 +321,49 @@
                 <div class="form-group">
                     <label>Ciudad</label>
                     <input type="text" name="ciudad" 
-                           placeholder="Ciudad del proveedor">
+                           placeholder="Ciudad del proveedor"
+                           class="form-control">
                 </div>
                 <div class="form-group">
                     <label>Dirección</label>
                     <input type="text" name="direccion" 
-                           placeholder="Dirección completa">
+                           placeholder="Dirección completa"
+                           class="form-control">
                 </div>
             </div>
 
             <div class="form-group">
                 <label>Observaciones</label>
                 <textarea name="observaciones" rows="3" 
-                          placeholder="Notas adicionales"></textarea>
+                          placeholder="Notas adicionales sobre el proveedor"
+                          class="form-control"></textarea>
             </div>
 
             <div class="form-notice">
-                <small><i class="fas fa-info-circle"></i> Los campos marcados con * son obligatorios</small>
+                <i class="fas fa-info-circle"></i>
+                <small>Los campos marcados con <span class="required">*</span> son obligatorios</small>
             </div>
 
             <div class="form-actions">
-                <button type="submit" class="btn btn-primary">Guardar Proveedor</button>
-                <button type="button" class="btn btn-secondary" onclick="cerrarModal('modalProveedor')">Cancelar</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Guardar Proveedor
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="cerrarModal('modalProveedor')">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
             </div>
         </form>
     </div>
 </div>
 
-<!-- Modal para Editar Proveedor -->
+<!-- Modal para Editar Proveedor - Versión Mejorada -->
 <div id="modalEditarProveedor" class="modal">
     <div class="modal-content">
         <div class="modal-header">
-            <h2>Editar Proveedor</h2>
+            <h2>
+                <i class="fas fa-edit"></i>
+                Editar Proveedor
+            </h2>
             <button class="btn-close" onclick="cerrarModal('modalEditarProveedor')">&times;</button>
         </div>
         <form method="POST" id="formEditarProveedor" class="form">
@@ -193,14 +371,16 @@
             
             <div class="form-row">
                 <div class="form-group">
-                    <label>Nombre *</label>
+                    <label>Nombre <span class="required">*</span></label>
                     <input type="text" name="nombre" id="edit_nombre" required 
-                           placeholder="Ingrese el nombre del proveedor">
+                           placeholder="Ingrese el nombre del proveedor"
+                           class="form-control">
                 </div>
                 <div class="form-group">
                     <label>Contacto</label>
                     <input type="text" name="contacto" id="edit_contacto" 
-                           placeholder="Nombre de la persona de contacto">
+                           placeholder="Nombre de la persona de contacto"
+                           class="form-control">
                 </div>
             </div>
 
@@ -208,12 +388,14 @@
                 <div class="form-group">
                     <label>Email</label>
                     <input type="email" name="email" id="edit_email" 
-                           placeholder="correo@ejemplo.com">
+                           placeholder="correo@ejemplo.com"
+                           class="form-control">
                 </div>
                 <div class="form-group">
                     <label>Teléfono</label>
                     <input type="text" name="telefono" id="edit_telefono" 
-                           placeholder="Número telefónico">
+                           placeholder="Número telefónico"
+                           class="form-control">
                 </div>
             </div>
 
@@ -221,128 +403,348 @@
                 <div class="form-group">
                     <label>Ciudad</label>
                     <input type="text" name="ciudad" id="edit_ciudad" 
-                           placeholder="Ciudad del proveedor">
+                           placeholder="Ciudad del proveedor"
+                           class="form-control">
                 </div>
                 <div class="form-group">
                     <label>Dirección</label>
                     <input type="text" name="direccion" id="edit_direccion" 
-                           placeholder="Dirección completa">
+                           placeholder="Dirección completa"
+                           class="form-control">
                 </div>
             </div>
 
             <div class="form-group">
                 <label>Observaciones</label>
                 <textarea name="observaciones" id="edit_observaciones" rows="3" 
-                          placeholder="Notas adicionales"></textarea>
+                          placeholder="Notas adicionales sobre el proveedor"
+                          class="form-control"></textarea>
             </div>
 
-            <div class="form-group">
-                <label>
-                    <input type="checkbox" name="activo" id="edit_activo">
-                    Proveedor Activo
+            <div class="form-group checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="activo" id="edit_activo" class="checkbox-input">
+                    <span class="checkbox-custom"></span>
+                    <span class="checkbox-text">Proveedor Activo</span>
                 </label>
             </div>
 
             <div class="form-notice">
-                <small><i class="fas fa-info-circle"></i> Los campos marcados con * son obligatorios</small>
+                <i class="fas fa-info-circle"></i>
+                <small>Los campos marcados con <span class="required">*</span> son obligatorios</small>
             </div>
 
             <div class="form-actions">
-                <button type="submit" class="btn btn-primary">Actualizar Proveedor</button>
-                <button type="button" class="btn btn-secondary" onclick="cerrarModal('modalEditarProveedor')">Cancelar</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Actualizar Proveedor
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="cerrarModal('modalEditarProveedor')">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
             </div>
         </form>
     </div>
 </div>
 
-<script>
-// Función para cerrar modales
-function cerrarModal(modalId) {
-    document.getElementById(modalId).style.display = 'none';
-}
-
-// Función para cargar datos desde la fila al hacer clic en Editar
-function cargarDatosDesdeFila(boton) {
-    const fila = boton.closest('tr');
-    
-    const datos = {
-        id: fila.dataset.id,
-        nombre: fila.dataset.nombre,
-        email: fila.dataset.email,
-        telefono: fila.dataset.telefono,
-        ciudad: fila.dataset.ciudad,
-        contacto: fila.dataset.contacto,
-        direccion: fila.dataset.direccion,
-        observaciones: fila.dataset.observaciones,
-        activo: fila.dataset.activo
-    };
-    
-    // Llenar el formulario de edición con los datos
-    document.getElementById('edit_id').value = datos.id;
-    document.getElementById('edit_nombre').value = datos.nombre || '';
-    document.getElementById('edit_email').value = datos.email || '';
-    document.getElementById('edit_telefono').value = datos.telefono || '';
-    document.getElementById('edit_ciudad').value = datos.ciudad || '';
-    document.getElementById('edit_contacto').value = datos.contacto || '';
-    document.getElementById('edit_direccion').value = datos.direccion || '';
-    document.getElementById('edit_observaciones').value = datos.observaciones || '';
-    
-    // Configurar estado activo
-    document.getElementById('edit_activo').checked = (datos.activo === 'true');
-    
-    // Configurar acción del formulario
-    const form = document.getElementById('formEditarProveedor');
-    form.action = `/proveedores/editar/${datos.id}`;
-    
-    // Mostrar el modal
-    document.getElementById('modalEditarProveedor').style.display = 'block';
-}
-
-// Inicialización al cargar la página
-document.addEventListener('DOMContentLoaded', function() {
-    // Mostrar modal de nuevo proveedor si hay parámetro
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('nuevo') === '1') {
-        document.getElementById('modalProveedor').style.display = 'block';
-    }
-    
-    // Abrir modal de nuevo proveedor al hacer clic en botón
-    const botonNuevo = document.querySelector('[data-target="#modalProveedor"]');
-    if (botonNuevo) {
-        botonNuevo.addEventListener('click', function(e) {
-            e.preventDefault();
-            document.getElementById('modalProveedor').style.display = 'block';
-        });
-    }
-    
-    // Manejar cierre de modales
-    document.querySelectorAll('.modal').forEach(modal => {
-        modal.addEventListener('click', function(e) {
-            if (e.target === this) {
-                this.style.display = 'none';
-            }
-        });
-    });
-    
-    // Validación de formularios
-    const forms = document.querySelectorAll('.form');
-    forms.forEach(form => {
-        form.addEventListener('submit', function(e) {
-            const nombre = this.querySelector('input[name="nombre"]');
-            if (nombre && nombre.value.trim().length < 2) {
-                e.preventDefault();
-                alert('El nombre del proveedor es requerido (mínimo 2 caracteres)');
-                nombre.focus();
-                return false;
-            }
-            return true;
-        });
-    });
-});
-</script>
-
 <style>
-/* Estilos para los modales - consistentes con productos */
+/* ========== VARIABLES GLOBALES ========== */
+:root {
+    --primary-color: #0d6efd;
+    --primary-dark: #0b5ed7;
+    --secondary-color: #6c757d;
+    --success-color: #198754;
+    --warning-color: #ffc107;
+    --danger-color: #dc3545;
+    --light-bg: #f8f9fa;
+    --border-color: #dee2e6;
+    --text-dark: #495057;
+    --text-light: #6c757d;
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+/* ========== ESTILOS BASE ========== */
+* {
+    box-sizing: border-box;
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid var(--border-color);
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.page-header h1 {
+    margin: 0;
+    font-size: 1.8rem;
+    color: var(--text-dark);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.page-header h1 i {
+    color: var(--primary-color);
+}
+
+.header-actions {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+/* ========== FILTROS RESPONSIVE ========== */
+.filters-bar {
+    background-color: var(--light-bg);
+    padding: 1.5rem;
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border-color);
+}
+
+.filter-form {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.filter-group {
+    flex: 1;
+    min-width: 200px;
+    position: relative;
+}
+
+.filter-group i {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-light);
+    z-index: 1;
+}
+
+.input-search,
+.input-select {
+    width: 100%;
+    padding: 0.75rem 1rem 0.75rem 2.5rem;
+    border: 2px solid var(--border-color);
+    border-radius: 10px;
+    font-size: 0.95rem;
+    transition: all 0.2s;
+    background: white;
+}
+
+.input-search:focus,
+.input-select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
+}
+
+.checkbox-group {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 8px;
+    transition: background 0.2s;
+}
+
+.checkbox-label:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.checkbox-input {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.checkbox-text {
+    font-size: 0.95rem;
+    color: var(--text-dark);
+    user-select: none;
+}
+
+.filter-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+/* ========== TABLA RESPONSIVE ========== */
+.table-container {
+    background: white;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+}
+
+.desktop-table {
+    display: block;
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 800px;
+}
+
+.table th {
+    background-color: var(--light-bg);
+    padding: 1rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-dark);
+    border-bottom: 2px solid var(--border-color);
+}
+
+.table td {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+
+.table tbody tr:hover {
+    background-color: var(--light-bg);
+}
+
+.table tbody tr.inactivo-row {
+    opacity: 0.7;
+    background-color: #f8f9fa;
+}
+
+.actions-cell {
+    padding: 0.5rem !important;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+/* ========== TARJETAS MÓVILES ========== */
+.mobile-cards {
+    display: none;
+    padding: 1rem;
+}
+
+.proveedor-card {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    margin-bottom: 1rem;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.proveedor-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.inactive-card {
+    opacity: 0.7;
+    background-color: #f8f9fa;
+}
+
+.card-header {
+    padding: 1rem;
+    background: linear-gradient(135deg, var(--light-bg), white);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.card-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1rem;
+    flex-wrap: wrap;
+}
+
+.card-title i {
+    color: var(--primary-color);
+    font-size: 1.2rem;
+}
+
+.card-id {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    background: var(--light-bg);
+    padding: 0.2rem 0.5rem;
+    border-radius: 20px;
+}
+
+.card-body {
+    padding: 1rem;
+}
+
+.card-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #f1f5f9;
+    gap: 0.5rem;
+}
+
+.card-row:last-child {
+    border-bottom: none;
+}
+
+.card-label {
+    font-weight: 600;
+    color: var(--text-dark);
+    min-width: 100px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.card-label i {
+    width: 20px;
+    color: var(--primary-color);
+}
+
+.card-value {
+    flex: 1;
+    text-align: right;
+    color: var(--text-light);
+    word-break: break-word;
+}
+
+.card-actions {
+    padding: 1rem;
+    background: #fafbfc;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+/* ========== MODALES ========== */
 .modal {
     display: none;
     position: fixed;
@@ -351,145 +753,219 @@ document.addEventListener('DOMContentLoaded', function() {
     top: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0,0,0,0.5);
+    background-color: rgba(0, 0, 0, 0.5);
+    overflow-y: auto;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 .modal-content {
     background-color: white;
-    margin: 5% auto;
-    padding: 20px;
-    border-radius: 8px;
+    margin: 2rem auto;
+    border-radius: 16px;
     width: 90%;
     max-width: 800px;
     max-height: 90vh;
     overflow-y: auto;
+    box-shadow: var(--shadow-lg);
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(30px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
 }
 
 .modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 10px;
+    padding: 1.5rem 2rem;
+    border-bottom: 2px solid var(--border-color);
+    background: linear-gradient(135deg, var(--light-bg), white);
+    border-radius: 16px 16px 0 0;
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
 .modal-header h2 {
     margin: 0;
+    font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--text-dark);
+}
+
+.modal-header h2 i {
+    color: var(--primary-color);
 }
 
 .btn-close {
     background: none;
     border: none;
-    font-size: 24px;
+    font-size: 2rem;
     cursor: pointer;
-    color: #666;
+    color: var(--text-light);
+    transition: all 0.2s;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
 }
 
 .btn-close:hover {
-    color: #333;
+    color: var(--text-dark);
+    background-color: var(--light-bg);
+    transform: rotate(90deg);
 }
 
-/* Estilos para la cabecera de página */
-.page-header {
+/* ========== FORMULARIOS ========== */
+.form {
+    padding: 2rem;
+}
+
+.form-row {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-    padding-bottom: 15px;
-    border-bottom: 1px solid #eee;
-}
-
-.page-header h1 {
-    margin: 0;
-    font-size: 1.8rem;
-    color: #333;
-}
-
-/* Estilos para filtros */
-.filters-bar {
-    background-color: #f8f9fa;
-    padding: 15px;
-    border-radius: 8px;
-    margin-bottom: 20px;
-    border: 1px solid #dee2e6;
-}
-
-.filter-form {
-    display: flex;
-    gap: 10px;
-    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 1rem;
     flex-wrap: wrap;
 }
 
-.input-search,
-.input-select {
-    padding: 8px 12px;
-    border: 1px solid #ced4da;
-    border-radius: 4px;
-    font-size: 14px;
-    flex-grow: 1;
+.form-row .form-group {
+    flex: 1;
     min-width: 200px;
 }
 
-.input-search:focus,
-.input-select:focus {
-    outline: none;
-    border-color: #80bdff;
-    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+.form-group {
+    margin-bottom: 1rem;
 }
 
-.form-check {
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: var(--text-dark);
+    font-size: 0.9rem;
+}
+
+.form-group .required {
+    color: var(--danger-color);
+    margin-left: 2px;
+}
+
+.form-control {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 2px solid var(--border-color);
+    border-radius: 10px;
+    font-size: 0.95rem;
+    transition: all 0.2s;
+    background-color: white;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
+}
+
+.form-control:hover:not(:focus) {
+    border-color: var(--text-light);
+}
+
+.form-group small {
+    display: block;
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-light);
+}
+
+textarea.form-control {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.form-notice {
+    background-color: #e7f3ff;
+    border-left: 4px solid var(--primary-color);
+    padding: 1rem;
+    margin: 1rem 0;
+    border-radius: 8px;
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 0.75rem;
+    font-size: 0.9rem;
+    color: var(--text-dark);
 }
 
-.form-check-input {
-    margin: 0;
+.form-notice i {
+    color: var(--primary-color);
+    font-size: 1.1rem;
 }
 
-.form-check-label {
-    font-size: 14px;
-    color: #666;
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-color);
+    flex-wrap: wrap;
 }
 
-/* Estilos para botones */
+/* ========== BOTONES ========== */
 .btn {
-    padding: 8px 16px;
+    padding: 0.75rem 1.5rem;
     border: none;
-    border-radius: 4px;
+    border-radius: 10px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 0.95rem;
     font-weight: 500;
     text-decoration: none;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 5px;
+    gap: 0.5rem;
     transition: all 0.2s;
 }
 
 .btn-primary {
-    background-color: #0d6efd;
+    background-color: var(--primary-color);
     color: white;
 }
 
 .btn-primary:hover {
-    background-color: #0b5ed7;
+    background-color: var(--primary-dark);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
 }
 
 .btn-secondary {
-    background-color: #6c757d;
+    background-color: var(--secondary-color);
     color: white;
 }
 
 .btn-secondary:hover {
     background-color: #5c636a;
+    transform: translateY(-1px);
 }
 
 .btn-success {
-    background-color: #198754;
+    background-color: var(--success-color);
     color: white;
 }
 
@@ -498,7 +974,7 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 .btn-warning {
-    background-color: #ffc107;
+    background-color: var(--warning-color);
     color: #000;
 }
 
@@ -507,7 +983,7 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 .btn-danger {
-    background-color: #dc3545;
+    background-color: var(--danger-color);
     color: white;
 }
 
@@ -515,137 +991,52 @@ document.addEventListener('DOMContentLoaded', function() {
     background-color: #bb2d3b;
 }
 
-.btn-small {
-    padding: 4px 8px;
-    font-size: 12px;
-}
-
-/* Estilos para la tabla */
-.table-container {
-    background: white;
+.btn-icon {
+    background: none;
+    border: none;
+    padding: 0.5rem;
     border-radius: 8px;
-    border: 1px solid #dee2e6;
-    overflow: hidden;
-}
-
-.table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.table th {
-    background-color: #f8f9fa;
-    padding: 12px 15px;
-    text-align: left;
-    font-weight: 600;
-    color: #495057;
-    border-bottom: 2px solid #dee2e6;
-}
-
-.table td {
-    padding: 12px 15px;
-    border-bottom: 1px solid #dee2e6;
-    vertical-align: middle;
-}
-
-.table tbody tr:hover {
-    background-color: #f8f9fa;
-}
-
-.table tbody tr.inactivo-row {
-    opacity: 0.7;
-    background-color: #f8f9fa;
-}
-
-/* Estilos para formularios dentro de modales */
-.form {
-    margin-top: 20px;
-}
-
-.form-row {
-    display: flex;
-    gap: 20px;
-    margin-bottom: 15px;
-}
-
-.form-row .form-group {
-    flex: 1;
-}
-
-.form-group {
-    margin-bottom: 15px;
-}
-
-.form-group label {
-    display: block;
-    margin-bottom: 5px;
-    font-weight: 500;
-    color: #495057;
-    font-size: 14px;
-}
-
-.form-group input[type="text"],
-.form-group input[type="email"],
-.form-group input[type="number"],
-.form-group input[type="date"],
-.form-group select,
-.form-group textarea {
-    width: 100%;
-    padding: 8px 12px;
-    border: 1px solid #ced4da;
-    border-radius: 4px;
-    font-size: 14px;
-    transition: border-color 0.15s ease-in-out;
-}
-
-.form-group textarea {
-    resize: vertical;
-    min-height: 60px;
-}
-
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-    outline: none;
-    border-color: #80bdff;
-    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
-}
-
-.form-notice {
-    background-color: #e7f3ff;
-    border-left: 4px solid #0d6efd;
-    padding: 10px 15px;
-    margin: 15px 0;
-    font-size: 14px;
-    color: #495057;
-}
-
-.form-notice small {
-    display: flex;
+    cursor: pointer;
+    color: var(--text-light);
+    transition: all 0.2s;
+    display: inline-flex;
     align-items: center;
-    gap: 5px;
+    justify-content: center;
+    gap: 0.25rem;
+    font-size: 0.9rem;
 }
 
-.form-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    margin-top: 20px;
-    padding-top: 20px;
-    border-top: 1px solid #eee;
+.btn-icon:hover {
+    background-color: var(--light-bg);
+    color: var(--primary-color);
 }
 
-/* Estilos para badges de estado */
+.btn-icon.btn-warning:hover {
+    background-color: #fff3cd;
+    color: #ffc107;
+}
+
+.btn-icon.btn-danger:hover {
+    background-color: #f8d7da;
+    color: var(--danger-color);
+}
+
+.btn-icon.btn-success:hover {
+    background-color: #d1e7dd;
+    color: var(--success-color);
+}
+
+/* ========== BADGES ========== */
 .badge {
     display: inline-block;
-    padding: 4px 8px;
-    font-size: 12px;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
     font-weight: 600;
     line-height: 1;
     text-align: center;
     white-space: nowrap;
     vertical-align: baseline;
-    border-radius: 10px;
+    border-radius: 20px;
 }
 
 .badge.success {
@@ -658,38 +1049,423 @@ document.addEventListener('DOMContentLoaded', function() {
     color: #842029;
 }
 
-/* Texto centrado */
+/* ========== ESTADOS VACÍOS ========== */
+.empty-table,
+.empty-cards {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-light);
+}
+
+.empty-table i,
+.empty-cards i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.empty-table p,
+.empty-cards p {
+    margin-bottom: 1rem;
+}
+
+.mt-3 {
+    margin-top: 1rem;
+}
+
 .text-center {
     text-align: center;
 }
 
-/* Responsividad */
-@media (max-width: 768px) {
-    .page-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 10px;
-    }
-    
+/* ========== MEDIA QUERIES ========== */
+
+/* Tablets */
+@media (max-width: 992px) {
     .filter-form {
         flex-direction: column;
         align-items: stretch;
     }
     
-    .form-row {
+    .filter-group {
+        width: 100%;
+    }
+    
+    .checkbox-group {
+        justify-content: flex-start;
+    }
+    
+    .filter-actions {
+        width: 100%;
+        justify-content: stretch;
+    }
+    
+    .filter-actions .btn {
+        flex: 1;
+    }
+}
+
+/* Móviles */
+@media (max-width: 768px) {
+    .page-header {
         flex-direction: column;
-        gap: 10px;
+        align-items: stretch;
+        text-align: center;
+    }
+    
+    .header-actions {
+        justify-content: center;
+    }
+    
+    .desktop-table {
+        display: none;
+    }
+    
+    .mobile-cards {
+        display: block;
     }
     
     .modal-content {
-        margin: 10% auto;
-        width: 95%;
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        border-radius: 0;
+        max-height: 100vh;
     }
     
-    .table {
+    .modal-header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        padding: 1rem;
+    }
+    
+    .modal-header h2 {
+        font-size: 1.2rem;
+    }
+    
+    .form {
+        padding: 1rem;
+    }
+    
+    .form-row {
+        flex-direction: column;
+        gap: 0;
+    }
+    
+    .form-row .form-group {
+        min-width: auto;
+    }
+    
+    .form-actions {
+        flex-direction: column;
+    }
+    
+    .form-actions .btn {
+        width: 100%;
+    }
+    
+    .card-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .card-value {
+        text-align: left;
+        width: 100%;
+    }
+    
+    .card-actions {
+        flex-direction: column;
+    }
+    
+    .card-actions .btn-icon {
+        width: 100%;
+        justify-content: center;
+        padding: 0.75rem;
+    }
+    
+    .action-buttons {
+        flex-direction: column;
+    }
+    
+    .action-buttons form,
+    .action-buttons button {
+        width: 100%;
+    }
+}
+
+/* Móviles pequeños */
+@media (max-width: 480px) {
+    .page-header h1 {
+        font-size: 1.4rem;
+    }
+    
+    .btn {
+        font-size: 0.85rem;
+        padding: 0.6rem 1rem;
+    }
+    
+    .card-title {
+        font-size: 0.9rem;
+    }
+    
+    .card-label {
+        min-width: auto;
+    }
+    
+    .badge {
+        font-size: 0.7rem;
+    }
+    
+    .form-control {
+        font-size: 0.9rem;
+        padding: 0.6rem 0.8rem;
+    }
+}
+
+/* Orientación landscape en móviles */
+@media (max-width: 768px) and (orientation: landscape) {
+    .modal-content {
+        max-height: 90vh;
+    }
+    
+    .form-row {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+    
+    .form-row .form-group {
+        flex: 1;
+        min-width: 200px;
+    }
+}
+
+/* Pantallas grandes */
+@media (min-width: 1400px) {
+    .modal-content {
+        max-width: 1000px;
+    }
+    
+    .form-row {
+        gap: 2rem;
+    }
+}
+
+/* Soporte para reducción de movimiento */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Impresión */
+@media print {
+    .btn,
+    .header-actions,
+    .filters-bar,
+    .card-actions,
+    .action-buttons {
+        display: none !important;
+    }
+    
+    .desktop-table {
         display: block;
-        overflow-x: auto;
+    }
+    
+    .mobile-cards {
+        display: none;
+    }
+    
+    .table-container {
+        box-shadow: none;
+        border: 1px solid #ddd;
+    }
+    
+    .inactivo-row {
+        opacity: 1;
+        background: #f5f5f5;
     }
 }
 </style>
+
+<script>
+// Función para cerrar modales
+function cerrarModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = 'auto';
+    }
+}
+
+// Función para abrir modal de nuevo proveedor
+function abrirModalNuevo() {
+    const modal = document.getElementById('modalProveedor');
+    if (modal) {
+        modal.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+// Función para cargar datos desde la fila al hacer clic en Editar
+function cargarDatosDesdeFila(elemento) {
+    let datos = {};
+    
+    // Si el elemento es un botón dentro de una fila de tabla
+    if (elemento.closest('tr')) {
+        const fila = elemento.closest('tr');
+        datos = {
+            id: fila.dataset.id,
+            nombre: fila.dataset.nombre,
+            email: fila.dataset.email,
+            telefono: fila.dataset.telefono,
+            ciudad: fila.dataset.ciudad,
+            contacto: fila.dataset.contacto,
+            direccion: fila.dataset.direccion,
+            observaciones: fila.dataset.observaciones,
+            activo: fila.dataset.activo
+        };
+    } 
+    // Si el elemento es un botón dentro de una tarjeta (versión móvil)
+    else if (elemento.closest('.proveedor-card')) {
+        datos = {
+            id: elemento.dataset.id,
+            nombre: elemento.dataset.nombre,
+            email: elemento.dataset.email,
+            telefono: elemento.dataset.telefono,
+            ciudad: elemento.dataset.ciudad,
+            contacto: elemento.dataset.contacto,
+            direccion: elemento.dataset.direccion,
+            observaciones: elemento.dataset.observaciones,
+            activo: elemento.dataset.activo
+        };
+    }
+    
+    // Llenar el formulario de edición con los datos
+    const editId = document.getElementById('edit_id');
+    const editNombre = document.getElementById('edit_nombre');
+    const editEmail = document.getElementById('edit_email');
+    const editTelefono = document.getElementById('edit_telefono');
+    const editCiudad = document.getElementById('edit_ciudad');
+    const editContacto = document.getElementById('edit_contacto');
+    const editDireccion = document.getElementById('edit_direccion');
+    const editObservaciones = document.getElementById('edit_observaciones');
+    const editActivo = document.getElementById('edit_activo');
+    
+    if (editId) editId.value = datos.id || '';
+    if (editNombre) editNombre.value = datos.nombre || '';
+    if (editEmail) editEmail.value = datos.email || '';
+    if (editTelefono) editTelefono.value = datos.telefono || '';
+    if (editCiudad) editCiudad.value = datos.ciudad || '';
+    if (editContacto) editContacto.value = datos.contacto || '';
+    if (editDireccion) editDireccion.value = datos.direccion || '';
+    if (editObservaciones) editObservaciones.value = datos.observaciones || '';
+    if (editActivo) editActivo.checked = (datos.activo === 'true');
+    
+    // Configurar acción del formulario
+    const form = document.getElementById('formEditarProveedor');
+    if (form && datos.id) {
+        form.action = `/proveedores/editar/${datos.id}`;
+    }
+    
+    // Mostrar el modal
+    const modal = document.getElementById('modalEditarProveedor');
+    if (modal) {
+        modal.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+// Inicialización al cargar la página
+document.addEventListener('DOMContentLoaded', function() {
+    // Mostrar modal de nuevo proveedor si hay parámetro
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('nuevo') === '1') {
+        abrirModalNuevo();
+    }
+    
+    // Abrir modal de nuevo proveedor al hacer clic en botón
+    const botonNuevo = document.querySelector('[data-target="#modalProveedor"]');
+    if (botonNuevo) {
+        botonNuevo.addEventListener('click', function(e) {
+            e.preventDefault();
+            abrirModalNuevo();
+        });
+    }
+    
+    // Manejar cierre de modales al hacer clic fuera
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                cerrarModal(this.id);
+            }
+        });
+    });
+    
+    // Cerrar con tecla Escape
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            const modales = document.querySelectorAll('.modal');
+            modales.forEach(modal => {
+                if (modal.style.display === 'block') {
+                    cerrarModal(modal.id);
+                }
+            });
+        }
+    });
+    
+    // Validación de formularios
+    const forms = document.querySelectorAll('.form');
+    forms.forEach(form => {
+        form.addEventListener('submit', function(e) {
+            const nombre = this.querySelector('input[name="nombre"]');
+            if (nombre && nombre.value.trim().length < 2) {
+                e.preventDefault();
+                alert('❌ El nombre del proveedor es requerido (mínimo 2 caracteres)');
+                nombre.focus();
+                nombre.style.borderColor = '#dc3545';
+                return false;
+            }
+            
+            // Validar email si está presente
+            const email = this.querySelector('input[name="email"]');
+            if (email && email.value) {
+                const emailRegex = /^[^\s@]+@([^\s@]+\.)+[^\s@]+$/;
+                if (!emailRegex.test(email.value)) {
+                    e.preventDefault();
+                    alert('❌ Por favor, ingrese un email válido');
+                    email.focus();
+                    email.style.borderColor = '#dc3545';
+                    return false;
+                }
+            }
+            
+            return true;
+        });
+        
+        // Limpiar estilos de error al enfocar
+        const inputs = form.querySelectorAll('input, textarea, select');
+        inputs.forEach(input => {
+            input.addEventListener('focus', function() {
+                this.style.borderColor = '';
+            });
+        });
+    });
+    
+    // Mejorar experiencia en dispositivos táctiles
+    if ('ontouchstart' in window) {
+        const buttons = document.querySelectorAll('.btn, .btn-icon');
+        buttons.forEach(btn => {
+            btn.addEventListener('touchstart', function() {
+                this.style.transform = 'scale(0.98)';
+            });
+            btn.addEventListener('touchend', function() {
+                this.style.transform = '';
+            });
+        });
+    }
+});
+</script>
 {% endblock %}

@@ -57,12 +57,13 @@
     </form>
 </div>
 
-<!-- Tabla de Productos -->
+<!-- Tabla de Productos - Versión Responsive -->
 <div class="table-container">
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Código</th>
+    <!-- Versión Desktop: Tabla tradicional -->
+    <div class="desktop-table">
+        <table class="table">
+            <thead>
+                32<th>Código</th>
                 <th>Nombre</th>
                 <th>Tipo</th>
                 <th>Categoría</th>
@@ -71,91 +72,177 @@
                 <th>Venta Base</th>
                 <th>Presentaciones</th>
                 <th>Acciones</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for p in productos %}
-            <tr class="{% if not p.activo %}inactive-row{% endif %}">
-                <td><strong>{{ p.codigo }}</strong></td>
-                <td>
-                    {{ p.nombre }}
+            </thead>
+            <tbody>
+                {% for p in productos %}
+                <tr class="{% if not p.activo %}inactive-row{% endif %}">
+                    <td data-label="Código"><strong>{{ p.codigo }}</strong></td>
+                    <td data-label="Nombre">
+                        {{ p.nombre }}
+                        {% if p.fecha_vencimiento and p.fecha_vencimiento <= now %}
+                            <span class="badge badge-danger" title="Vencido">⚠️</span>
+                        {% endif %}
+                    </td>
+                    <td data-label="Tipo">
+                        {% if p.tipo_producto == 'jerarquico' %}
+                            <span class="badge badge-info">📦 Jerárquico</span>
+                        {% else %}
+                            <span class="badge badge-secondary">📦 Simple</span>
+                        {% endif %}
+                    </td>
+                    <td data-label="Categoría">{{ p.categoria_nombre or 'Sin categoría' }}</td>
+                    <td data-label="Stock" class="stock-cell {% if p.estado_stock == 'bajo' %}bajo-stock{% endif %}"
+                        title="{{ p.stock_formateado }}">
+                        {{ p.stock_actual }} {{ p.abreviatura or 'und' }}
+                        {% if p.estado_stock == 'bajo' %}
+                            <span class="stock-warning">⚠️</span>
+                        {% endif %}
+                    </td>
+                    <td data-label="Costo">C$ {{ "%.2f"|format(p.precio_costo) }}</td>
+                    <td data-label="Venta Base">C$ {{ "%.2f"|format(p.precio_venta) }} / {{ p.abreviatura or 'und' }}</td>
+                    <td data-label="Presentaciones">
+                        {% if p.total_variaciones and p.total_variaciones > 0 %}
+                            <button class="btn-icon btn-info" onclick="verPresentaciones({{ p.id }})" 
+                                    title="Ver presentaciones">
+                                <i class="fas fa-boxes"></i>
+                                <span class="badge-count">{{ p.total_variaciones }}</span>
+                            </button>
+                        {% else %}
+                            <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td data-label="Acciones">
+                        <div class="action-buttons">
+                            <!-- Botón de editar CORREGIDO: usa url_for en lugar de onclick -->
+                            <a href="{{ url_for('editar_producto_form', producto_id=p.id) }}" 
+                               class="btn-icon btn-edit" 
+                               title="Editar producto">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                            
+                            {% if p.tipo_producto == 'jerarquico' %}
+                            <a href="{{ url_for('detalle_precios_producto', producto_id=p.id) }}" 
+                               class="btn-icon btn-info" 
+                               title="Ver detalle de precios">
+                                <i class="fas fa-chart-line"></i>
+                            </a>
+                            {% endif %}
+                            
+                            {% if p.activo %}
+                            <button class="btn-icon btn-danger" 
+                                    onclick="eliminarProducto({{ p.id }})"
+                                    title="Desactivar producto">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                            {% else %}
+                            <button class="btn-icon btn-success" 
+                                    onclick="activarProducto({{ p.id }})"
+                                    title="Activar producto">
+                                <i class="fas fa-undo"></i>
+                            </button>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="9" class="text-center empty-table">
+                        <i class="fas fa-box-open"></i>
+                        <p>No hay productos registrados</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Versión Mobile: Tarjetas -->
+    <div class="mobile-cards">
+        {% for p in productos %}
+        <div class="product-card {% if not p.activo %}inactive-card{% endif %}">
+            <div class="card-header">
+                <div class="card-title">
+                    <strong>{{ p.codigo }}</strong> - {{ p.nombre }}
                     {% if p.fecha_vencimiento and p.fecha_vencimiento <= now %}
                         <span class="badge badge-danger" title="Vencido">⚠️</span>
                     {% endif %}
-                </td>
-                <td>
+                </div>
+                <div class="card-badge">
                     {% if p.tipo_producto == 'jerarquico' %}
                         <span class="badge badge-info">📦 Jerárquico</span>
                     {% else %}
                         <span class="badge badge-secondary">📦 Simple</span>
                     {% endif %}
-                </td>
-                <td>{{ p.categoria_nombre or 'Sin categoría' }}</td>
-                <td class="stock-cell {% if p.estado_stock == 'bajo' %}bajo-stock{% endif %}"
-                    title="{{ p.stock_formateado }}">
-                    {{ p.stock_actual }} {{ p.abreviatura or 'und' }}
-                    {% if p.estado_stock == 'bajo' %}
-                        <span class="stock-warning">⚠️</span>
-                    {% endif %}
-                </td>
-                <td>C$ {{ "%.2f"|format(p.precio_costo) }}</td>
-                <td>C$ {{ "%.2f"|format(p.precio_venta) }} / {{ p.abreviatura or 'und' }}</td>
-                <td>
-                    {% if p.total_variaciones and p.total_variaciones > 0 %}
-                        <button class="btn-icon btn-info" onclick="verPresentaciones({{ p.id }})" 
-                                title="Ver presentaciones">
-                            <i class="fas fa-boxes"></i>
-                            <span class="badge-count">{{ p.total_variaciones }}</span>
-                        </button>
-                    {% else %}
-                        <span class="text-muted">-</span>
-                    {% endif %}
-                </td>
-                <td>
-                    <div class="action-buttons">
-                        <button class="btn-icon btn-edit" 
-                                onclick="editarProducto({{ p.id }})"
-                                title="Editar producto">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        
-                        {% if p.tipo_producto == 'jerarquico' %}
-                        <a href="{{ url_for('detalle_precios_producto', producto_id=p.id) }}" 
-                           class="btn-icon btn-info" 
-                           title="Ver detalle de precios">
-                            <i class="fas fa-chart-line"></i>
-                        </a>
+                </div>
+            </div>
+            
+            <div class="card-body">
+                <div class="card-row">
+                    <span class="card-label">Categoría:</span>
+                    <span>{{ p.categoria_nombre or 'Sin categoría' }}</span>
+                </div>
+                <div class="card-row">
+                    <span class="card-label">Stock:</span>
+                    <span class="{% if p.estado_stock == 'bajo' %}bajo-stock{% endif %}">
+                        {{ p.stock_actual }} {{ p.abreviatura or 'und' }}
+                        {% if p.estado_stock == 'bajo' %}
+                            <span class="stock-warning">⚠️</span>
                         {% endif %}
-                        
-                        {% if p.activo %}
-                        <button class="btn-icon btn-danger" 
-                                onclick="eliminarProducto({{ p.id }})"
-                                title="Desactivar producto">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                        {% else %}
-                        <button class="btn-icon btn-success" 
-                                onclick="activarProducto({{ p.id }})"
-                                title="Activar producto">
-                            <i class="fas fa-undo"></i>
-                        </button>
-                        {% endif %}
-                    </div>
-                </td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="9" class="text-center empty-table">
-                    <i class="fas fa-box-open"></i>
-                    <p>No hay productos registrados</p>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+                    </span>
+                </div>
+                <div class="card-row">
+                    <span class="card-label">Costo:</span>
+                    <span>C$ {{ "%.2f"|format(p.precio_costo) }}</span>
+                </div>
+                <div class="card-row">
+                    <span class="card-label">Venta Base:</span>
+                    <span>C$ {{ "%.2f"|format(p.precio_venta) }} / {{ p.abreviatura or 'und' }}</span>
+                </div>
+                {% if p.total_variaciones and p.total_variaciones > 0 %}
+                <div class="card-row">
+                    <span class="card-label">Presentaciones:</span>
+                    <button class="btn-icon btn-info" onclick="verPresentaciones({{ p.id }})">
+                        <i class="fas fa-boxes"></i> Ver ({{ p.total_variaciones }})
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="card-actions">
+                <!-- Botón de editar CORREGIDO: usa url_for en lugar de onclick -->
+                <a href="{{ url_for('editar_producto_form', producto_id=p.id) }}" 
+                   class="btn-icon btn-edit" title="Editar">
+                    <i class="fas fa-edit"></i> Editar
+                </a>
+                
+                {% if p.tipo_producto == 'jerarquico' %}
+                <a href="{{ url_for('detalle_precios_producto', producto_id=p.id) }}" 
+                   class="btn-icon btn-info" title="Ver precios">
+                    <i class="fas fa-chart-line"></i> Precios
+                </a>
+                {% endif %}
+                
+                {% if p.activo %}
+                <button class="btn-icon btn-danger" onclick="eliminarProducto({{ p.id }})" title="Desactivar">
+                    <i class="fas fa-trash"></i> Desactivar
+                </button>
+                {% else %}
+                <button class="btn-icon btn-success" onclick="activarProducto({{ p.id }})" title="Activar">
+                    <i class="fas fa-undo"></i> Activar
+                </button>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <div class="empty-cards">
+            <i class="fas fa-box-open"></i>
+            <p>No hay productos registrados</p>
+        </div>
+        {% endfor %}
+    </div>
 </div>
 
-<!-- Modal para Nuevo Producto -->
+<!-- Modal para Nuevo Producto (se mantiene igual) -->
 <div id="modalNuevoProducto" class="modal">
     <div class="modal-content modal-lg">
         <div class="modal-header">
@@ -476,195 +563,6 @@
     </div>
 </div>
 
-<!-- Modal para Editar Producto -->
-<div id="modalEditarProducto" class="modal">
-    <div class="modal-content modal-lg">
-        <div class="modal-header">
-            <h2><i class="fas fa-edit"></i> Editar Producto</h2>
-            <button class="btn-close" onclick="cerrarModal('modalEditarProducto')">&times;</button>
-        </div>
-        
-        <form method="POST" action="" id="formEditarProducto" class="form">
-            <!-- Tipo de producto (solo lectura en edición) -->
-            <input type="hidden" name="tipo_producto" id="edit_tipo_producto">
-            
-            <!-- Datos Básicos -->
-            <div class="form-section">
-                <h3 class="section-title">
-                    <i class="fas fa-info-circle"></i> Información Básica
-                </h3>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Código <span class="required">*</span></label>
-                        <input type="text" name="codigo" id="edit_codigo" required class="form-control">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Nombre <span class="required">*</span></label>
-                        <input type="text" name="nombre" id="edit_nombre" required class="form-control">
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Principio Activo</label>
-                        <input type="text" name="principio_activo" id="edit_principio_activo" class="form-control">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Presentación</label>
-                        <input type="text" name="presentacion" id="edit_presentacion" class="form-control">
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Categoría</label>
-                        <select name="categoria_id" id="edit_categoria_id" class="form-control">
-                            <option value="">-- Sin categoría --</option>
-                            {% for categoria in categorias %}
-                                <option value="{{ categoria.id }}">{{ categoria.nombre }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    
-                    <div class="form-group" id="edit_campo_unidad_base">
-                        <label>Unidad Base <span class="required">*</span></label>
-                        <select name="unidad_base_id" id="edit_unidad_base_id" required class="form-control">
-                            <option value="">-- Seleccionar unidad base --</option>
-                            {% for unidad in unidades %}
-                                <option value="{{ unidad.id }}">{{ unidad.nombre }} ({{ unidad.abreviatura }})</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>Descripción</label>
-                    <textarea name="descripcion" id="edit_descripcion" rows="3" class="form-control"></textarea>
-                </div>
-            </div>
-
-            <!-- Precios y Stock (varían según tipo) -->
-            <div id="edit_seccion_simple" class="form-section">
-                <h3 class="section-title">
-                    <i class="fas fa-tag"></i> Precios y Stock
-                </h3>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Precio de Costo (C$) *</label>
-                        <input type="number" name="precio_costo" id="edit_precio_costo" 
-                               step="0.01" min="0.01" required class="form-control"
-                               oninput="calcularPrecioVentaSimple('edit')">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Porcentaje de Ganancia %</label>
-                        <input type="number" name="porcentaje_ganancia" id="edit_porcentaje" 
-                               step="0.01" min="0" value="30" class="form-control"
-                               oninput="calcularPrecioVentaSimple('edit')">
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Precio de Venta (C$) *</label>
-                        <input type="number" name="precio_venta" id="edit_precio_venta" 
-                               step="0.01" min="0.01" required class="form-control">
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Stock Actual</label>
-                        <input type="number" name="stock_actual" id="edit_stock_actual" 
-                               min="0" class="form-control">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Stock Mínimo</label>
-                        <input type="number" name="stock_minimo" id="edit_stock_minimo" 
-                               min="0" class="form-control">
-                    </div>
-                </div>
-            </div>
-
-            <div id="edit_seccion_jerarquico" class="form-section" style="display: none;">
-                <h3 class="section-title">
-                    <i class="fas fa-sitemap"></i> Configuración Jerárquica
-                </h3>
-                
-                <div class="jerarquico-container">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Costo de Caja (C$)</label>
-                            <input type="number" name="costo_caja" id="edit_costo_caja" 
-                                   step="0.01" min="0" class="form-control"
-                                   oninput="calcularJerarquico('edit')">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label>Porcentaje de Ganancia %</label>
-                            <input type="number" name="porcentaje_ganancia_jer" id="edit_porcentaje_jer" 
-                                   step="0.01" min="0" value="30" class="form-control"
-                                   oninput="calcularJerarquico('edit')">
-                        </div>
-                    </div>
-
-                    <div class="vista-previa">
-                        <h4>📊 Precios Actuales</h4>
-                        <div id="edit_precios_container" class="precios-grid">
-                            <!-- Se llena con JavaScript -->
-                        </div>
-                    </div>
-
-                    <p class="text-muted">
-                        <i class="fas fa-info-circle"></i>
-                        Los cambios en costos recalcularán todos los precios automáticamente
-                    </p>
-                </div>
-            </div>
-
-            <!-- Lote y Vencimiento -->
-            <div class="form-section">
-                <h3 class="section-title">
-                    <i class="fas fa-calendar"></i> Lote y Vencimiento
-                </h3>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Lote</label>
-                        <input type="text" name="lote" id="edit_lote" class="form-control">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Fecha de Vencimiento</label>
-                        <input type="date" name="fecha_vencimiento" id="edit_fecha_vencimiento" class="form-control">
-                    </div>
-                </div>
-            </div>
-
-            <div class="form-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" name="activo" id="edit_activo" checked>
-                    <span>Producto Activo</span>
-                </label>
-            </div>
-
-            <div class="form-actions">
-                <button type="submit" class="btn btn-primary btn-lg">
-                    <i class="fas fa-save"></i> Actualizar Producto
-                </button>
-                <button type="button" class="btn btn-secondary btn-lg" onclick="cerrarModal('modalEditarProducto')">
-                    <i class="fas fa-times"></i> Cancelar
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
 <!-- Modal para Ver Presentaciones -->
 <div id="modalPresentaciones" class="modal">
     <div class="modal-content" style="max-width: 500px;">
@@ -704,39 +602,34 @@ function toggleTipoProducto(contexto) {
     const campoUnidadBase = document.getElementById(`${contexto}_campo_unidad_base`);
     
     if (tipo === 'jerarquico') {
-        seccionSimple.style.display = 'none';
-        seccionJerarquico.style.display = 'block';
-        campoUnidadBase.style.display = 'none';
+        if (seccionSimple) seccionSimple.style.display = 'none';
+        if (seccionJerarquico) seccionJerarquico.style.display = 'block';
+        if (campoUnidadBase) campoUnidadBase.style.display = 'none';
         
-        // Quitar required de campos simples
         const simpleFields = ['precio_costo', 'precio_venta'];
         simpleFields.forEach(f => {
             const field = document.getElementById(`${contexto}_${f}`);
             if (field) field.required = false;
         });
         
-        // Agregar required a campos jerárquicos
         const jerFields = ['costo_caja', 'sobres_por_caja', 'blister_por_sobre', 'pastillas_por_blister'];
         jerFields.forEach(f => {
             const field = document.getElementById(`${contexto}_${f}`);
             if (field) field.required = true;
         });
         
-        // Calcular valores iniciales
         calcularJerarquico(contexto);
     } else {
-        seccionSimple.style.display = 'block';
-        seccionJerarquico.style.display = 'none';
-        campoUnidadBase.style.display = 'block';
+        if (seccionSimple) seccionSimple.style.display = 'block';
+        if (seccionJerarquico) seccionJerarquico.style.display = 'none';
+        if (campoUnidadBase) campoUnidadBase.style.display = 'block';
         
-        // Quitar required de campos jerárquicos
         const jerFields = ['costo_caja', 'sobres_por_caja', 'blister_por_sobre', 'pastillas_por_blister'];
         jerFields.forEach(f => {
             const field = document.getElementById(`${contexto}_${f}`);
             if (field) field.required = false;
         });
         
-        // Agregar required a campos simples
         const simpleFields = ['precio_costo', 'precio_venta'];
         simpleFields.forEach(f => {
             const field = document.getElementById(`${contexto}_${f}`);
@@ -758,7 +651,6 @@ function calcularPrecioVentaSimple(contexto) {
 }
 
 function calcularJerarquico(contexto) {
-    // Obtener valores
     const costo_caja = parseFloat(document.getElementById(`${contexto}_costo_caja`)?.value) || 0;
     const sobres = parseInt(document.getElementById(`${contexto}_sobres_por_caja`)?.value) || 1;
     const blister = parseInt(document.getElementById(`${contexto}_blister_por_sobre`)?.value) || 1;
@@ -766,32 +658,29 @@ function calcularJerarquico(contexto) {
     const porcentaje = parseFloat(document.getElementById(`${contexto}_porcentaje_jer`)?.value) || 30;
     
     if (costo_caja > 0 && sobres > 0 && blister > 0 && pastillas > 0) {
-        // Calcular total de pastillas por caja
         const total_pastillas = sobres * blister * pastillas;
-        document.getElementById(`${contexto}_total_pastillas`).textContent = total_pastillas;
+        const totalPastillasSpan = document.getElementById(`${contexto}_total_pastillas`);
+        if (totalPastillasSpan) totalPastillasSpan.textContent = total_pastillas;
         
-        // Calcular costos unitarios
         const costo_pastilla = costo_caja / total_pastillas;
         const costo_blister = costo_pastilla * pastillas;
         const costo_sobre = costo_blister * blister;
         
-        // Calcular precios de venta
         const precio_pastilla = costo_pastilla * (1 + porcentaje/100);
         const precio_blister = costo_blister * (1 + porcentaje/100);
         const precio_sobre = costo_sobre * (1 + porcentaje/100);
         const precio_caja = costo_caja * (1 + porcentaje/100);
         
-        // Actualizar displays
-        document.getElementById(`${contexto}_precio_pastilla_display`).textContent = 
-            `C$${precio_pastilla.toFixed(2)}`;
-        document.getElementById(`${contexto}_precio_blister_display`).textContent = 
-            `C$${precio_blister.toFixed(2)}`;
-        document.getElementById(`${contexto}_precio_sobre_display`).textContent = 
-            `C$${precio_sobre.toFixed(2)}`;
-        document.getElementById(`${contexto}_precio_caja_display`).textContent = 
-            `C$${precio_caja.toFixed(2)}`;
+        const displayPastilla = document.getElementById(`${contexto}_precio_pastilla_display`);
+        const displayBlister = document.getElementById(`${contexto}_precio_blister_display`);
+        const displaySobre = document.getElementById(`${contexto}_precio_sobre_display`);
+        const displayCaja = document.getElementById(`${contexto}_precio_caja_display`);
         
-        // Actualizar stock
+        if (displayPastilla) displayPastilla.textContent = `C$${precio_pastilla.toFixed(2)}`;
+        if (displayBlister) displayBlister.textContent = `C$${precio_blister.toFixed(2)}`;
+        if (displaySobre) displaySobre.textContent = `C$${precio_sobre.toFixed(2)}`;
+        if (displayCaja) displayCaja.textContent = `C$${precio_caja.toFixed(2)}`;
+        
         actualizarStockPastillas(contexto);
     }
 }
@@ -812,7 +701,6 @@ function actualizarStockPastillas(contexto) {
 // ========== FUNCIONES PARA PRESENTACIONES ADICIONALES ==========
 function agregarPresentacionSimple() {
     const container = document.getElementById('nuevo_presentaciones_simple');
-    const index = container.children.length;
     
     const item = document.createElement('div');
     item.className = 'presentacion-item';
@@ -838,94 +726,30 @@ function agregarPresentacionSimple() {
     container.appendChild(item);
 }
 
-// ========== FUNCIÓN PARA EDITAR PRODUCTO ==========
-function editarProducto(productoId) {
-    fetch(`/productos/${productoId}/variaciones`)
-        .then(response => response.json())
-        .then(variaciones => {
-            const producto = productosData.find(p => p.id == productoId);
-            if (!producto) return;
-            
-            // Configurar acción del formulario
-            document.getElementById('formEditarProducto').action = `/productos/${productoId}/editar`;
-            
-            // Llenar campos básicos
-            document.getElementById('edit_codigo').value = producto.codigo;
-            document.getElementById('edit_nombre').value = producto.nombre;
-            document.getElementById('edit_descripcion').value = producto.descripcion || '';
-            document.getElementById('edit_categoria_id').value = producto.categoria_id || '';
-            document.getElementById('edit_principio_activo').value = producto.principio_activo || '';
-            document.getElementById('edit_presentacion').value = producto.presentacion || '';
-            document.getElementById('edit_unidad_base_id').value = producto.unidad_base_id || '';
-            document.getElementById('edit_precio_costo').value = producto.precio_costo;
-            document.getElementById('edit_precio_venta').value = producto.precio_venta;
-            document.getElementById('edit_porcentaje').value = producto.porcentaje_ganancia;
-            document.getElementById('edit_stock_actual').value = producto.stock_actual;
-            document.getElementById('edit_stock_minimo').value = producto.stock_minimo;
-            document.getElementById('edit_lote').value = producto.lote || '';
-            document.getElementById('edit_fecha_vencimiento').value = producto.fecha_vencimiento || '';
-            document.getElementById('edit_activo').checked = producto.activo == 1;
-            
-            // Configurar tipo de producto
-            document.getElementById('edit_tipo_producto').value = producto.tipo_producto;
-            
-            if (producto.tipo_producto === 'jerarquico') {
-                document.getElementById('edit_seccion_simple').style.display = 'none';
-                document.getElementById('edit_seccion_jerarquico').style.display = 'block';
-                document.getElementById('edit_campo_unidad_base').style.display = 'none';
-                
-                // Cargar precios de presentaciones
-                let preciosHtml = '';
-                if (variaciones && variaciones.length > 0) {
-                    variaciones.forEach(v => {
-                        preciosHtml += `
-                            <div class="precio-item">
-                                <span class="presentacion">${v.unidad_nombre || v.abreviatura}</span>
-                                <span class="valor">C$${parseFloat(v.precio_venta).toFixed(2)}</span>
-                            </div>
-                        `;
-                    });
-                } else {
-                    preciosHtml = '<p class="text-muted">No hay presentaciones configuradas</p>';
-                }
-                document.getElementById('edit_precios_container').innerHTML = preciosHtml;
-                
-            } else {
-                document.getElementById('edit_seccion_simple').style.display = 'block';
-                document.getElementById('edit_seccion_jerarquico').style.display = 'none';
-                document.getElementById('edit_campo_unidad_base').style.display = 'block';
-            }
-            
-            // Mostrar modal
-            document.getElementById('modalEditarProducto').style.display = 'block';
-            document.body.style.overflow = 'hidden';
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error al cargar los datos del producto');
-        });
-}
-
 // ========== FUNCIÓN PARA VER PRESENTACIONES ==========
 function verPresentaciones(productoId) {
     fetch(`/productos/${productoId}/variaciones`)
         .then(response => response.json())
         .then(variaciones => {
-            let html = '<table class="table"><thead><tr><th>Presentación</th><th>Precio</th><th>Stock</th></tr></thead><tbody>';
+            let html = '<div class="presentaciones-list"><ul class="presentaciones-ul">';
             
             if (!variaciones || variaciones.length === 0) {
-                html += '<tr><td colspan="3" class="text-center">No hay presentaciones registradas</td></tr>';
+                html += '<li class="text-center">No hay presentaciones registradas</li>';
             } else {
                 variaciones.forEach(v => {
-                    html += `<tr>
-                        <td>${v.descripcion || v.unidad_nombre || v.abreviatura}</td>
-                        <td>C$ ${parseFloat(v.precio_venta).toFixed(2)}</td>
-                        <td>${v.stock_disponible || 0} ${v.abreviatura || ''}</td>
-                    </tr>`;
+                    html += `
+                        <li class="presentacion-li">
+                            <strong>${v.descripcion || v.unidad_nombre || v.abreviatura}</strong>
+                            <div class="presentacion-details">
+                                <span>💲 Precio: C$ ${parseFloat(v.precio_venta).toFixed(2)}</span>
+                                <span>📦 Stock: ${v.stock_disponible || 0} ${v.abreviatura || ''}</span>
+                            </div>
+                        </li>
+                    `;
                 });
             }
             
-            html += '</tbody></table>';
+            html += '</ul></div>';
             document.getElementById('contenido_presentaciones').innerHTML = html;
             document.getElementById('modalPresentaciones').style.display = 'block';
             document.body.style.overflow = 'hidden';
@@ -973,7 +797,6 @@ function activarProducto(productoId) {
 
 // ========== INICIALIZACIÓN ==========
 document.addEventListener('DOMContentLoaded', function() {
-    // Cerrar modales al hacer clic fuera
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', function(e) {
             if (e.target === this) {
@@ -982,7 +805,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Cerrar con tecla Escape
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
             document.querySelectorAll('.modal').forEach(modal => {
@@ -996,32 +818,51 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <style>
-/* ========== ESTILOS ADICIONALES ========== */
+/* ========== ESTILOS ADICIONALES MEJORADOS ========== */
+
+/* Variables globales para responsividad */
+:root {
+    --breakpoint-mobile: 768px;
+    --breakpoint-tablet: 1024px;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+    --spacing-xl: 2rem;
+}
+
+/* Reset y base */
+* {
+    box-sizing: border-box;
+}
+
 .page-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 2rem;
+    margin-bottom: var(--spacing-xl);
+    flex-wrap: wrap;
+    gap: var(--spacing-md);
 }
 
 .header-actions {
     display: flex;
-    gap: 1rem;
+    gap: var(--spacing-md);
+    flex-wrap: wrap;
 }
 
-/* Filtros */
+/* Filtros Responsive */
 .filters-bar {
     background: white;
     border-radius: 12px;
-    padding: 1.5rem;
-    margin-bottom: 2rem;
+    padding: var(--spacing-lg);
+    margin-bottom: var(--spacing-xl);
     box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
 .filter-form {
     display: flex;
-    gap: 1rem;
-    align-items: center;
+    gap: var(--spacing-md);
+    align-items: flex-end;
     flex-wrap: wrap;
 }
 
@@ -1046,9 +887,17 @@ document.addEventListener('DOMContentLoaded', function() {
     border: 2px solid #e2e8f0;
     border-radius: 10px;
     font-size: 0.95rem;
+    transition: all 0.3s ease;
 }
 
-/* Tabla */
+.filter-group input:focus,
+.filter-group select:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* Tabla Responsive */
 .table-container {
     background: white;
     border-radius: 12px;
@@ -1056,14 +905,21 @@ document.addEventListener('DOMContentLoaded', function() {
     overflow: hidden;
 }
 
+/* Desktop Table */
+.desktop-table {
+    display: block;
+    overflow-x: auto;
+}
+
 .table {
     width: 100%;
     border-collapse: collapse;
+    min-width: 800px;
 }
 
 .table th {
     background: #f8fafc;
-    padding: 1rem;
+    padding: var(--spacing-md);
     text-align: left;
     font-weight: 600;
     color: #475569;
@@ -1071,13 +927,89 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 .table td {
-    padding: 1rem;
+    padding: var(--spacing-md);
     border-bottom: 1px solid #e2e8f0;
 }
 
-.inactive-row {
+/* Versión Mobile: Tarjetas */
+.mobile-cards {
+    display: none;
+}
+
+.product-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    margin-bottom: var(--spacing-md);
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.product-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.inactive-card {
     opacity: 0.6;
     background-color: #f8fafc;
+}
+
+.card-header {
+    padding: var(--spacing-md);
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+}
+
+.card-title {
+    font-size: 1rem;
+    font-weight: 500;
+    color: #1e293b;
+}
+
+.card-body {
+    padding: var(--spacing-md);
+}
+
+.card-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-sm) 0;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.card-row:last-child {
+    border-bottom: none;
+}
+
+.card-label {
+    font-weight: 600;
+    color: #475569;
+}
+
+.card-actions {
+    padding: var(--spacing-md);
+    background: #fafbfc;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+}
+
+.empty-cards {
+    text-align: center;
+    padding: var(--spacing-xl);
+    color: #94a3b8;
+}
+
+.empty-cards i {
+    font-size: 3rem;
+    margin-bottom: var(--spacing-md);
 }
 
 /* Badges */
@@ -1131,6 +1063,7 @@ document.addEventListener('DOMContentLoaded', function() {
 .action-buttons {
     display: flex;
     gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .btn-icon {
@@ -1146,6 +1079,7 @@ document.addEventListener('DOMContentLoaded', function() {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    gap: 0.25rem;
 }
 
 .btn-icon:hover {
@@ -1174,9 +1108,9 @@ document.addEventListener('DOMContentLoaded', function() {
 /* Tipos de producto */
 .tipo-selector {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-    margin-bottom: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
 }
 
 .tipo-option {
@@ -1190,23 +1124,26 @@ document.addEventListener('DOMContentLoaded', function() {
 .tipo-option input[type="radio"]:checked + .tipo-card {
     border-color: #2563eb;
     background: #eff6ff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(37,99,235,0.2);
 }
 
 .tipo-card {
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 1.5rem;
+    padding: var(--spacing-lg);
     border: 2px solid #e2e8f0;
     border-radius: 12px;
-    transition: all 0.2s;
+    transition: all 0.3s ease;
     text-align: center;
+    height: 100%;
 }
 
 .tipo-card i {
     font-size: 2rem;
     color: #2563eb;
-    margin-bottom: 0.5rem;
+    margin-bottom: var(--spacing-sm);
 }
 
 .tipo-card small {
@@ -1217,9 +1154,9 @@ document.addEventListener('DOMContentLoaded', function() {
 /* Jerárquico */
 .jerarquico-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1rem;
-    margin-bottom: 2rem;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-xl);
 }
 
 .nivel-card {
@@ -1227,6 +1164,12 @@ document.addEventListener('DOMContentLoaded', function() {
     border: 2px solid #e2e8f0;
     border-radius: 12px;
     overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.nivel-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 
 .nivel-header {
@@ -1248,7 +1191,7 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 .nivel-body {
-    padding: 1rem;
+    padding: var(--spacing-md);
 }
 
 .nivel-caja .nivel-header {
@@ -1276,23 +1219,29 @@ document.addEventListener('DOMContentLoaded', function() {
     background: #f8fafc;
     border: 2px solid #e2e8f0;
     border-radius: 12px;
-    padding: 1rem;
-    margin: 1rem 0;
+    padding: var(--spacing-md);
+    margin: var(--spacing-md) 0;
 }
 
 .precios-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 1rem;
-    margin-top: 0.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-sm);
 }
 
 .precio-item {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     padding: 0.5rem;
     background: white;
     border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.precio-item:hover {
+    background: #f1f5f9;
 }
 
 .precio-item .presentacion {
@@ -1307,42 +1256,83 @@ document.addEventListener('DOMContentLoaded', function() {
 
 /* Presentaciones adicionales */
 .presentaciones-container {
-    margin-top: 1.5rem;
-    padding-top: 1rem;
+    margin-top: var(--spacing-lg);
+    padding-top: var(--spacing-md);
     border-top: 2px dashed #e2e8f0;
 }
 
 .presentaciones-container h4 {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    margin-bottom: 1rem;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
 }
 
 .presentacion-item {
-    margin-bottom: 0.5rem;
+    margin-bottom: var(--spacing-sm);
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .presentacion-row {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr 2fr auto;
-    gap: 0.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--spacing-sm);
     align-items: center;
+}
+
+/* Presentaciones en modal */
+.presentaciones-ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.presentacion-li {
+    padding: var(--spacing-md);
+    border-bottom: 1px solid #e2e8f0;
+    margin-bottom: var(--spacing-sm);
+}
+
+.presentacion-li:last-child {
+    border-bottom: none;
+}
+
+.presentacion-details {
+    display: flex;
+    justify-content: space-between;
+    margin-top: var(--spacing-sm);
+    color: #64748b;
+    font-size: 0.9rem;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
 }
 
 /* Total unidades */
 .total-unidades {
     text-align: right;
-    padding: 0.5rem;
+    padding: var(--spacing-sm);
     background: white;
     border-radius: 8px;
-    margin-top: 0.5rem;
+    margin-top: var(--spacing-sm);
 }
 
 /* Formulario */
 .form-section {
-    margin-bottom: 2rem;
-    padding-bottom: 1.5rem;
+    margin-bottom: var(--spacing-xl);
+    padding-bottom: var(--spacing-lg);
     border-bottom: 1px solid #e2e8f0;
 }
 
@@ -1351,14 +1341,15 @@ document.addEventListener('DOMContentLoaded', function() {
     align-items: center;
     gap: 0.5rem;
     color: #1e293b;
-    margin-bottom: 1.5rem;
+    margin-bottom: var(--spacing-lg);
+    font-size: 1.2rem;
 }
 
 .form-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1rem;
-    margin-bottom: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
 }
 
 .form-group {
@@ -1381,7 +1372,8 @@ document.addEventListener('DOMContentLoaded', function() {
     padding: 0.75rem 1rem;
     border: 2px solid #e2e8f0;
     border-radius: 10px;
-    transition: all 0.2s;
+    transition: all 0.3s ease;
+    font-size: 1rem;
 }
 
 .form-control:focus {
@@ -1390,11 +1382,23 @@ document.addEventListener('DOMContentLoaded', function() {
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
+textarea.form-control {
+    resize: vertical;
+    min-height: 80px;
+}
+
 .checkbox-label {
     display: flex;
     align-items: center;
     gap: 0.5rem;
     cursor: pointer;
+    padding: var(--spacing-sm);
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.checkbox-label:hover {
+    background: #f1f5f9;
 }
 
 /* Modal */
@@ -1408,15 +1412,37 @@ document.addEventListener('DOMContentLoaded', function() {
     height: 100%;
     background: rgba(0,0,0,0.5);
     overflow-y: auto;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
 }
 
 .modal-content {
     background: white;
-    margin: 2rem auto;
+    margin: var(--spacing-xl) auto;
     border-radius: 16px;
     width: 90%;
-    max-width: 900px;
+    max-width: 1000px;
     box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
 }
 
 .modal-lg {
@@ -1424,13 +1450,16 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 .modal-header {
-    padding: 1.5rem 2rem;
+    padding: var(--spacing-lg) var(--spacing-xl);
     border-bottom: 2px solid #f0f0f0;
     display: flex;
     justify-content: space-between;
     align-items: center;
     background: #f8fafc;
     border-radius: 16px 16px 0 0;
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
 .modal-header h2 {
@@ -1438,6 +1467,7 @@ document.addEventListener('DOMContentLoaded', function() {
     display: flex;
     align-items: center;
     gap: 0.75rem;
+    font-size: 1.5rem;
 }
 
 .btn-close {
@@ -1447,15 +1477,24 @@ document.addEventListener('DOMContentLoaded', function() {
     cursor: pointer;
     color: #94a3b8;
     transition: all 0.2s;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .btn-close:hover {
     color: #1e293b;
+    background: #e2e8f0;
     transform: rotate(90deg);
 }
 
 .modal-body {
-    padding: 2rem;
+    padding: var(--spacing-xl);
+    max-height: calc(100vh - 150px);
+    overflow-y: auto;
 }
 
 /* Botones */
@@ -1469,6 +1508,7 @@ document.addEventListener('DOMContentLoaded', function() {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
+    font-size: 0.95rem;
 }
 
 .btn-primary {
@@ -1490,6 +1530,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .btn-secondary:hover {
     background: #e2e8f0;
+    transform: translateY(-2px);
 }
 
 .btn-small {
@@ -1499,7 +1540,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .btn-lg {
     padding: 1rem 2rem;
-    font-size: 1.1rem;
+    font-size: 1rem;
 }
 
 /* Utilidades */
@@ -1512,19 +1553,19 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 .empty-table {
-    padding: 3rem;
+    padding: var(--spacing-xl);
     color: #94a3b8;
 }
 
 .empty-table i {
     font-size: 3rem;
-    margin-bottom: 1rem;
+    margin-bottom: var(--spacing-md);
 }
 
 .alert {
-    padding: 1rem;
+    padding: var(--spacing-md);
     border-radius: 8px;
-    margin-bottom: 1rem;
+    margin-bottom: var(--spacing-md);
 }
 
 .alert-info {
@@ -1535,40 +1576,258 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .form-actions {
     display: flex;
-    gap: 1rem;
+    gap: var(--spacing-md);
     justify-content: flex-end;
-    margin-top: 2rem;
+    margin-top: var(--spacing-xl);
+    flex-wrap: wrap;
 }
 
-/* Responsive */
+/* ========== MEDIA QUERIES ========== */
+
+/* Tablets y dispositivos medianos */
+@media (max-width: 1024px) {
+    .modal-content {
+        margin: var(--spacing-md) auto;
+        width: 95%;
+    }
+    
+    .precios-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .jerarquico-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Dispositivos móviles */
 @media (max-width: 768px) {
+    /* Espaciado reducido */
+    :root {
+        --spacing-lg: 1rem;
+        --spacing-xl: 1.5rem;
+    }
+    
+    /* Header */
+    .page-header {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+    }
+    
+    .header-actions {
+        justify-content: center;
+    }
+    
+    /* Filtros */
     .filter-form {
         flex-direction: column;
+        align-items: stretch;
     }
     
     .filter-group {
         width: 100%;
     }
     
+    .filter-form .btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    /* Tabla: ocultar versión desktop, mostrar tarjetas */
+    .desktop-table {
+        display: none;
+    }
+    
+    .mobile-cards {
+        display: block;
+    }
+    
+    /* Tipos de producto */
     .tipo-selector {
         grid-template-columns: 1fr;
     }
     
+    /* Jerarquico */
     .jerarquico-grid {
         grid-template-columns: 1fr;
     }
     
+    .precios-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    /* Presentaciones adicionales */
     .presentacion-row {
         grid-template-columns: 1fr;
     }
     
+    .presentaciones-container h4 {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+    }
+    
+    /* Modal */
     .modal-content {
-        margin: 1rem;
-        width: calc(100% - 2rem);
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        border-radius: 0;
+        overflow-y: auto;
+    }
+    
+    .modal-header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    
+    .modal-body {
+        padding: var(--spacing-md);
+        max-height: none;
+    }
+    
+    /* Formulario */
+    .form-row {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-md);
+    }
+    
+    .form-actions {
+        flex-direction: column;
+    }
+    
+    .form-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    /* Botones de acción en tarjetas */
+    .card-actions .btn-icon {
+        flex: 1;
+        justify-content: center;
+        padding: 0.5rem;
+    }
+    
+    /* Precios en modal */
+    .precio-item {
+        flex-direction: column;
+        text-align: center;
+        gap: var(--spacing-sm);
+    }
+    
+    /* Presentaciones */
+    .presentacion-details {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    /* Vista previa */
+    .total-unidades {
+        text-align: center;
+    }
+}
+
+/* Dispositivos muy pequeños (teléfonos pequeños) */
+@media (max-width: 480px) {
+    .card-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .card-title {
+        font-size: 0.9rem;
+    }
+    
+    .card-row {
+        font-size: 0.85rem;
+    }
+    
+    .btn-icon {
+        font-size: 0.85rem;
+    }
+    
+    .modal-header h2 {
+        font-size: 1.2rem;
+    }
+    
+    .section-title {
+        font-size: 1rem;
+    }
+    
+    .form-control {
+        font-size: 0.9rem;
+        padding: 0.6rem 0.8rem;
+    }
+    
+    .btn {
+        font-size: 0.9rem;
+        padding: 0.6rem 1rem;
+    }
+}
+
+/* Orientación landscape en móviles */
+@media (max-width: 768px) and (orientation: landscape) {
+    .modal-body {
+        max-height: 80vh;
     }
     
     .form-row {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .jerarquico-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Soporte para pantallas grandes */
+@media (min-width: 1400px) {
+    .container {
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+    
+    .modal-content {
+        max-width: 1200px;
+    }
+    
+    .form-row {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* Mejoras de accesibilidad */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Modo oscuro (opcional) */
+@media (prefers-color-scheme: dark) {
+    /* Puedes agregar estilos para modo oscuro si es necesario */
+}
+
+/* Impresión */
+@media print {
+    .btn,
+    .header-actions,
+    .filters-bar,
+    .card-actions,
+    .action-buttons {
+        display: none !important;
+    }
+    
+    .desktop-table {
+        display: block;
+    }
+    
+    .mobile-cards {
+        display: none;
     }
 }
 </style>
