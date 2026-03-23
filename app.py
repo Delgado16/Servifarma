@@ -2722,18 +2722,30 @@ def nueva_venta():
             if efectivo < total_venta:
                 raise ValueError("El efectivo es insuficiente")
             
+            # Verificar que existe una caja activa para el usuario
+            cursor.execute("""
+                SELECT id, total_ventas, total_efectivo, monto_apertura 
+                FROM caja 
+                WHERE usuario_id = %s AND estado = 'abierta'
+            """, (session['usuario_id'],))
+            
+            caja_activa = cursor.fetchone()
+            
+            if not caja_activa:
+                raise ValueError("No tienes una caja aperturada. Debes aperturar caja primero.")
+            
             # Calcular cambio
             cambio = efectivo - total_venta
             
-            # Insertar cabecera de venta
+            # Insertar cabecera de venta con referencia a la caja
             cursor.execute('''
-                INSERT INTO ventas (usuario_id, fecha_venta, total_venta, efectivo, cambio)
-                VALUES (%s, CURDATE(), %s, %s, %s)
-            ''', (session['usuario_id'], total_venta, efectivo, cambio))
+                INSERT INTO ventas (usuario_id, caja_id, fecha_venta, total_venta, efectivo, cambio)
+                VALUES (%s, %s, CURDATE(), %s, %s, %s)
+            ''', (session['usuario_id'], caja_activa['id'], total_venta, efectivo, cambio))
             
             venta_id = cursor.lastrowid
             
-            # Procesar cada item
+            # Procesar cada item (tu código existente)
             for item in items:
                 tipo_detalle = item['tipo_detalle']
                 referencia_id = item['referencia_id']
@@ -2914,6 +2926,16 @@ def nueva_venta():
                         subtotal
                     ))
             
+            # ACTUALIZAR CAJA: Incrementar total_ventas y total_efectivo
+            nuevo_total_ventas = caja_activa['total_ventas'] + total_venta
+            nuevo_total_efectivo = caja_activa['total_efectivo'] + total_venta
+            
+            cursor.execute("""
+                UPDATE caja 
+                SET total_ventas = %s, total_efectivo = %s
+                WHERE id = %s
+            """, (nuevo_total_ventas, nuevo_total_efectivo, caja_activa['id']))
+            
             # Confirmar transacción
             mysql.connection.commit()
             
@@ -2921,7 +2943,11 @@ def nueva_venta():
                 'success': True,
                 'message': 'Venta registrada exitosamente',
                 'venta_id': venta_id,
-                'cambio': cambio
+                'cambio': cambio,
+                'caja_actual': {
+                    'total_ventas': nuevo_total_ventas,
+                    'total_efectivo': nuevo_total_efectivo
+                }
             })
             
         except ValueError as e:
@@ -2936,6 +2962,19 @@ def nueva_venta():
     
     # GET: Mostrar formulario de venta
     try:
+        # Primero verificar si el usuario tiene caja activa
+        cursor.execute("""
+            SELECT id, monto_apertura, total_ventas, total_efectivo 
+            FROM caja 
+            WHERE usuario_id = %s AND estado = 'abierta'
+        """, (session['usuario_id'],))
+        
+        caja_activa = cursor.fetchone()
+        
+        if not caja_activa:
+            flash('No tienes una caja aperturada. Debes aperturar caja antes de realizar ventas.', 'warning')
+            return redirect(url_for('caja_movimiento'))
+        
         # Obtener productos activos
         cursor.execute('''
             SELECT 
@@ -3003,7 +3042,8 @@ def nueva_venta():
         return render_template('admin/punto_venta.html',
                              productos=productos,
                              servicios=servicios,
-                             combos=combos)
+                             combos=combos,
+                             caja_activa=caja_activa)  # Enviar info de caja a la vista
     
     except Exception as e:
         cursor.close()
@@ -3012,7 +3052,8 @@ def nueva_venta():
         return render_template('admin/punto_venta.html',
                              productos=[],
                              servicios=[],
-                             combos=[])
+                             combos=[],
+                             caja_activa=None)
 #
 @app.route('/ventas/<int:venta_id>', methods=['GET'])
 @login_required
@@ -3295,6 +3336,535 @@ def api_servicios_disponibles():
     finally:
         cursor.close()
 
+# ========================
+# CAJA DE EFECTIVO
+# ========================
+@app.route('/caja')
+@login_required
+def caja_index():
+    """Página principal de caja con información del día actual"""
+    from datetime import datetime
+    import calendar
+    import locale
+    
+    # Configurar locale para nombres de meses en español
+    try:
+        locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
+    except:
+        pass
+    
+    cursor = mysql.connection.cursor(DictCursor)
+    
+    # Obtener caja activa del usuario actual
+    cursor.execute("""
+        SELECT c.*, u.nombre as usuario_nombre
+        FROM caja c
+        INNER JOIN usuarios u ON c.usuario_id = u.id
+        WHERE c.usuario_id = %s AND c.estado = 'abierta'
+        ORDER BY c.fecha_apertura DESC LIMIT 1
+    """, (session['usuario_id'],))
+    
+    caja_activa = cursor.fetchone()
+    
+    # Variables para el modal de cierre
+    resumen_ventas = None
+    monto_esperado = 0
+    
+    # Si hay caja activa, obtener las ventas del día de esta caja
+    ventas_hoy = []
+    total_ventas_hoy = 0
+    
+    if caja_activa:
+        cursor.execute("""
+            SELECT v.*, 
+                   COUNT(dv.id) as total_items
+            FROM ventas v
+            LEFT JOIN detalles_venta dv ON v.id = dv.venta_id
+            WHERE v.caja_id = %s AND DATE(v.fecha_venta) = CURDATE()
+            GROUP BY v.id
+            ORDER BY v.fecha_venta DESC
+        """, (caja_activa['id'],))
+        
+        ventas_hoy = cursor.fetchall()
+        
+        # Calcular total de ventas del día
+        cursor.execute("""
+            SELECT COALESCE(SUM(total_venta), 0) as total
+            FROM ventas
+            WHERE caja_id = %s AND DATE(fecha_venta) = CURDATE()
+        """, (caja_activa['id'],))
+        
+        total_ventas_hoy = cursor.fetchone()['total']
+        
+        # Obtener resumen de ventas para el modal de cierre
+        cursor.execute("""
+            SELECT 
+                COUNT(*) as total_ventas_dia,
+                COALESCE(SUM(total_venta), 0) as monto_total_ventas,
+                MIN(fecha_venta) as primera_venta,
+                MAX(fecha_venta) as ultima_venta
+            FROM ventas
+            WHERE caja_id = %s AND DATE(fecha_venta) = CURDATE()
+        """, (caja_activa['id'],))
+        
+        resumen_ventas = cursor.fetchone()
+        
+        # Calcular monto esperado en caja
+        monto_esperado = float(caja_activa['monto_apertura']) + float(resumen_ventas['monto_total_ventas'] if resumen_ventas['monto_total_ventas'] else 0)
+    
+    # Obtener historial de cierres del mes actual para este usuario
+    cursor.execute("""
+        SELECT 
+            c.*,
+            u.nombre as usuario_nombre,
+            DATE(c.fecha_apertura) as fecha,
+            TIME(c.fecha_apertura) as hora_apertura,
+            TIME(c.fecha_cierre) as hora_cierre,
+            TIMEDIFF(c.fecha_cierre, c.fecha_apertura) as tiempo_trabajado
+        FROM caja c
+        INNER JOIN usuarios u ON c.usuario_id = u.id
+        WHERE c.usuario_id = %s 
+            AND c.estado = 'cerrada'
+            AND MONTH(c.fecha_apertura) = MONTH(CURDATE())
+            AND YEAR(c.fecha_apertura) = YEAR(CURDATE())
+        ORDER BY c.fecha_apertura DESC
+    """, (session['usuario_id'],))
+    
+    historial_mes = cursor.fetchall()
+    
+    # Calcular resumen del mes
+    resumen_mes = {
+        'total_aperturas': len(historial_mes),
+        'total_ventas_mes': sum(float(c['total_ventas']) for c in historial_mes),
+        'total_efectivo_mes': sum(float(c['total_efectivo']) for c in historial_mes),
+        'diferencia_total': sum(float(c['diferencia'] or 0) for c in historial_mes)
+    }
+    
+    cursor.close()
+    
+    # Obtener nombre del mes actual
+    now = datetime.now()
+    nombre_mes = calendar.month_name[now.month]
+    
+    return render_template('admin/caja/caja_efectivo.html',
+                         caja_activa=caja_activa,
+                         ventas_hoy=ventas_hoy,
+                         total_ventas_hoy=total_ventas_hoy,
+                         historial_mes=historial_mes,
+                         resumen_mes=resumen_mes,
+                         resumen_ventas=resumen_ventas,
+                         monto_esperado=monto_esperado,
+                         now=now,
+                         nombre_mes=nombre_mes)
+
+@app.route('/caja/apertura', methods=['GET', 'POST'])
+@login_required
+def caja_apertura():
+    """Aperturar nueva caja"""
+    if request.method == 'POST':
+        try:
+            monto_apertura = request.form.get('monto_apertura', 0, type=float)
+            observaciones = request.form.get('observaciones', '')
+            
+            cursor = mysql.connection.cursor(DictCursor)
+            
+            # Verificar si ya tiene una caja abierta
+            cursor.execute("""
+                SELECT id, estado FROM caja 
+                WHERE usuario_id = %s AND estado = 'abierta'
+            """, (session['usuario_id'],))
+            
+            caja_existente = cursor.fetchone()
+            
+            if caja_existente:
+                flash('Ya tienes una caja abierta. Debes cerrarla antes de abrir una nueva.', 'warning')
+                return redirect(url_for('caja_index'))
+            
+            # Verificar si ya aperturó caja hoy
+            cursor.execute("""
+                SELECT id FROM caja 
+                WHERE usuario_id = %s 
+                    AND DATE(fecha_apertura) = CURDATE()
+                    AND estado = 'cerrada'
+            """, (session['usuario_id'],))
+            
+            caja_hoy = cursor.fetchone()
+            
+            if caja_hoy:
+                flash('Ya realizaste una apertura de caja hoy. Solo puedes aperturar una caja por día.', 'warning')
+                return redirect(url_for('caja_index'))
+            
+            # Crear nueva caja
+            cursor.execute("""
+                INSERT INTO caja (usuario_id, fecha_apertura, monto_apertura, estado, observaciones)
+                VALUES (%s, NOW(), %s, 'abierta', %s)
+            """, (
+                session['usuario_id'],
+                monto_apertura,
+                observaciones
+            ))
+            
+            mysql.connection.commit()
+            
+            flash(f'✅ Caja aperturada exitosamente con saldo inicial de C$ {monto_apertura:,.2f}', 'success')
+            
+        except Exception as e:
+            mysql.connection.rollback()
+            flash(f'❌ Error al aperturar caja: {str(e)}', 'danger')
+            print(f"Error: {e}")
+        
+        finally:
+            cursor.close()
+        
+        return redirect(url_for('caja_index'))
+    
+    # GET - Mostrar formulario de apertura
+    return render_template('admin/caja/apertura.html')
+
+@app.route('/caja/cierre', methods=['GET', 'POST'])
+@login_required
+def caja_cierre():
+    """Cerrar caja actual con verificación de efectivo físico"""
+    cursor = mysql.connection.cursor(DictCursor)
+    
+    # Obtener caja activa
+    cursor.execute("""
+        SELECT c.*, u.nombre as usuario_nombre
+        FROM caja c
+        INNER JOIN usuarios u ON c.usuario_id = u.id
+        WHERE c.usuario_id = %s AND c.estado = 'abierta'
+    """, (session['usuario_id'],))
+    
+    caja_activa = cursor.fetchone()
+    
+    if not caja_activa:
+        flash('No tienes una caja abierta para cerrar', 'warning')
+        return redirect(url_for('caja_index'))
+    
+    # Obtener ventas del día para esta caja
+    cursor.execute("""
+        SELECT 
+            COUNT(*) as total_ventas_dia,
+            COALESCE(SUM(total_venta), 0) as monto_total_ventas,
+            MIN(fecha_venta) as primera_venta,
+            MAX(fecha_venta) as ultima_venta
+        FROM ventas
+        WHERE caja_id = %s AND DATE(fecha_venta) = CURDATE()
+    """, (caja_activa['id'],))
+    
+    resumen_ventas = cursor.fetchone()
+    
+    # Calcular monto esperado
+    monto_esperado = float(caja_activa['monto_apertura']) + float(resumen_ventas['monto_total_ventas'])
+    
+    if request.method == 'POST':
+        try:
+            monto_fisico = request.form.get('monto_fisico', type=float)
+            observaciones_cierre = request.form.get('observaciones_cierre', '')
+            
+            if not monto_fisico:
+                flash('Debes ingresar el monto físico verificado', 'danger')
+                return redirect(url_for('caja_cierre'))
+            
+            # Calcular diferencias
+            diferencia = monto_fisico - monto_esperado
+            
+            # Actualizar observaciones existentes
+            observaciones_completas = caja_activa['observaciones'] or ''
+            if observaciones_completas:
+                observaciones_completas += f" | Cierre: {observaciones_cierre}"
+            else:
+                observaciones_completas = f"Cierre: {observaciones_cierre}"
+            
+            # Cerrar la caja
+            cursor.execute("""
+                UPDATE caja 
+                SET fecha_cierre = NOW(),
+                    monto_cierre = %s,
+                    diferencia = %s,
+                    estado = 'cerrada',
+                    observaciones = %s
+                WHERE id = %s
+            """, (
+                monto_fisico,
+                diferencia,
+                observaciones_completas,
+                caja_activa['id']
+            ))
+            
+            mysql.connection.commit()
+            
+            if diferencia == 0:
+                flash(f'✅ Caja cerrada exitosamente. El efectivo coincide perfectamente.', 'success')
+            else:
+                flash(f'⚠️ Caja cerrada exitosamente. Diferencia: C$ {diferencia:,.2f}', 'info')
+            
+            return redirect(url_for('caja_index'))
+            
+        except Exception as e:
+            mysql.connection.rollback()
+            flash(f'❌ Error al cerrar caja: {str(e)}', 'danger')
+            print(f"Error: {e}")
+            return redirect(url_for('caja_cierre'))
+        
+        finally:
+            cursor.close()
+    
+    # GET - Mostrar formulario de cierre
+    return render_template('admin/caja/cierre.html',
+                         caja_activa=caja_activa,
+                         resumen_ventas=resumen_ventas,
+                         monto_esperado=monto_esperado)
+
+
+@app.route('/caja/historial')
+@login_required
+def caja_historial():
+    """Historial de cajas con filtro por fecha (día del mes)"""
+    cursor = mysql.connection.cursor(DictCursor)
+    
+    # Obtener parámetros de filtro
+    mes = request.args.get('mes', type=int, default=datetime.now().month)
+    año = request.args.get('año', type=int, default=datetime.now().year)
+    dia = request.args.get('dia', type=int)
+    usuario_id = request.args.get('usuario_id', type=int)
+    
+    # Construir query base
+    query = """
+        SELECT 
+            c.*,
+            u.nombre as usuario_nombre,
+            DATE(c.fecha_apertura) as fecha_apertura_date,
+            TIME(c.fecha_apertura) as hora_apertura,
+            TIME(c.fecha_cierre) as hora_cierre,
+            TIMEDIFF(c.fecha_cierre, c.fecha_apertura) as tiempo_trabajado,
+            (SELECT COUNT(*) FROM ventas WHERE caja_id = c.id) as total_ventas_realizadas,
+            (SELECT COALESCE(SUM(total_venta), 0) FROM ventas WHERE caja_id = c.id) as monto_ventas_total
+        FROM caja c
+        INNER JOIN usuarios u ON c.usuario_id = u.id
+        WHERE c.estado = 'cerrada'
+            AND MONTH(c.fecha_apertura) = %s
+            AND YEAR(c.fecha_apertura) = %s
+    """
+    params = [mes, año]
+    
+    if dia:
+        query += " AND DAY(c.fecha_apertura) = %s"
+        params.append(dia)
+    
+    if usuario_id:
+        query += " AND c.usuario_id = %s"
+        params.append(usuario_id)
+    
+    query += " ORDER BY c.fecha_apertura DESC"
+    
+    cursor.execute(query, params)
+    historial = cursor.fetchall()
+    
+    # Calcular resumen del período
+    resumen = {
+        'total_cajas': len(historial),
+        'total_ventas_acumulado': sum(float(c['total_ventas']) for c in historial),
+        'total_efectivo_acumulado': sum(float(c['total_efectivo']) for c in historial),
+        'diferencia_total': sum(float(c['diferencia'] or 0) for c in historial),
+        'promedio_ventas_dia': sum(float(c['total_ventas']) for c in historial) / len(historial) if historial else 0
+    }
+    
+    # Obtener lista de usuarios para filtro
+    cursor.execute("""
+        SELECT DISTINCT u.id, u.nombre 
+        FROM usuarios u
+        INNER JOIN caja c ON u.id = c.usuario_id
+        ORDER BY u.nombre
+    """)
+    usuarios = cursor.fetchall()
+    
+    cursor.close()
+    
+    return render_template('admin/caja/historial.html',
+                         historial=historial,
+                         resumen=resumen,
+                         usuarios=usuarios,
+                         mes_actual=mes,
+                         año_actual=año,
+                         dia_actual=dia,
+                         usuario_filtro=usuario_id,
+                         meses=[(1, 'Enero'), (2, 'Febrero'), (3, 'Marzo'), (4, 'Abril'),
+                                (5, 'Mayo'), (6, 'Junio'), (7, 'Julio'), (8, 'Agosto'),
+                                (9, 'Septiembre'), (10, 'Octubre'), (11, 'Noviembre'), (12, 'Diciembre')],
+                         años=range(2020, datetime.now().year + 1),
+                         dias=range(1, 32))
+
+
+@app.route('/caja/detalle/<int:caja_id>')
+@login_required
+def caja_detalle(caja_id):
+    """Ver detalle completo de una caja específica"""
+    cursor = mysql.connection.cursor(DictCursor)
+    
+    # Obtener información de la caja
+    cursor.execute("""
+        SELECT 
+            c.*,
+            u.nombre as usuario_nombre,
+            DATE(c.fecha_apertura) as fecha_apertura_date,
+            TIME(c.fecha_apertura) as hora_apertura,
+            TIME(c.fecha_cierre) as hora_cierre,
+            TIMEDIFF(c.fecha_cierre, c.fecha_apertura) as tiempo_trabajado,
+            DATEDIFF(c.fecha_cierre, c.fecha_apertura) as dias_trabajados
+        FROM caja c
+        INNER JOIN usuarios u ON c.usuario_id = u.id
+        WHERE c.id = %s
+    """, (caja_id,))
+    
+    caja = cursor.fetchone()
+    
+    if not caja:
+        flash('Caja no encontrada', 'danger')
+        return redirect(url_for('caja_historial'))
+    
+    # Obtener todas las ventas de esta caja
+    cursor.execute("""
+        SELECT 
+            v.*,
+            COUNT(dv.id) as total_items,
+            GROUP_CONCAT(DISTINCT 
+                CASE 
+                    WHEN dv.tipo_detalle = 'producto' THEN 
+                        CONCAT(p.nombre, ' (x', dv.cantidad, ')')
+                    WHEN dv.tipo_detalle = 'servicio' THEN 
+                        CONCAT(s.nombre, ' (x', dv.cantidad, ')')
+                    WHEN dv.tipo_detalle = 'combo' THEN 
+                        CONCAT(cm.nombre, ' (x', dv.cantidad, ')')
+                END
+            ) as items_resumen
+        FROM ventas v
+        LEFT JOIN detalles_venta dv ON v.id = dv.venta_id
+        LEFT JOIN productos p ON dv.tipo_detalle = 'producto' AND dv.referencia_id = p.id
+        LEFT JOIN servicios s ON dv.tipo_detalle = 'servicio' AND dv.referencia_id = s.id
+        LEFT JOIN combos cm ON dv.tipo_detalle = 'combo' AND dv.referencia_id = cm.id
+        WHERE v.caja_id = %s
+        GROUP BY v.id
+        ORDER BY v.fecha_venta DESC
+    """, (caja_id,))
+    
+    ventas = cursor.fetchall()
+    
+    # Calcular resumen de ventas
+    resumen_ventas = {
+        'total_ventas': len(ventas),
+        'monto_total': sum(float(v['total_venta']) for v in ventas),
+        'efectivo_recibido': sum(float(v['efectivo']) for v in ventas),
+        'total_cambio': sum(float(v['cambio']) for v in ventas),
+        'venta_promedio': sum(float(v['total_venta']) for v in ventas) / len(ventas) if ventas else 0
+    }
+    
+    cursor.close()
+    
+    return render_template('admin/caja/detalle.html',
+                         caja=caja,
+                         ventas=ventas,
+                         resumen_ventas=resumen_ventas)
+
+
+@app.route('/caja/resumen_dia')
+@login_required
+def caja_resumen_dia():
+    """Resumen de todas las cajas del día actual"""
+    cursor = mysql.connection.cursor(DictCursor)
+    
+    # Obtener todas las cajas cerradas hoy
+    cursor.execute("""
+        SELECT 
+            c.*,
+            u.nombre as usuario_nombre,
+            (SELECT COUNT(*) FROM ventas WHERE caja_id = c.id) as total_ventas_realizadas,
+            (SELECT COALESCE(SUM(total_venta), 0) FROM ventas WHERE caja_id = c.id) as monto_ventas_total
+        FROM caja c
+        INNER JOIN usuarios u ON c.usuario_id = u.id
+        WHERE DATE(c.fecha_apertura) = CURDATE()
+        ORDER BY c.fecha_apertura DESC
+    """)
+    
+    cajas_dia = cursor.fetchall()
+    
+    # Obtener cajas abiertas actualmente
+    cursor.execute("""
+        SELECT 
+            c.*,
+            u.nombre as usuario_nombre,
+            (SELECT COUNT(*) FROM ventas WHERE caja_id = c.id AND DATE(fecha_venta) = CURDATE()) as ventas_hoy
+        FROM caja c
+        INNER JOIN usuarios u ON c.usuario_id = u.id
+        WHERE c.estado = 'abierta'
+        ORDER BY c.fecha_apertura
+    """)
+    
+    cajas_abiertas = cursor.fetchall()
+    
+    # Calcular resumen del día
+    cursor.execute("""
+        SELECT 
+            COUNT(DISTINCT c.id) as total_cajas,
+            SUM(c.total_ventas) as total_ventas_dia,
+            SUM(c.total_efectivo) as total_efectivo_dia,
+            SUM(c.diferencia) as diferencia_total_dia,
+            COUNT(DISTINCT c.usuario_id) as total_vendedores
+        FROM caja c
+        WHERE DATE(c.fecha_apertura) = CURDATE() AND c.estado = 'cerrada'
+    """)
+    
+    resumen_dia = cursor.fetchone()
+    
+    cursor.close()
+    
+    return render_template('admin/caja/resumen_dia.html',
+                         cajas_dia=cajas_dia,
+                         cajas_abiertas=cajas_abiertas,
+                         resumen_dia=resumen_dia)
+
+
+@app.route('/caja/verificar_estado')
+@login_required
+def caja_verificar_estado():
+    """API para verificar estado de caja (para AJAX)"""
+    cursor = mysql.connection.cursor(DictCursor)
+    
+    cursor.execute("""
+        SELECT 
+            c.id,
+            c.monto_apertura,
+            c.total_ventas,
+            c.total_efectivo,
+            c.fecha_apertura,
+            (c.monto_apertura + c.total_efectivo) as total_disponible,
+            (SELECT COUNT(*) FROM ventas WHERE caja_id = c.id AND DATE(fecha_venta) = CURDATE()) as ventas_hoy
+        FROM caja c
+        WHERE c.usuario_id = %s AND c.estado = 'abierta'
+    """, (session['usuario_id'],))
+    
+    caja_activa = cursor.fetchone()
+    cursor.close()
+    
+    if caja_activa:
+        return jsonify({
+            'success': True,
+            'tiene_caja_activa': True,
+            'caja': {
+                'id': caja_activa['id'],
+                'monto_apertura': float(caja_activa['monto_apertura']),
+                'total_ventas': float(caja_activa['total_ventas']),
+                'total_efectivo': float(caja_activa['total_efectivo']),
+                'total_disponible': float(caja_activa['total_disponible']),
+                'ventas_hoy': caja_activa['ventas_hoy'],
+                'fecha_apertura': caja_activa['fecha_apertura'].strftime('%d/%m/%Y %H:%M')
+            }
+        })
+    else:
+        return jsonify({
+            'success': True,
+            'tiene_caja_activa': False
+        })
 
 # ========================
 # GESTIÓN DE SERVICIOS
