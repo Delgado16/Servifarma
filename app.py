@@ -10,8 +10,7 @@ import MySQLdb
 from flask import Flask, flash, json, render_template, request, jsonify, send_from_directory, session, redirect, url_for
 from flask_mysqldb import MySQL
 from datetime import datetime, timedelta
-# CORREGIR EL IMPORT:
-from MySQLdb.cursors import DictCursor  # Import específico
+from MySQLdb.cursors import DictCursor
 from functools import wraps
 import hashlib
 import os
@@ -2734,6 +2733,10 @@ def nueva_venta():
             if not caja_activa:
                 raise ValueError("No tienes una caja aperturada. Debes aperturar caja primero.")
             
+            # Convertir valores Decimal a float
+            total_ventas_actual = float(caja_activa['total_ventas']) if caja_activa['total_ventas'] else 0.0
+            total_efectivo_actual = float(caja_activa['total_efectivo']) if caja_activa['total_efectivo'] else 0.0
+            
             # Calcular cambio
             cambio = efectivo - total_venta
             
@@ -2777,15 +2780,20 @@ def nueva_venta():
                         if not variacion:
                             raise ValueError(f"Variación de producto no encontrada")
                         
+                        # Convertir valores Decimal a float
+                        stock_producto_base = float(variacion['stock_producto_base']) if variacion['stock_producto_base'] else 0.0
+                        cantidad_equivalente = float(variacion['cantidad_equivalente']) if variacion['cantidad_equivalente'] else 1.0
+                        
                         # Calcular cantidad en unidades base (para actualizar stock)
-                        cantidad_base = cantidad * variacion['cantidad_equivalente']
+                        cantidad_base = cantidad * cantidad_equivalente
                         
                         # Verificar stock
-                        if variacion['stock_producto_base'] < cantidad_base:
+                        if stock_producto_base < cantidad_base:
+                            stock_disponible_presentacion = int(stock_producto_base / cantidad_equivalente)
                             raise ValueError(
                                 f"Stock insuficiente para {variacion['producto_nombre']} "
                                 f"en presentación {variacion['unidad_abrev']}. "
-                                f"Disponible: {int(variacion['stock_producto_base'] / variacion['cantidad_equivalente'])} "
+                                f"Disponible: {stock_disponible_presentacion} "
                                 f"{variacion['unidad_abrev']}"
                             )
                         
@@ -2808,7 +2816,7 @@ def nueva_venta():
                         ))
                         
                         # Actualizar stock del producto base (restando la cantidad base)
-                        nuevo_stock = variacion['stock_producto_base'] - cantidad_base
+                        nuevo_stock = stock_producto_base - cantidad_base
                         cursor.execute('''
                             UPDATE productos 
                             SET stock_actual = %s 
@@ -2831,7 +2839,7 @@ def nueva_venta():
                         ''', (
                             referencia_id,
                             cantidad_base,
-                            variacion['stock_producto_base'],
+                            stock_producto_base,
                             nuevo_stock,
                             venta_id,
                             session['usuario_id'],
@@ -2850,10 +2858,12 @@ def nueva_venta():
                         if not producto:
                             raise ValueError(f"Producto no encontrado")
                         
-                        if producto['stock_actual'] < cantidad:
+                        stock_actual = float(producto['stock_actual']) if producto['stock_actual'] else 0.0
+                        
+                        if stock_actual < cantidad:
                             raise ValueError(
                                 f"Stock insuficiente para {producto['nombre']}. "
-                                f"Disponible: {producto['stock_actual']}"
+                                f"Disponible: {stock_actual}"
                             )
                         
                         # Insertar detalle de venta
@@ -2873,7 +2883,7 @@ def nueva_venta():
                         ))
                         
                         # Actualizar stock
-                        nuevo_stock = producto['stock_actual'] - cantidad
+                        nuevo_stock = stock_actual - cantidad
                         cursor.execute('''
                             UPDATE productos 
                             SET stock_actual = %s 
@@ -2889,7 +2899,7 @@ def nueva_venta():
                         ''', (
                             referencia_id,
                             cantidad,
-                            producto['stock_actual'],
+                            stock_actual,
                             nuevo_stock,
                             venta_id,
                             session['usuario_id'],
@@ -2927,8 +2937,9 @@ def nueva_venta():
                     ))
             
             # ACTUALIZAR CAJA: Incrementar total_ventas y total_efectivo
-            nuevo_total_ventas = caja_activa['total_ventas'] + total_venta
-            nuevo_total_efectivo = caja_activa['total_efectivo'] + total_venta
+            # Ya convertimos estos valores al inicio
+            nuevo_total_ventas = total_ventas_actual + total_venta
+            nuevo_total_efectivo = total_efectivo_actual + total_venta
             
             cursor.execute("""
                 UPDATE caja 
@@ -2975,6 +2986,14 @@ def nueva_venta():
             flash('No tienes una caja aperturada. Debes aperturar caja antes de realizar ventas.', 'warning')
             return redirect(url_for('caja_movimiento'))
         
+        # Convertir valores Decimal a float para la vista
+        if caja_activa['total_ventas']:
+            caja_activa['total_ventas'] = float(caja_activa['total_ventas'])
+        if caja_activa['total_efectivo']:
+            caja_activa['total_efectivo'] = float(caja_activa['total_efectivo'])
+        if caja_activa['monto_apertura']:
+            caja_activa['monto_apertura'] = float(caja_activa['monto_apertura'])
+        
         # Obtener productos activos
         cursor.execute('''
             SELECT 
@@ -2989,6 +3008,15 @@ def nueva_venta():
             ORDER BY p.nombre
         ''')
         productos = cursor.fetchall()
+        
+        # Convertir valores Decimal a float para cada producto
+        for producto in productos:
+            if producto.get('stock_actual'):
+                producto['stock_actual'] = float(producto['stock_actual'])
+            if producto.get('precio_base'):
+                producto['precio_base'] = float(producto['precio_base'])
+            if producto.get('precio_compra'):
+                producto['precio_compra'] = float(producto['precio_compra'])
         
         # Obtener variaciones para cada producto jerárquico
         for producto in productos:
@@ -3008,10 +3036,12 @@ def nueva_venta():
                 ''', (producto['id'],))
                 producto['variaciones'] = cursor.fetchall()
                 
-                # Convertir valores para la vista
+                # Convertir valores Decimal a float para cada variación
                 for variacion in producto['variaciones']:
                     if variacion.get('precio_venta'):
                         variacion['precio_venta'] = float(variacion['precio_venta'])
+                    if variacion.get('cantidad_equivalente'):
+                        variacion['cantidad_equivalente'] = float(variacion['cantidad_equivalente'])
                     if variacion.get('stock_disponible'):
                         variacion['stock_disponible'] = int(variacion['stock_disponible'])
             else:
@@ -3027,6 +3057,11 @@ def nueva_venta():
         ''')
         servicios = cursor.fetchall()
         
+        # Convertir valores Decimal a float para cada servicio
+        for servicio in servicios:
+            if servicio.get('precio'):
+                servicio['precio'] = float(servicio['precio'])
+        
         # Obtener combos activos
         cursor.execute('''
             SELECT c.*, 
@@ -3037,13 +3072,18 @@ def nueva_venta():
         ''')
         combos = cursor.fetchall()
         
+        # Convertir valores Decimal a float para cada combo
+        for combo in combos:
+            if combo.get('precio_combo'):
+                combo['precio_combo'] = float(combo['precio_combo'])
+        
         cursor.close()
         
         return render_template('admin/punto_venta.html',
                              productos=productos,
                              servicios=servicios,
                              combos=combos,
-                             caja_activa=caja_activa)  # Enviar info de caja a la vista
+                             caja_activa=caja_activa)
     
     except Exception as e:
         cursor.close()
@@ -3059,6 +3099,8 @@ def nueva_venta():
 @login_required
 def detalle_venta(venta_id):
     cursor = mysql.connection.cursor(DictCursor)
+    
+    print(f"=== Accediendo a detalle_venta con ID: {venta_id} ===")
     
     try:
         # Obtener información de la venta
@@ -3086,10 +3128,10 @@ def detalle_venta(venta_id):
                         CONCAT(
                             p.nombre,
                             IF(dv.variacion_id IS NOT NULL, 
-                               CONCAT(' (', u.abreviatura, ')'), 
-                               IF(p.tipo_producto = 'simple', 
-                                  CONCAT(' (', ub.abreviatura, ')'), 
-                                  ''))
+                            CONCAT(' (', u.abreviatura, ')'), 
+                            IF(p.tipo_producto = 'simple', 
+                                CONCAT(' (', ub.abreviatura, ')'), 
+                                ''))
                         )
                     WHEN dv.tipo_detalle = 'servicio' THEN s.nombre
                     WHEN dv.tipo_detalle = 'combo' THEN c.nombre
@@ -3122,8 +3164,8 @@ def detalle_venta(venta_id):
                 END as estado_item,
                 -- Valores formateados
                 FORMAT(dv.precio_unitario, 2) as precio_unitario_formato,
-                FORMAT(dv.subtotal, 2) as subtotal_formato,
-                dv.observaciones
+                FORMAT(dv.subtotal, 2) as subtotal_formato
+                -- ELIMINA ESTA LÍNEA: dv.observaciones
             FROM detalles_venta dv
             LEFT JOIN productos p ON dv.tipo_detalle = 'producto' AND dv.referencia_id = p.id
             LEFT JOIN servicios s ON dv.tipo_detalle = 'servicio' AND dv.referencia_id = s.id
