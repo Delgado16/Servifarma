@@ -1,0 +1,1125 @@
+<!-- templates/vendedor/comparativa.html -->
+{% extends "base.html" %}
+
+{% block title %}Comparativa de Rendimiento{% endblock %}
+
+{% block extra_css %}
+{{ super() }}
+<style>
+    /* ============================================
+       ESTILOS EXCLUSIVOS PARA COMPARATIVA
+       Usando namespace "comp-" para evitar conflictos
+    ============================================ */
+    
+    /* Contenedor principal */
+    .comp-dashboard {
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+    
+    /* Header de la página */
+    .comp-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid var(--gray-light);
+    }
+    
+    .comp-header h1 {
+        margin: 0;
+        font-size: 1.5rem;
+        color: var(--dark-color);
+    }
+    
+    .comp-badge {
+        background: #17a2b8;
+        color: white;
+        padding: 0.25rem 1rem;
+        border-radius: 2rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+    
+    /* Grid de estadísticas - SIN conflictos con stats-grid de base.html */
+    .comp-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    /* Tarjetas de estadísticas */
+    .comp-stat-card {
+        border-radius: var(--radius);
+        padding: 1.25rem;
+        color: white;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        cursor: pointer;
+    }
+    
+    .comp-stat-card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-lg);
+    }
+    
+    .comp-stat-card h6 {
+        margin: 0 0 0.5rem 0;
+        font-size: 0.875rem;
+        opacity: 0.9;
+    }
+    
+    .comp-stat-card h3 {
+        margin: 0;
+        font-size: 1.5rem;
+        font-weight: bold;
+        word-break: break-word;
+    }
+    
+    .comp-stat-card small {
+        font-size: 0.75rem;
+        opacity: 0.8;
+        display: block;
+        margin-top: 0.5rem;
+    }
+    
+    /* Tabs con scroll horizontal */
+    .comp-tabs {
+        display: flex;
+        gap: 0.25rem;
+        margin-bottom: 1.5rem;
+        border-bottom: 2px solid var(--gray-light);
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .comp-tabs::-webkit-scrollbar {
+        height: 3px;
+    }
+    
+    .comp-tabs::-webkit-scrollbar-track {
+        background: var(--gray-light);
+        border-radius: 3px;
+    }
+    
+    .comp-tabs::-webkit-scrollbar-thumb {
+        background: var(--gray-medium);
+        border-radius: 3px;
+    }
+    
+    .comp-tab-btn {
+        padding: 0.5rem 1.25rem;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--gray-dark);
+        transition: all 0.2s ease;
+        white-space: nowrap;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -2px;
+    }
+    
+    .comp-tab-btn:hover {
+        color: var(--primary-color);
+    }
+    
+    .comp-tab-btn.active {
+        color: var(--primary-color);
+        border-bottom-color: var(--primary-color);
+    }
+    
+    /* Paneles de contenido */
+    .comp-tab-pane {
+        display: none;
+        animation: compFadeIn 0.3s ease;
+    }
+    
+    .comp-tab-pane.active {
+        display: block;
+    }
+    
+    @keyframes compFadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    /* Tablas responsivas */
+    .comp-table-wrapper {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .comp-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 600px;
+    }
+    
+    .comp-table thead {
+        background: var(--gray-light);
+    }
+    
+    .comp-table th,
+    .comp-table td {
+        padding: 0.75rem 1rem;
+        text-align: left;
+        border-bottom: 1px solid var(--gray-light);
+        font-size: 0.875rem;
+        vertical-align: middle;
+    }
+    
+    .comp-table tbody tr:hover {
+        background: var(--light-color);
+    }
+    
+    .comp-table tr.comp-highlight {
+        background: #e3f2fd;
+    }
+    
+    /* Tarjetas para móvil */
+    .comp-mobile-cards {
+        display: none;
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .comp-ranking-card {
+        background: white;
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        transition: transform 0.2s ease;
+    }
+    
+    .comp-ranking-card:active {
+        transform: scale(0.99);
+    }
+    
+    .comp-ranking-header {
+        background: var(--gray-light);
+        padding: 0.75rem 1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid var(--gray-light);
+    }
+    
+    .comp-ranking-position {
+        font-weight: 600;
+        font-size: 0.875rem;
+    }
+    
+    .comp-ranking-body {
+        padding: 1rem;
+    }
+    
+    .comp-ranking-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .comp-ranking-row:last-child {
+        border-bottom: none;
+    }
+    
+    .comp-ranking-label {
+        font-weight: 600;
+        color: var(--gray-dark);
+        font-size: 0.75rem;
+    }
+    
+    .comp-ranking-value {
+        font-weight: 500;
+        text-align: right;
+        font-size: 0.875rem;
+    }
+    
+    /* Badges específicos */
+    .comp-badge-admin {
+        background: #ffc107;
+        color: #1a2c3e;
+        padding: 0.25rem 0.75rem;
+        border-radius: 2rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        display: inline-block;
+    }
+    
+    .comp-badge-seller {
+        background: #17a2b8;
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 2rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        display: inline-block;
+    }
+    
+    .comp-badge-primary {
+        background: var(--primary-color);
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 2rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        display: inline-block;
+    }
+    
+    /* Progreso */
+    .comp-progress {
+        height: 1rem;
+        background: var(--gray-light);
+        border-radius: 1rem;
+        overflow: hidden;
+    }
+    
+    .comp-progress-bar {
+        height: 100%;
+        background: var(--secondary-color);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 0.7rem;
+        font-weight: 500;
+        transition: width 0.3s ease;
+    }
+    
+    /* Gráficos */
+    .comp-canvas {
+        max-width: 100%;
+        height: auto !important;
+        max-height: 400px;
+    }
+    
+    /* Colores de texto */
+    .comp-text-success {
+        color: var(--secondary-color);
+    }
+    
+    .comp-text-danger {
+        color: var(--danger-color);
+    }
+    
+    .comp-text-warning {
+        color: var(--warning-color);
+    }
+    
+    /* Utilidades */
+    .comp-mt-4 {
+        margin-top: 1.5rem;
+    }
+    
+    /* Media Queries */
+    @media (min-width: 768px) {
+        .comp-desktop-only {
+            display: block;
+        }
+        .comp-mobile-cards {
+            display: none;
+        }
+    }
+    
+    @media (max-width: 767px) {
+        .comp-desktop-only {
+            display: none;
+        }
+        .comp-mobile-cards {
+            display: flex;
+        }
+        .comp-stat-card h3 {
+            font-size: 1.25rem;
+        }
+        .comp-canvas {
+            max-height: 250px;
+        }
+    }
+    
+    /* Respetar preferencias de movimiento */
+    @media (prefers-reduced-motion: reduce) {
+        .comp-tab-pane {
+            animation: none;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="comp-dashboard">
+    <!-- Header de la página -->
+    <div class="comp-header">
+        <h1>📊 Comparativa de Rendimiento</h1>
+        <span class="comp-badge">
+            👥 Incluye Administradores y Vendedores
+        </span>
+    </div>
+    
+    <!-- Alerta de bienvenida usando estilos de base.html -->
+    <div class="alert alert-success">
+        <div class="alert-content">
+            <i class="fas fa-user-circle"></i>
+            <div>
+                <strong>
+                    {% if usuario_actual.rol == 'admin' %}👑 Admin -{% endif %} 
+                    Hola, {{ usuario_actual.nombre }}!
+                </strong>
+                <p class="mb-0 mt-1">
+                    Actualmente te encuentras en la posición <strong>#{{ posicion_mensual }}</strong> 
+                    de {{ estadisticas_equipo.total_personas }} personas que realizan ventas este mes.
+                </p>
+            </div>
+        </div>
+        <div class="mt-2">
+            <span class="badge {% if usuario_actual.rol == 'admin' %}badge-warning{% else %}badge-primary{% endif %}">
+                {% if usuario_actual.rol == 'admin' %}Administrador{% else %}Vendedor{% endif %}
+            </span>
+        </div>
+    </div>
+
+    <!-- Grid de estadísticas -->
+    <div class="comp-stats-grid">
+        <div class="comp-stat-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+            <h6>👥 Total Personas</h6>
+            <h3>{{ estadisticas_equipo.total_personas }}</h3>
+            <small>{% if estadisticas_equipo.total_administradores > 0 %}
+                ({{ estadisticas_equipo.total_administradores }} administradores)
+            {% endif %}</small>
+        </div>
+        
+        <div class="comp-stat-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+            <h6>📈 Promedio del Equipo</h6>
+            <h3>C${{ '{:,.0f}'.format(estadisticas_equipo.promedio_equipo) }}</h3>
+            <small>Ventas promedio por persona</small>
+        </div>
+        
+        <div class="comp-stat-card" style="background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);">
+            <h6>🏆 Mejor del Mes</h6>
+            <h3>C${{ '{:,.0f}'.format(estadisticas_equipo.mejor_del_mes) }}</h3>
+            <small>{{ estadisticas_equipo.nombre_mejor_vendedor }}</small>
+        </div>
+        
+        <div class="comp-stat-card" style="background: linear-gradient(135deg, #17a2b8 0%, #6f42c1 100%);">
+            <h6>💰 Total Ventas Equipo</h6>
+            <h3>C${{ '{:,.0f}'.format(estadisticas_equipo.equipo_total) }}</h3>
+            <small>Meta: C${{ '{:,.0f}'.format(estadisticas_equipo.equipo_total * 1.2) }}</small>
+        </div>
+    </div>
+
+    <!-- Tabs de navegación -->
+    <div class="comp-tabs">
+        <button class="comp-tab-btn active" data-comp-tab="mensual">📅 Ranking Mensual</button>
+        <button class="comp-tab-btn" data-comp-tab="semanal">📆 Ranking Semanal</button>
+        <button class="comp-tab-btn" data-comp-tab="diario">📊 Ranking Diario</button>
+        <button class="comp-tab-btn" data-comp-tab="grafico">📈 Gráfico Comparativo</button>
+        <button class="comp-tab-btn" data-comp-tab="horario">⏰ Productividad por Hora</button>
+    </div>
+
+    <!-- ==================== PANEL: RANKING MENSUAL ==================== -->
+    <div class="comp-tab-pane active" id="comp-mensual">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Ranking del Mes Actual</h5>
+                <small class="text-muted">Incluye administradores y vendedores</small>
+            </div>
+            <div class="card-body">
+                <!-- Versión escritorio -->
+                <div class="comp-desktop-only">
+                    <div class="comp-table-wrapper">
+                        <table class="comp-table">
+                            <thead>
+                                <tr>
+                                    <th>Posición</th>
+                                    <th>Persona</th>
+                                    <th>Rol</th>
+                                    <th>Ventas</th>
+                                    <th>Monto Total</th>
+                                    <th>Promedio Diario</th>
+                                    <th>% del Equipo</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for persona in ranking_mensual %}
+                                <tr {% if persona.es_actual %}class="comp-highlight"{% endif %}>
+                                    <td class="fw-semibold">
+                                        {% if loop.index == 1 %}🥇 1°
+                                        {% elif loop.index == 2 %}🥈 2°
+                                        {% elif loop.index == 3 %}🥉 3°
+                                        {% else %}#{{ loop.index }}{% endif %}
+                                    </td>
+                                    <td>
+                                        <strong>{{ persona.nombre }}</strong>
+                                        {% if persona.es_actual %}
+                                        <span class="comp-badge-primary ms-2">Tú</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if persona.rol == 'admin' %}
+                                        <span class="comp-badge-admin">Administrador</span>
+                                        {% else %}
+                                        <span class="comp-badge-seller">Vendedor</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ "{:,}".format(persona.total_ventas) }}</td>
+                                    <td><strong>C${{ '{:,.0f}'.format(persona.monto_total) }}</strong></td>
+                                    <td>C${{ '{:,.0f}'.format(persona.promedio_diario) }}</td>
+                                    <td>
+                                        <div class="comp-progress">
+                                            <div class="comp-progress-bar" style="width: {{ persona.porcentaje_equipo }}%;">
+                                                {{ persona.porcentaje_equipo }}%
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Versión móvil -->
+                <div class="comp-mobile-cards">
+                    {% for persona in ranking_mensual %}
+                    <div class="comp-ranking-card">
+                        <div class="comp-ranking-header">
+                            <span class="comp-ranking-position">
+                                {% if loop.index == 1 %}🥇 1er Lugar
+                                {% elif loop.index == 2 %}🥈 2do Lugar
+                                {% elif loop.index == 3 %}🥉 3er Lugar
+                                {% else %}#{{ loop.index }} Lugar{% endif %}
+                            </span>
+                            {% if persona.es_actual %}
+                            <span class="comp-badge-primary">Tú</span>
+                            {% endif %}
+                        </div>
+                        <div class="comp-ranking-body">
+                            <div class="comp-ranking-row">
+                                <span class="comp-ranking-label">👤 Persona:</span>
+                                <span class="comp-ranking-value"><strong>{{ persona.nombre }}</strong></span>
+                            </div>
+                            <div class="comp-ranking-row">
+                                <span class="comp-ranking-label">🎭 Rol:</span>
+                                <span class="comp-ranking-value">
+                                    {% if persona.rol == 'admin' %}
+                                    <span class="comp-badge-admin">Administrador</span>
+                                    {% else %}
+                                    <span class="comp-badge-seller">Vendedor</span>
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <div class="comp-ranking-row">
+                                <span class="comp-ranking-label">📦 Ventas:</span>
+                                <span class="comp-ranking-value">{{ "{:,}".format(persona.total_ventas) }}</span>
+                            </div>
+                            <div class="comp-ranking-row">
+                                <span class="comp-ranking-label">💰 Monto Total:</span>
+                                <span class="comp-ranking-value"><strong>C${{ '{:,.0f}'.format(persona.monto_total) }}</strong></span>
+                            </div>
+                            <div class="comp-ranking-row">
+                                <span class="comp-ranking-label">📊 Promedio Diario:</span>
+                                <span class="comp-ranking-value">C${{ '{:,.0f}'.format(persona.promedio_diario) }}</span>
+                            </div>
+                            <div class="mt-2">
+                                <div class="comp-progress">
+                                    <div class="comp-progress-bar" style="width: {{ persona.porcentaje_equipo }}%;">
+                                        {{ persona.porcentaje_equipo }}%
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== PANEL: RANKING SEMANAL ==================== -->
+    <div class="comp-tab-pane" id="comp-semanal">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Top 10 - Ranking de la Semana</h5>
+            </div>
+            <div class="card-body">
+                <div class="comp-desktop-only">
+                    <div class="comp-table-wrapper">
+                        <table class="comp-table">
+                            <thead>
+                                <tr>
+                                    <th>Posición</th>
+                                    <th>Persona</th>
+                                    <th>Rol</th>
+                                    <th>Ventas</th>
+                                    <th>Monto Total</th>
+                                    <th>Promedio Diario</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for persona in ranking_semanal %}
+                                <tr>
+                                    <td class="fw-semibold">
+                                        {% if loop.index == 1 %}🥇 1°
+                                        {% elif loop.index == 2 %}🥈 2°
+                                        {% elif loop.index == 3 %}🥉 3°
+                                        {% else %}#{{ loop.index }}{% endif %}
+                                    </td>
+                                    <td><strong>{{ persona.nombre }}</strong></td>
+                                    <td>{{ persona.rol_nombre }}</td>
+                                    <td>{{ persona.total_ventas }}</td>
+                                    <td><strong>C${{ '{:,.0f}'.format(persona.monto_total) }}</strong></td>
+                                    <td>C${{ '{:,.0f}'.format(persona.promedio_diario) }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="comp-mobile-cards">
+                    {% for persona in ranking_semanal %}
+                    <div class="comp-ranking-card">
+                        <div class="comp-ranking-header">
+                            <span class="comp-ranking-position">
+                                {% if loop.index == 1 %}🥇 1er Lugar
+                                {% elif loop.index == 2 %}🥈 2do Lugar
+                                {% elif loop.index == 3 %}🥉 3er Lugar
+                                {% else %}#{{ loop.index }} Lugar{% endif %}
+                            </span>
+                        </div>
+                        <div class="comp-ranking-body">
+                            <div class="comp-ranking-row">
+                                <span class="comp-ranking-label">👤 Persona:</span>
+                                <span class="comp-ranking-value"><strong>{{ persona.nombre }}</strong></span>
+                            </div>
+                            <div class="comp-ranking-row">
+                                <span class="comp-ranking-label">🎭 Rol:</span>
+                                <span class="comp-ranking-value">{{ persona.rol_nombre }}</span>
+                            </div>
+                            <div class="comp-ranking-row">
+                                <span class="comp-ranking-label">📦 Ventas:</span>
+                                <span class="comp-ranking-value">{{ persona.total_ventas }}</span>
+                            </div>
+                            <div class="comp-ranking-row">
+                                <span class="comp-ranking-label">💰 Monto Total:</span>
+                                <span class="comp-ranking-value"><strong>C${{ '{:,.0f}'.format(persona.monto_total) }}</strong></span>
+                            </div>
+                            <div class="comp-ranking-row">
+                                <span class="comp-ranking-label">📊 Promedio Diario:</span>
+                                <span class="comp-ranking-value">C${{ '{:,.0f}'.format(persona.promedio_diario) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== PANEL: RANKING DIARIO ==================== -->
+    <div class="comp-tab-pane" id="comp-diario">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Top 10 - Ranking del Día</h5>
+            </div>
+            <div class="card-body">
+                <div class="comp-desktop-only">
+                    <div class="comp-table-wrapper">
+                        <table class="comp-table">
+                            <thead>
+                                <tr>
+                                    <th>Posición</th>
+                                    <th>Persona</th>
+                                    <th>Rol</th>
+                                    <th>Ventas</th>
+                                    <th>Monto Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for persona in ranking_diario %}
+                                <tr>
+                                    <td class="fw-semibold">
+                                        {% if loop.index == 1 %}🥇 1°
+                                        {% elif loop.index == 2 %}🥈 2°
+                                        {% elif loop.index == 3 %}🥉 3°
+                                        {% else %}#{{ loop.index }}{% endif %}
+                                    </td>
+                                    <td><strong>{{ persona.nombre }}</strong></td>
+                                    <td>{{ persona.rol_nombre }}</td>
+                                    <td>{{ persona.total_ventas }}</td>
+                                    <td><strong>C${{ '{:,.0f}'.format(persona.monto_total) }}</strong></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="comp-mobile-cards">
+                    {% for persona in ranking_diario %}
+                    <div class="comp-ranking-card">
+                        <div class="comp-ranking-header">
+                            <span class="comp-ranking-position">
+                                {% if loop.index == 1 %}🥇 1er Lugar
+                                {% elif loop.index == 2 %}🥈 2do Lugar
+                                {% elif loop.index == 3 %}🥉 3er Lugar
+                                {% else %}#{{ loop.index }} Lugar{% endif %}
+                            </span>
+                        </div>
+                        <div class="comp-ranking-body">
+                            <div class="comp-ranking-row">
+                                <span class="comp-ranking-label">👤 Persona:</span>
+                                <span class="comp-ranking-value"><strong>{{ persona.nombre }}</strong></span>
+                            </div>
+                            <div class="comp-ranking-row">
+                                <span class="comp-ranking-label">🎭 Rol:</span>
+                                <span class="comp-ranking-value">{{ persona.rol_nombre }}</span>
+                            </div>
+                            <div class="comp-ranking-row">
+                                <span class="comp-ranking-label">📦 Ventas:</span>
+                                <span class="comp-ranking-value">{{ persona.total_ventas }}</span>
+                            </div>
+                            <div class="comp-ranking-row">
+                                <span class="comp-ranking-label">💰 Monto Total:</span>
+                                <span class="comp-ranking-value"><strong>C${{ '{:,.0f}'.format(persona.monto_total) }}</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== PANEL: GRÁFICO COMPARATIVO ==================== -->
+    <div class="comp-tab-pane" id="comp-grafico">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Comparativa Visual de Rendimiento</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="comparativaChart" class="comp-canvas"></canvas>
+                
+                <hr class="my-4">
+                
+                <h6>📊 Análisis de Rendimiento</h6>
+                <div class="comp-desktop-only">
+                    <div class="comp-table-wrapper">
+                        <table class="comp-table">
+                            <thead>
+                                <tr>
+                                    <th>Persona</th>
+                                    <th>Rol</th>
+                                    <th>Monto Mes</th>
+                                    <th>Ventas</th>
+                                    <th>vs Promedio</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for persona in datos_grafico %}
+                                <tr>
+                                    <td>{{ persona.icono }} {{ persona.nombre }}</td>
+                                    <td>
+                                        {% if persona.rol == 'admin' %}
+                                        <span class="comp-badge-admin">Admin</span>
+                                        {% else %}
+                                        <span class="comp-badge-seller">Vendedor</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>C${{ '{:,.0f}'.format(persona.monto_mes) }}</td>
+                                    <td>{{ persona.ventas_mes }}</td>
+                                    <td>
+                                        {% if persona.porcentaje_vs_promedio > 100 %}
+                                        <span class="comp-text-success">▲ +{{ (persona.porcentaje_vs_promedio - 100)|round }}%</span>
+                                        {% elif persona.porcentaje_vs_promedio < 100 %}
+                                        <span class="comp-text-danger">▼ {{ (persona.porcentaje_vs_promedio - 100)|round }}%</span>
+                                        {% else %}
+                                        <span class="comp-text-warning">● 0%</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="comp-mobile-cards">
+                    {% for persona in datos_grafico %}
+                    <div class="comp-ranking-card">
+                        <div class="comp-ranking-header">
+                            <span>{{ persona.icono }} {{ persona.nombre }}</span>
+                            {% if persona.rol == 'admin' %}
+                            <span class="comp-badge-admin">Admin</span>
+                            {% else %}
+                            <span class="comp-badge-seller">Vendedor</span>
+                            {% endif %}
+                        </div>
+                        <div class="comp-ranking-body">
+                            <div class="comp-ranking-row">
+                                <span class="comp-ranking-label">💰 Monto Mes:</span>
+                                <span class="comp-ranking-value">C${{ '{:,.0f}'.format(persona.monto_mes) }}</span>
+                            </div>
+                            <div class="comp-ranking-row">
+                                <span class="comp-ranking-label">📦 Ventas:</span>
+                                <span class="comp-ranking-value">{{ persona.ventas_mes }}</span>
+                            </div>
+                            <div class="comp-ranking-row">
+                                <span class="comp-ranking-label">📈 vs Promedio:</span>
+                                <span class="comp-ranking-value">
+                                    {% if persona.porcentaje_vs_promedio > 100 %}
+                                    <span class="comp-text-success">▲ +{{ (persona.porcentaje_vs_promedio - 100)|round }}%</span>
+                                    {% elif persona.porcentaje_vs_promedio < 100 %}
+                                    <span class="comp-text-danger">▼ {{ (persona.porcentaje_vs_promedio - 100)|round }}%</span>
+                                    {% else %}
+                                    <span class="comp-text-warning">● 0%</span>
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== PANEL: PRODUCTIVIDAD POR HORA ==================== -->
+    <div class="comp-tab-pane" id="comp-horario">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">⏰ Productividad por Hora (Últimos 30 días)</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="productividadChart" class="comp-canvas"></canvas>
+                <p class="text-muted mt-3 small">
+                    📊 Este gráfico muestra el promedio de ventas por hora en los últimos 30 días. 
+                    Identifica tus horas más productivas para optimizar tu tiempo.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== EVOLUCIÓN SEMANAL ==================== -->
+    <div class="card comp-mt-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">📈 Evolución Semanal (Top 5 del Mes)</h5>
+        </div>
+        <div class="card-body">
+            <canvas id="evolucionChart" class="comp-canvas" style="max-height: 300px;"></canvas>
+            <p class="text-muted mt-3 small">
+                📈 Tendencia semanal de los 5 mejores vendedores del mes. 
+                Observa cómo ha sido su progreso a lo largo de las semanas.
+            </p>
+        </div>
+    </div>
+
+    <!-- ==================== INFORMACIÓN ADICIONAL ==================== -->
+    <div class="card comp-mt-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">💡 ¿Qué nos dice este ranking?</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <ul class="mb-0">
+                        <li>🎯 Meta a alcanzar: Supera el promedio del equipo de <strong>C${{ '{:,.0f}'.format(estadisticas_equipo.promedio_equipo) }}</strong></li>
+                        <li>🏆 Récord del mes: C${{ '{:,.0f}'.format(estadisticas_equipo.mejor_del_mes) }} ({{ estadisticas_equipo.nombre_mejor_vendedor }})</li>
+                        {% if usuario_actual.rol == 'admin' %}
+                        <li>👑 Como administrador: Tu participación en ventas inspira y motiva al equipo</li>
+                        {% else %}
+                        <li>⚡ Para mejorar: Analiza las horas de mayor productividad y enfoca tus esfuerzos</li>
+                        {% endif %}
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <div class="bg-light p-3 rounded">
+                        <strong>📊 Dato interesante:</strong> 
+                        La desviación estándar del equipo es de <strong>C${{ '{:,.0f}'.format(estadisticas_equipo.desviacion_estandar) }}</strong>, 
+                        lo que indica que el equipo tiene una 
+                        {% if estadisticas_equipo.desviacion_estandar > estadisticas_equipo.promedio_equipo * 0.3 %}
+                        alta variabilidad
+                        {% else %}
+                        consistencia notable
+                        {% endif %}
+                        en sus ventas.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// ============================================
+// SISTEMA DE TABS
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+    const tabs = document.querySelectorAll('.comp-tab-btn');
+    const panes = {
+        mensual: document.getElementById('comp-mensual'),
+        semanal: document.getElementById('comp-semanal'),
+        diario: document.getElementById('comp-diario'),
+        grafico: document.getElementById('comp-grafico'),
+        horario: document.getElementById('comp-horario')
+    };
+    
+    tabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+            tabs.forEach(t => t.classList.remove('active'));
+            Object.values(panes).forEach(pane => {
+                if (pane) pane.classList.remove('active');
+            });
+            
+            this.classList.add('active');
+            const tabId = this.getAttribute('data-comp-tab');
+            if (panes[tabId]) {
+                panes[tabId].classList.add('active');
+                
+                setTimeout(() => {
+                    if (window.comparativaChart) window.comparativaChart.update();
+                    if (window.evolucionChart) window.evolucionChart.update();
+                    if (window.productividadChart) window.productividadChart.update();
+                }, 100);
+            }
+        });
+    });
+});
+
+// ============================================
+// INICIALIZACIÓN DE GRÁFICOS
+// ============================================
+let comparativaChart = null;
+let evolucionChart = null;
+let productividadChart = null;
+
+function initCharts() {
+    // Gráfico comparativo
+    const ctxComparativa = document.getElementById('comparativaChart');
+    if (ctxComparativa && !comparativaChart) {
+        comparativaChart = new Chart(ctxComparativa, {
+            type: 'bar',
+            data: {
+                labels: [{% for p in datos_grafico %}'{{ p.icono }} {{ p.nombre }}',{% endfor %}],
+                datasets: [{
+                    label: '💰 Monto de Ventas (Mes)',
+                    data: [{% for p in datos_grafico %}{{ p.monto_mes }},{% endfor %}],
+                    backgroundColor: [{% for p in datos_grafico %}
+                        '{{ "rgba(255, 99, 132, 0.7)" if p.rol == "admin" else "rgba(54, 162, 235, 0.7)" }}',
+                    {% endfor %}],
+                    borderColor: [{% for p in datos_grafico %}
+                        '{{ "rgba(255, 99, 132, 1)" if p.rol == "admin" else "rgba(54, 162, 235, 1)" }}',
+                    {% endfor %}],
+                    borderWidth: 1,
+                    borderRadius: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: window.innerWidth < 768 ? 'bottom' : 'top',
+                        labels: { font: { size: window.innerWidth < 768 ? 10 : 12 } }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return '💰 C$' + context.raw.toLocaleString();
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return 'C$' + value.toLocaleString();
+                            },
+                            font: { size: window.innerWidth < 768 ? 10 : 12 }
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            font: { size: window.innerWidth < 768 ? 9 : 12 },
+                            maxRotation: window.innerWidth < 768 ? 45 : 0
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // Gráfico de evolución semanal
+    const ctxEvolucion = document.getElementById('evolucionChart');
+    const evolucionData = {{ evolucion_semanal|tojson }};
+    
+    if (ctxEvolucion && evolucionData && evolucionData.length > 0 && !evolucionChart) {
+        const semanas = [...new Set(evolucionData.map(item => item.inicio_semana).filter(s => s !== null))].sort();
+        const personasTop = [...new Set(evolucionData.map(item => item.persona))];
+        const colores = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'];
+        
+        const datasetsEvolucion = personasTop.map((persona, index) => {
+            const datosSemana = semanas.map(semana => {
+                const venta = evolucionData.find(v => v.persona === persona && v.inicio_semana === semana);
+                return venta ? venta.monto_semana : 0;
+            });
+            
+            return {
+                label: persona,
+                data: datosSemana,
+                borderColor: colores[index % colores.length],
+                backgroundColor: 'transparent',
+                tension: 0.4,
+                fill: false,
+                pointRadius: window.innerWidth < 768 ? 3 : 4
+            };
+        });
+        
+        if (semanas.length > 0 && personasTop.length > 0) {
+            evolucionChart = new Chart(ctxEvolucion, {
+                type: 'line',
+                data: {
+                    labels: semanas.map(s => {
+                        const fecha = new Date(s);
+                        return fecha.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' });
+                    }),
+                    datasets: datasetsEvolucion
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: window.innerWidth < 768 ? 'bottom' : 'top',
+                            labels: { font: { size: window.innerWidth < 768 ? 9 : 12 } }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return '💰 C$' + context.raw.toLocaleString();
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            ticks: {
+                                callback: function(value) {
+                                    return 'C$' + value.toLocaleString();
+                                },
+                                font: { size: window.innerWidth < 768 ? 10 : 12 }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+    
+    // Gráfico de productividad por hora
+    const ctxProductividad = document.getElementById('productividadChart');
+    const productividadData = {{ productividad_horaria|tojson }};
+    
+    if (ctxProductividad && productividadData && productividadData.length > 0 && !productividadChart) {
+        const horas = [...new Set(productividadData.map(item => item.hora_formateada))].sort();
+        const personasProductividad = [...new Set(productividadData.map(item => item.persona))];
+        const colores = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'];
+        
+        const datasetsProductividad = personasProductividad.map((persona, index) => {
+            const datosHora = horas.map(hora => {
+                const registro = productividadData.find(p => p.persona === persona && p.hora_formateada === hora);
+                return registro ? registro.monto_por_hora : 0;
+            });
+            
+            return {
+                label: persona,
+                data: datosHora,
+                borderColor: colores[index % colores.length],
+                backgroundColor: colores[index % colores.length] + '20',
+                tension: 0.4,
+                fill: true,
+                pointRadius: window.innerWidth < 768 ? 2 : 3
+            };
+        });
+        
+        if (horas.length > 0 && personasProductividad.length > 0) {
+            productividadChart = new Chart(ctxProductividad, {
+                type: 'line',
+                data: {
+                    labels: horas,
+                    datasets: datasetsProductividad
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: window.innerWidth < 768 ? 'bottom' : 'top',
+                            labels: { font: { size: window.innerWidth < 768 ? 9 : 12 } }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return '💰 C$' + context.raw.toLocaleString();
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return 'C$' + value.toLocaleString();
+                                },
+                                font: { size: window.innerWidth < 768 ? 10 : 12 }
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                font: { size: window.innerWidth < 768 ? 9 : 12 },
+                                maxRotation: window.innerWidth < 768 ? 45 : 0
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+}
+
+// Inicializar gráficos
+document.addEventListener('DOMContentLoaded', initCharts);
+
+// Manejar resize
+let resizeTimeout;
+window.addEventListener('resize', function() {
+    if (resizeTimeout) clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+        if (comparativaChart) comparativaChart.update();
+        if (evolucionChart) evolucionChart.update();
+        if (productividadChart) productividadChart.update();
+    }, 150);
+});
+</script>
+{% endblock %}

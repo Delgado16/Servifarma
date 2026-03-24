@@ -536,7 +536,345 @@ def dashboard_admin():
                          
                          # Fecha actual para el template
                          fecha_actual=datetime.now().strftime('%d/%m/%Y %H:%M'))
+
+@app.route('/vendedor/comparativa')
+@login_required
+def comparativa_vendedores():
+    cursor = mysql.connection.cursor(DictCursor)
+    usuario_id = session['usuario_id']
     
+    # Obtener información del usuario actual
+    cursor.execute("""
+        SELECT id, nombre, email, rol, activo
+        FROM usuarios 
+        WHERE id = %s
+    """, (usuario_id,))
+    usuario_actual = cursor.fetchone()
+    
+    # 1. Ranking GENERAL del mes actual (todos los que venden)
+    cursor.execute("""
+        SELECT 
+            u.id,
+            u.nombre,
+            u.rol,
+            u.email,
+            COUNT(v.id) as total_ventas,
+            COALESCE(SUM(v.total_venta), 0) as monto_total,
+            CASE 
+                WHEN u.rol = 'admin' THEN 'Administrador'
+                ELSE 'Vendedor'
+            END as rol_nombre
+        FROM usuarios u
+        LEFT JOIN ventas v ON u.id = v.usuario_id 
+            AND MONTH(v.fecha_venta) = MONTH(CURDATE())
+            AND YEAR(v.fecha_venta) = YEAR(CURDATE())
+        WHERE u.activo = 1
+            AND (u.rol = 'vendedor' OR u.rol = 'admin')
+        GROUP BY u.id, u.nombre, u.rol, u.email
+        ORDER BY monto_total DESC
+    """)
+    ranking_mensual = cursor.fetchall()
+    
+    # Convertir Decimal a float y calcular promedio diario y porcentaje
+    total_equipo = 0.0
+    for persona in ranking_mensual:
+        # Convertir monto_total a float
+        if hasattr(persona['monto_total'], 'quantize'):  # Es Decimal
+            monto = float(persona['monto_total'])
+            persona['monto_total'] = monto
+        else:
+            monto = float(persona['monto_total']) if persona['monto_total'] else 0.0
+            persona['monto_total'] = monto
+        
+        # Calcular promedio diario
+        persona['promedio_diario'] = round(monto / 30, 2)
+        total_equipo += monto
+    
+    # Calcular porcentaje del equipo
+    for persona in ranking_mensual:
+        if total_equipo > 0:
+            persona['porcentaje_equipo'] = round((persona['monto_total'] * 100.0 / total_equipo), 2)
+        else:
+            persona['porcentaje_equipo'] = 0
+    
+    # Encontrar posición del usuario actual
+    posicion_mensual = None
+    for idx, usuario in enumerate(ranking_mensual, 1):
+        if usuario['id'] == usuario_id:
+            posicion_mensual = idx
+            usuario['es_actual'] = True
+        else:
+            usuario['es_actual'] = False
+    
+    # 2. Ranking semanal
+    cursor.execute("""
+        SELECT 
+            u.id,
+            u.nombre,
+            u.rol,
+            COUNT(v.id) as total_ventas,
+            COALESCE(SUM(v.total_venta), 0) as monto_total,
+            CASE 
+                WHEN u.rol = 'admin' THEN 'Administrador'
+                ELSE 'Vendedor'
+            END as rol_nombre
+        FROM usuarios u
+        LEFT JOIN ventas v ON u.id = v.usuario_id 
+            AND YEARWEEK(v.fecha_venta) = YEARWEEK(CURDATE())
+        WHERE u.activo = 1
+            AND (u.rol = 'vendedor' OR u.rol = 'admin')
+        GROUP BY u.id, u.nombre, u.rol
+        ORDER BY monto_total DESC
+        LIMIT 10
+    """)
+    ranking_semanal = cursor.fetchall()
+    
+    # Convertir Decimal a float para ranking semanal
+    for persona in ranking_semanal:
+        if hasattr(persona['monto_total'], 'quantize'):
+            persona['monto_total'] = float(persona['monto_total'])
+        else:
+            persona['monto_total'] = float(persona['monto_total']) if persona['monto_total'] else 0.0
+        persona['promedio_diario'] = round(persona['monto_total'] / 7, 2)
+    
+    # 3. Ranking diario
+    cursor.execute("""
+        SELECT 
+            u.id,
+            u.nombre,
+            u.rol,
+            COUNT(v.id) as total_ventas,
+            COALESCE(SUM(v.total_venta), 0) as monto_total,
+            CASE 
+                WHEN u.rol = 'admin' THEN 'Administrador'
+                ELSE 'Vendedor'
+            END as rol_nombre
+        FROM usuarios u
+        LEFT JOIN ventas v ON u.id = v.usuario_id 
+            AND DATE(v.fecha_venta) = CURDATE()
+        WHERE u.activo = 1
+            AND (u.rol = 'vendedor' OR u.rol = 'admin')
+        GROUP BY u.id, u.nombre, u.rol
+        ORDER BY monto_total DESC
+        LIMIT 10
+    """)
+    ranking_diario = cursor.fetchall()
+    
+    # Convertir Decimal a float para ranking diario
+    for persona in ranking_diario:
+        if hasattr(persona['monto_total'], 'quantize'):
+            persona['monto_total'] = float(persona['monto_total'])
+        else:
+            persona['monto_total'] = float(persona['monto_total']) if persona['monto_total'] else 0.0
+    
+    # 4. Estadísticas del equipo
+    cursor.execute("""
+        SELECT 
+            COUNT(DISTINCT u.id) as total_personas,
+            COUNT(DISTINCT CASE WHEN u.rol = 'vendedor' THEN u.id END) as total_vendedores,
+            COUNT(DISTINCT CASE WHEN u.rol = 'admin' THEN u.id END) as total_administradores
+        FROM usuarios u
+        WHERE u.activo = 1
+            AND (u.rol = 'vendedor' OR u.rol = 'admin')
+    """)
+    estadisticas_equipo = cursor.fetchone()
+    
+    # Obtener ventas mensuales para estadísticas
+    cursor.execute("""
+        SELECT 
+            usuario_id,
+            COALESCE(SUM(total_venta), 0) as ventas_mes
+        FROM ventas
+        WHERE MONTH(fecha_venta) = MONTH(CURDATE())
+            AND YEAR(fecha_venta) = YEAR(CURDATE())
+        GROUP BY usuario_id
+    """)
+    ventas_por_usuario = cursor.fetchall()
+    
+    # Calcular estadísticas
+    ventas_lista = []
+    for v in ventas_por_usuario:
+        monto = float(v['ventas_mes']) if hasattr(v['ventas_mes'], 'quantize') else float(v['ventas_mes'])
+        ventas_lista.append(monto)
+    
+    if ventas_lista:
+        from statistics import mean, stdev
+        estadisticas_equipo['promedio_equipo'] = round(mean(ventas_lista), 2)
+        estadisticas_equipo['equipo_total'] = round(sum(ventas_lista), 2)
+        estadisticas_equipo['mejor_del_mes'] = round(max(ventas_lista), 2)
+        estadisticas_equipo['peor_del_mes'] = round(min(ventas_lista), 2)
+        if len(ventas_lista) > 1:
+            estadisticas_equipo['desviacion_estandar'] = round(stdev(ventas_lista), 2)
+        else:
+            estadisticas_equipo['desviacion_estandar'] = 0
+    else:
+        estadisticas_equipo['promedio_equipo'] = 0
+        estadisticas_equipo['equipo_total'] = 0
+        estadisticas_equipo['mejor_del_mes'] = 0
+        estadisticas_equipo['peor_del_mes'] = 0
+        estadisticas_equipo['desviacion_estandar'] = 0
+    
+    # Obtener nombre del mejor vendedor
+    if ventas_lista:
+        mejor_monto = max(ventas_lista)
+        mejor_index = ventas_lista.index(mejor_monto)
+        mejor_usuario_id = ventas_por_usuario[mejor_index]['usuario_id']
+        
+        cursor.execute("""
+            SELECT nombre FROM usuarios WHERE id = %s
+        """, (mejor_usuario_id,))
+        mejor = cursor.fetchone()
+        estadisticas_equipo['nombre_mejor_vendedor'] = mejor['nombre'] if mejor else 'N/A'
+        estadisticas_equipo['monto_mejor_vendedor'] = mejor_monto
+    else:
+        estadisticas_equipo['nombre_mejor_vendedor'] = 'N/A'
+        estadisticas_equipo['monto_mejor_vendedor'] = 0
+    
+    # 5. Evolución semanal top 5
+    # Primero obtener los top 5 vendedores del mes
+    if ventas_por_usuario:
+        top5_ids = [v['usuario_id'] for v in sorted(ventas_por_usuario, key=lambda x: float(x['ventas_mes']) if hasattr(x['ventas_mes'], 'quantize') else float(x['ventas_mes']), reverse=True)[:5]]
+    else:
+        top5_ids = []
+    
+    # Luego obtener evolución semanal de esos top 5
+    if top5_ids:
+        placeholders = ','.join(['%s'] * len(top5_ids))
+        cursor.execute(f"""
+            SELECT 
+                u.nombre as persona,
+                u.rol,
+                DATE(v.fecha_venta) as fecha_venta,
+                SUM(v.total_venta) as monto_dia
+            FROM usuarios u
+            INNER JOIN ventas v ON u.id = v.usuario_id
+            WHERE u.activo = 1
+                AND (u.rol = 'vendedor' OR u.rol = 'admin')
+                AND u.id IN ({placeholders})
+                AND v.fecha_venta >= DATE_SUB(CURDATE(), INTERVAL 4 WEEK)
+            GROUP BY u.id, u.nombre, u.rol, DATE(v.fecha_venta)
+            ORDER BY u.nombre, fecha_venta
+        """, top5_ids)
+        ventas_diarias = cursor.fetchall()
+        
+        # Procesar datos para evolución semanal
+        evolucion_semanal = []
+        from datetime import datetime, timedelta
+        
+        for venta in ventas_diarias:
+            fecha = venta['fecha_venta']
+            if isinstance(fecha, str):
+                fecha = datetime.strptime(str(fecha), '%Y-%m-%d').date()
+            
+            # Calcular inicio de semana (lunes)
+            inicio_semana = fecha - timedelta(days=fecha.weekday())
+            fin_semana = inicio_semana + timedelta(days=6)
+            
+            monto_dia = float(venta['monto_dia']) if hasattr(venta['monto_dia'], 'quantize') else float(venta['monto_dia'])
+            
+            # Buscar si ya existe registro para esta persona y semana
+            encontrado = False
+            for item in evolucion_semanal:
+                if (item['persona'] == venta['persona'] and 
+                    item['inicio_semana'] == inicio_semana):
+                    item['monto_semana'] += monto_dia
+                    item['ventas_semana'] += 1
+                    encontrado = True
+                    break
+            
+            if not encontrado:
+                evolucion_semanal.append({
+                    'persona': venta['persona'],
+                    'rol': venta['rol'],
+                    'inicio_semana': inicio_semana,
+                    'fin_semana': fin_semana,
+                    'monto_semana': monto_dia,
+                    'ventas_semana': 1
+                })
+    else:
+        evolucion_semanal = []
+    
+    # 6. Datos para gráfico
+    cursor.execute("""
+        SELECT 
+            u.nombre,
+            u.rol,
+            COALESCE(SUM(v.total_venta), 0) as monto_mes,
+            COUNT(v.id) as ventas_mes
+        FROM usuarios u
+        LEFT JOIN ventas v ON u.id = v.usuario_id 
+            AND MONTH(v.fecha_venta) = MONTH(CURDATE())
+            AND YEAR(v.fecha_venta) = YEAR(CURDATE())
+        WHERE u.activo = 1
+            AND (u.rol = 'vendedor' OR u.rol = 'admin')
+        GROUP BY u.id, u.nombre, u.rol
+        ORDER BY monto_mes DESC
+    """)
+    datos_grafico = cursor.fetchall()
+    
+    # Convertir Decimal a float y calcular porcentaje vs promedio
+    montos_lista = []
+    for persona in datos_grafico:
+        if hasattr(persona['monto_mes'], 'quantize'):
+            monto = float(persona['monto_mes'])
+            persona['monto_mes'] = monto
+        else:
+            monto = float(persona['monto_mes']) if persona['monto_mes'] else 0.0
+            persona['monto_mes'] = monto
+        montos_lista.append(monto)
+        persona['icono'] = '[Admin]' if persona['rol'] == 'admin' else '[Vend]'
+    
+    # Calcular porcentaje vs promedio
+    if montos_lista:
+        promedio_equipo = sum(montos_lista) / len(montos_lista)
+        for persona in datos_grafico:
+            if promedio_equipo > 0:
+                persona['porcentaje_vs_promedio'] = round((persona['monto_mes'] * 100.0 / promedio_equipo), 2)
+            else:
+                persona['porcentaje_vs_promedio'] = 0
+    else:
+        for persona in datos_grafico:
+            persona['porcentaje_vs_promedio'] = 0
+    
+    # 7. Productividad por hora
+    cursor.execute("""
+        SELECT 
+            u.nombre as persona,
+            u.rol,
+            HOUR(v.fecha_creacion) as hora,
+            COUNT(v.id) as ventas_por_hora,
+            COALESCE(SUM(v.total_venta), 0) as monto_por_hora
+        FROM usuarios u
+        INNER JOIN ventas v ON u.id = v.usuario_id
+        WHERE u.activo = 1
+            AND (u.rol = 'vendedor' OR u.rol = 'admin')
+            AND v.fecha_venta >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+        GROUP BY u.id, u.nombre, u.rol, HOUR(v.fecha_creacion)
+        ORDER BY u.nombre, hora
+    """)
+    productividad_horaria = cursor.fetchall()
+    
+    # Convertir Decimal a float y formatear hora
+    for item in productividad_horaria:
+        if hasattr(item['monto_por_hora'], 'quantize'):
+            item['monto_por_hora'] = float(item['monto_por_hora'])
+        else:
+            item['monto_por_hora'] = float(item['monto_por_hora']) if item['monto_por_hora'] else 0.0
+        item['hora_formateada'] = f"{str(item['hora']).zfill(2)}:00"
+    
+    cursor.close()
+    
+    return render_template('admin/comparativa.html',
+                         usuario_actual=usuario_actual,
+                         ranking_mensual=ranking_mensual,
+                         ranking_semanal=ranking_semanal,
+                         ranking_diario=ranking_diario,
+                         posicion_mensual=posicion_mensual,
+                         estadisticas_equipo=estadisticas_equipo,
+                         evolucion_semanal=evolucion_semanal,
+                         datos_grafico=datos_grafico,
+                         productividad_horaria=productividad_horaria)
+
 # ========================
 # GESTIÓN DE PRODUCTOS
 # ========================

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="es">
   <head>
-    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta charset="UTF-8" />
     <meta
       name="viewport"
@@ -872,6 +872,10 @@
                 <i class="fas fa-users"></i>
                 <span>Usuarios</span>
               </a>
+              <a href="{{ url_for('comparativa_vendedores') }}" class="menu-item">
+                <i class="fas fa-chart-line"></i>
+                <span>Vendedores</span>
+              </a>
             </li>
           </ul>
         </nav>
@@ -895,6 +899,12 @@
                 <span>Ventas</span>
               </a>
             </li>
+            <li>
+              <a href="{{ url_for('caja_index') }}" class="menu-item">
+                <i class="fas fa-cash-register"></i>
+                <span>Caja</span>
+              </a>
+            </il>
             <li>
               <a href="{{ url_for('buscar_productos') }}" class="menu-item">
                 <i class="fas fa-search"></i>
